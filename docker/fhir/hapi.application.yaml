@@ -17,6 +17,8 @@ hapi:
     client_id_strategy: ANY
     allow_cascading_deletes: true
     openapi_enabled: true
+    subscription:
+      resthook_enabled: true
     cors:
       allow_Credentials: true
       allowed_origin:

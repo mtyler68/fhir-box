@@ -1,0 +1,95 @@
+{
+  "resourceType": "Bundle",
+  "id": "fac5c7cb-6a59-4a03-b708-ea8859ccbfa7",
+  "type": "subscription-notification",
+  "entry": [
+    {
+      "fullUrl": "8f3643ba-c9dc-4a88-a441-1f55e4ccf862",
+      "resource": {
+        "resourceType": "SubscriptionStatus",
+        "id": "8f3643ba-c9dc-4a88-a441-1f55e4ccf862",
+        "status": "active",
+        "type": "event-notification",
+        "eventsSinceSubscriptionStart": 1,
+        "notificationEvent": [
+          {
+            "eventNumber": 1,
+            "focus": {
+              "reference": "Practitioner/6ae08adb-32f8-4d93-9820-c43acdc619e0"
+            }
+          }
+        ],
+        "subscription": {
+          "reference": "Subscription/sub-practitioner-created-v1.0.1"
+        },
+        "topic": "https://insulet.com/fhir/SubscriptionTopic/stp-practitioner-created"
+      }
+    },
+    {
+      "fullUrl": "Practitioner/6ae08adb-32f8-4d93-9820-c43acdc619e0/_history/1",
+      "resource": {
+        "resourceType": "Practitioner",
+        "id": "6ae08adb-32f8-4d93-9820-c43acdc619e0",
+        "meta": {
+          "versionId": "1",
+          "lastUpdated": "2026-08-21T22:32:30.226+00:00"
+        },
+        "identifier": [
+          {
+            "use": "official",
+            "system": "http://hl7.org/fhir/sid/us-npi",
+            "value": "1205486610"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "text": "Lucy Kamau",
+            "family": "KAMAU",
+            "given": [
+              "LUCY"
+            ]
+          }
+        ],
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "425-572-6217"
+          }
+        ],
+        "gender": "female",
+        "address": [
+          {
+            "type": "postal",
+            "line": [
+              "95 S TOBIN ST STE 100"
+            ],
+            "city": "RENTON",
+            "state": "WA",
+            "postalCode": "98057-5324",
+            "country": "US"
+          }
+        ],
+        "qualification": [
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://nucc.org/provider-taxonomy",
+                  "code": "163W00000X",
+                  "display": "Registered Nurse"
+                }
+              ],
+              "text": "Registered Nurse"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Practitioner"
+      }
+    }
+  ]
+}

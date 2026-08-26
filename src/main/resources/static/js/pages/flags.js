@@ -30,19 +30,23 @@ function renderFlagList() {
             system: "http://terminology.hl7.org/CodeSystem/flag-category" },
         { code: "safety", display: "Safety", system: "http://terminology.hl7.org/CodeSystem/flag-category" }
     ];
-    const codeCatalog = [
-        { code: "fall-risk", display: "Fall risk" },
-        { code: "isolation", display: "Isolation precautions" },
-        { code: "interpreter", display: "Interpreter needed" },
-        { code: "admin-hold", display: "Administrative hold" },
-        { code: "advance-directive", display: "Advance directive on file" }
+    const FLAG_CODE_SYSTEM = "https://cadmin.io/fhir/CodeSystem/flag-code";
+    let codeCatalog = [
+        { code: "fall-risk", display: "Fall risk", system: FLAG_CODE_SYSTEM },
+        { code: "isolation", display: "Isolation precautions", system: FLAG_CODE_SYSTEM },
+        { code: "interpreter", display: "Interpreter needed", system: FLAG_CODE_SYSTEM },
+        { code: "admin-hold", display: "Administrative hold", system: FLAG_CODE_SYSTEM },
+        { code: "advance-directive", display: "Advance directive on file", system: FLAG_CODE_SYSTEM }
     ];
     const $root = $("#app-content");
     $root.html(
         '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
             '<h1 class="h3 mb-0 page-title">Flags</h1>' +
-            '<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-flag-modal">' +
-                '<i class="bi bi-plus-lg me-1"></i>New flag</button>' +
+            CadminResourceDocument.splitButton({
+                label: "New flag",
+                modalTarget: "#create-flag-modal",
+                resourceType: "Flag"
+            }) +
         "</div>" +
         '<div id="flag-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
@@ -289,7 +293,7 @@ function renderFlagList() {
         if (categoryCoding) {
             resource.category = [{ coding: [categoryCoding] }];
         }
-        const code = codingFromSelect("#f-code", codeCatalog, "https://cadmin.io/fhir/CodeSystem/flag-code");
+        const code = codingFromSelect("#f-code", codeCatalog, FLAG_CODE_SYSTEM);
         if (code) {
             resource.code.coding = [code];
         }
@@ -343,9 +347,11 @@ function renderFlagList() {
         prepend: [{ code: "", display: "Any category" }],
         selected: ""
     });
-    CadminApi.fillSelectOptions("#f-code", codeCatalog, {
+    CadminApi.fillValueSetSelect("#f-code", CadminApi.valueSets.flagCode, {
+        fallback: codeCatalog,
         prepend: [{ code: "", display: "Custom message" }],
-        selected: "fall-risk"
+        selected: "fall-risk",
+        onConcepts: function (concepts) { codeCatalog = concepts; }
     });
     CadminApi.expandValueSet(CadminApi.valueSets.flagCategory).done(function (concepts) {
         categoryOptions = usableCategories(concepts);

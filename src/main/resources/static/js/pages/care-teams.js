@@ -34,8 +34,11 @@ function renderCareTeamList(initialQuery) {
     $root.html(
         '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
             '<h1 class="h3 mb-0 page-title">Care Teams</h1>' +
-            '<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-care-team-modal">' +
-                '<i class="bi bi-plus-lg me-1"></i>New care team</button>' +
+            CadminResourceDocument.splitButton({
+                label: "New care team",
+                modalTarget: "#create-care-team-modal",
+                resourceType: "CareTeam"
+            }) +
         '</div>' +
         '<div id="care-team-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +

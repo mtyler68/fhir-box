@@ -209,8 +209,9 @@ window.CadminCaregiverDetail = (function () {
             return '<span class="text-muted">—</span>';
         }
         return items.map(function (item) {
-            return '<span class="badge text-bg-secondary me-1 mb-1">' +
-                esc(conceptLabel(item.language || item)) + "</span>";
+            return '<span class="badge text-bg-' + (item.preferred ? "primary" : "secondary") +
+                ' me-1 mb-1">' + esc(conceptLabel(item.language || item)) +
+                (item.preferred ? " · Preferred" : "") + "</span>";
         }).join("");
     }
 
@@ -372,6 +373,7 @@ window.CadminCaregiverDetail = (function () {
                                 tabButton("cgd-tab-details", "Details", true) +
                                 (admin ? tabButton("cgd-tab-care", "Care", false) : "") +
                                 tabButton("cgd-tab-graph", "Graph", false) +
+                                tabButton("cgd-tab-history", "History", false) +
                             "</ul>" +
                         "</div>" +
                         '<div class="card-body">' +
@@ -396,6 +398,7 @@ window.CadminCaregiverDetail = (function () {
                                         false)
                                     : "") +
                                 tabPane("cgd-tab-graph", CadminResourceGraph.card(), false) +
+                                tabPane("cgd-tab-history", CadminResourceHistory.card(), false) +
                             "</div>" +
                         "</div>" +
                     "</div>" +
@@ -429,7 +432,10 @@ window.CadminCaregiverDetail = (function () {
                 '<div class="col-md-6 mb-0"><label class="form-label">Country</label><input class="form-control" id="cgd-country"></div></div>',
                 "cgd-address-form") +
             modal("cgd-lang-modal", "Add language",
-                field("Language", '<select class="form-select" id="cgd-lang">' + optionsHtml(languageOptions) + "</select>"),
+                field("Language", '<select class="form-select" id="cgd-lang">' + optionsHtml(languageOptions) + "</select>") +
+                '<div class="form-check mb-0">' +
+                    '<input class="form-check-input" type="checkbox" id="cgd-lang-preferred">' +
+                    '<label class="form-check-label" for="cgd-lang-preferred">Preferred language</label></div>',
                 "cgd-lang-form") +
             (isAdmin()
                 ? modal("cgd-team-modal", "Add patient via care team",
@@ -445,6 +451,7 @@ window.CadminCaregiverDetail = (function () {
         );
         CadminResourceSource.mount(function () { return caregiver; });
         CadminResourceGraph.mount(caregiver);
+        CadminResourceHistory.mount(caregiver);
         renderBasics();
         renderIdentifiers();
         renderTelecom();
@@ -523,10 +530,27 @@ window.CadminCaregiverDetail = (function () {
             return;
         }
         $("#cgd-lang-rows").html(items.map(function (item, index) {
-            return "<tr><td>" + esc(conceptLabel(item.language || item)) + "</td>" +
-                '<td class="text-end"><button class="btn btn-sm btn-outline-danger" type="button" data-remove="communication" data-index="' +
-                index + '" title="Remove" aria-label="Remove"><i class="bi bi-trash"></i></button></td></tr>';
+            return "<tr><td>" + esc(conceptLabel(item.language || item)) +
+                (item.preferred ? ' <span class="badge text-bg-primary">Preferred</span>' : "") + "</td>" +
+                '<td class="text-end text-nowrap">' +
+                    '<button class="btn btn-sm ' + (item.preferred ? "btn-primary" : "btn-outline-secondary") +
+                        ' me-1" type="button" data-prefer-lang="' + index + '" title="' +
+                        (item.preferred ? "Preferred language" : "Set as preferred") +
+                        '" aria-label="' + (item.preferred ? "Preferred language" : "Set as preferred") + '">' +
+                        '<i class="bi ' + (item.preferred ? "bi-star-fill" : "bi-star") + '"></i></button>' +
+                    '<button class="btn btn-sm btn-outline-danger" type="button" data-remove="communication" data-index="' +
+                    index + '" title="Remove" aria-label="Remove"><i class="bi bi-trash"></i></button></td></tr>';
         }).join(""));
+    }
+
+    function setPreferredLanguage(index, preferred) {
+        (caregiver.communication || []).forEach(function (item, i) {
+            if (i === index && preferred) {
+                item.preferred = true;
+            } else {
+                delete item.preferred;
+            }
+        });
     }
 
     function loadCareTeams() {
@@ -618,6 +642,7 @@ window.CadminCaregiverDetail = (function () {
         renderTelecom();
         renderAddresses();
         renderLanguages();
+        renderProfile();
     }
 
     function saveCaregiver(next) {
@@ -640,6 +665,18 @@ window.CadminCaregiverDetail = (function () {
             if (typeof CadminResourceGraph.resize === "function") {
                 CadminResourceGraph.resize();
             }
+        });
+
+        $root.on("click.cgdetail", "[data-prefer-lang]", function () {
+            const index = Number($(this).attr("data-prefer-lang"));
+            const item = (caregiver.communication || [])[index];
+            if (!item) {
+                return;
+            }
+            setPreferredLanguage(index, !item.preferred);
+            saveCaregiver(function () {
+                alertMsg("success", item.preferred ? "Preferred language set." : "Preferred language cleared.");
+            });
         });
 
         $root.on("click.cgdetail", "[data-remove]", function () {
@@ -780,6 +817,9 @@ window.CadminCaregiverDetail = (function () {
             });
         });
 
+        $("#cgd-lang-modal").on("show.bs.modal", function () {
+            $("#cgd-lang-preferred").prop("checked", false);
+        });
         $("#cgd-lang-form").on("submit", function (event) {
             event.preventDefault();
             const option = languageOptions.find(function (item) { return item.code === $("#cgd-lang").val(); });
@@ -788,13 +828,18 @@ window.CadminCaregiverDetail = (function () {
             }
             caregiver.communication = caregiver.communication || [];
             caregiver.communication.push({
-                coding: [{
-                    system: "urn:ietf:bcp:47",
-                    code: option.code,
-                    display: option.display
-                }],
-                text: option.display
+                language: {
+                    coding: [{
+                        system: "urn:ietf:bcp:47",
+                        code: option.code,
+                        display: option.display
+                    }],
+                    text: option.display
+                }
             });
+            if ($("#cgd-lang-preferred").prop("checked")) {
+                setPreferredLanguage(caregiver.communication.length - 1, true);
+            }
             saveCaregiver(function () {
                 hideModal("cgd-lang-modal");
                 alertMsg("success", "Language added.");

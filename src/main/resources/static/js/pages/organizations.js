@@ -28,8 +28,12 @@ function renderOrganizationList(initialQuery) {
     $root.html(
         '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
             '<h1 class="h3 mb-0 page-title">Organizations</h1>' +
-            '<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-organization-modal">' +
-                '<i class="bi bi-plus-lg me-1"></i>New organization</button>' +
+            CadminResourceDocument.splitButton({
+                label: "New organization",
+                modalTarget: "#create-organization-modal",
+                resourceType: "Organization",
+                items: [CadminNpiOrganization.menuItem()]
+            }) +
         '</div>' +
         '<div id="organization-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +

@@ -65,12 +65,13 @@ window.CadminApi = (function ($) {
         return ajax({ url: "/logout", method: "POST" });
     }
 
-    function fhir(path, method, data) {
+    function fhir(path, method, data, options) {
         const verb = (method || "GET").toUpperCase();
+        const opts = options && typeof options === "object" ? options : {};
         const request = ajax({
             url: "/fhir" + path,
             method: method || "GET",
-            data: data ? JSON.stringify(data) : undefined,
+            data: !data ? undefined : (typeof data === "string" ? data : JSON.stringify(data)),
             contentType: data ? "application/fhir+json" : undefined,
             converters: {
                 "text json": function (text) {
@@ -82,7 +83,7 @@ window.CadminApi = (function ($) {
                 Accept: "application/fhir+json"
             }, data ? { Prefer: "return=representation" } : {}, csrfHeaders())
         });
-        if (verb !== "GET" && verb !== "HEAD") {
+        if (verb !== "GET" && verb !== "HEAD" && String(path || "").indexOf("$") < 0) {
             request.done(function (body) {
                 if (window.CadminWorkspace && typeof CadminWorkspace.notifyWrite === "function") {
                     CadminWorkspace.notifyWrite({
@@ -93,7 +94,29 @@ window.CadminApi = (function ($) {
                 }
             });
         }
+        request.fail(function (xhr) {
+            if (xhr.status === 401 || opts.silent) {
+                return;
+            }
+            const issues = operationOutcomeIssues(xhr);
+            if (issues.length || (verb !== "GET" && verb !== "HEAD")) {
+                showFhirError(xhr, { issues: issues, title: opts.errorTitle });
+            }
+        });
         return request;
+    }
+
+    function wiremock(path, method, data) {
+        const verb = (method || "GET").toUpperCase();
+        const options = {
+            url: "/wiremock" + path,
+            method: verb
+        };
+        if (data !== undefined && data !== null && verb !== "GET" && verb !== "HEAD") {
+            options.data = typeof data === "string" ? data : JSON.stringify(data);
+            options.contentType = "application/json";
+        }
+        return ajax(options);
     }
 
     function showAlert(selector, type, message) {
@@ -101,6 +124,153 @@ window.CadminApi = (function ($) {
             .removeClass("d-none alert-success alert-danger alert-warning alert-info")
             .addClass("alert alert-" + type)
             .text(message);
+    }
+
+    function fhirErrorBody(xhr) {
+        if (xhr && xhr.responseJSON && typeof xhr.responseJSON === "object") {
+            return xhr.responseJSON;
+        }
+        const text = xhr && xhr.responseText;
+        if (!text || !String(text).trim()) {
+            return null;
+        }
+        try {
+            return JSON.parse(text);
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function issueMessage(issue) {
+        const details = (issue && issue.details) || {};
+        const coding = (details.coding && details.coding[0]) || {};
+        return details.text || coding.display || (issue && issue.diagnostics) || (issue && issue.code) || "";
+    }
+
+    function issueLocation(issue) {
+        if (!issue) {
+            return "";
+        }
+        if (issue.expression && issue.expression.length) {
+            return issue.expression.join(", ");
+        }
+        if (issue.location && issue.location.length) {
+            return issue.location.join(", ");
+        }
+        return "";
+    }
+
+    function collectOutcomeIssues(resource, out) {
+        if (!resource || typeof resource !== "object") {
+            return;
+        }
+        if (resource.resourceType === "OperationOutcome") {
+            (resource.issue || []).forEach(function (issue) {
+                const message = issueMessage(issue);
+                if (!message && !issue.code) {
+                    return;
+                }
+                out.push({
+                    severity: issue.severity || "error",
+                    code: issue.code || "",
+                    message: message || "Unspecified issue",
+                    location: issueLocation(issue)
+                });
+            });
+            return;
+        }
+        if (resource.resourceType === "Bundle") {
+            (resource.entry || []).forEach(function (entry) {
+                if (!entry) {
+                    return;
+                }
+                collectOutcomeIssues(entry.resource, out);
+                collectOutcomeIssues(entry.response && entry.response.outcome, out);
+            });
+        }
+    }
+
+    function operationOutcomeIssues(xhr) {
+        const issues = [];
+        const body = fhirErrorBody(xhr);
+        collectOutcomeIssues(body, issues);
+        if (!issues.length && body) {
+            const fallback = body.detail || body.message || body.error || body.title;
+            if (fallback) {
+                issues.push({
+                    severity: "error",
+                    code: "",
+                    message: fallback,
+                    location: ""
+                });
+            }
+        }
+        return issues;
+    }
+
+    function severityBadge(severity) {
+        const kind = severity === "fatal" || severity === "error" ? "danger"
+            : severity === "warning" ? "warning"
+                : severity === "information" ? "info"
+                    : "secondary";
+        return '<span class="badge text-bg-' + kind + '">' + escapeHtml(severity || "error") + "</span>";
+    }
+
+    function showFhirError(xhr, options) {
+        const opts = options || {};
+        let issues = opts.issues || operationOutcomeIssues(xhr);
+        if (!issues.length) {
+            issues = [{
+                severity: "error",
+                code: "",
+                message: "Request failed (" + ((xhr && xhr.status) || "error") + ").",
+                location: ""
+            }];
+        }
+        const status = xhr && xhr.status ? "HTTP " + xhr.status + (xhr.statusText ? " " + xhr.statusText : "") : "";
+        const title = opts.title || "FHIR request failed";
+        let modalEl = document.getElementById("cadmin-fhir-outcome-modal");
+        if (!modalEl) {
+            $("body").append(
+                '<div class="modal fade" id="cadmin-fhir-outcome-modal" tabindex="-1" aria-labelledby="cadmin-fhir-outcome-title">' +
+                    '<div class="modal-dialog modal-lg modal-dialog-scrollable">' +
+                        '<div class="modal-content">' +
+                            '<div class="modal-header">' +
+                                '<h5 class="modal-title" id="cadmin-fhir-outcome-title"></h5>' +
+                                '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>' +
+                            "</div>" +
+                            '<div class="modal-body">' +
+                                '<p class="text-muted small mb-3" id="cadmin-fhir-outcome-status"></p>' +
+                                '<div id="cadmin-fhir-outcome-issues"></div>' +
+                            "</div>" +
+                            '<div class="modal-footer">' +
+                                '<button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>' +
+                            "</div>" +
+                        "</div>" +
+                    "</div>" +
+                "</div>"
+            );
+            modalEl = document.getElementById("cadmin-fhir-outcome-modal");
+        }
+        $("#cadmin-fhir-outcome-title").text(title);
+        $("#cadmin-fhir-outcome-status").text(status || "").toggleClass("d-none", !status);
+        $("#cadmin-fhir-outcome-issues").html(
+            '<div class="list-group">' + issues.map(function (issue) {
+                return '<div class="list-group-item">' +
+                    '<div class="d-flex flex-wrap align-items-center gap-2 mb-1">' +
+                        severityBadge(issue.severity) +
+                        (issue.code ? '<span class="small text-muted">' + escapeHtml(issue.code) + "</span>" : "") +
+                    "</div>" +
+                    '<div style="white-space:pre-wrap">' + escapeHtml(issue.message) + "</div>" +
+                    (issue.location
+                        ? '<div class="small text-muted mt-1"><code>' + escapeHtml(issue.location) + "</code></div>"
+                        : "") +
+                    "</div>";
+            }).join("") + "</div>"
+        );
+        if (typeof bootstrap !== "undefined") {
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
     }
 
     function showToast(type, message) {
@@ -152,16 +322,22 @@ window.CadminApi = (function ($) {
         RelatedPerson: "#/caregivers/",
         Practitioner: "#/practitioners/",
         Device: "#/devices/",
+        DeviceAssociation: "#/device-associations/",
         Flag: "#/flags/",
         Organization: "#/organizations/",
         CareTeam: "#/care-teams/",
         Location: "#/locations/",
+        HealthcareService: "#/healthcare-services/",
         Consent: "#/consents/",
         Subscription: "#/subscriptions/",
         SubscriptionTopic: "#/subscription-topics/",
         Endpoint: "#/endpoints/",
         Library: "#/pds-policies/",
-        Questionnaire: "#/questionnaires/"
+        Questionnaire: "#/questionnaires/",
+        CodeSystem: "#/code-systems/",
+        ValueSet: "#/value-sets/",
+        PractitionerRole: "#/practitioner-roles/",
+        List: "#/lists/"
     };
 
     function detailHref(type, id) {
@@ -199,6 +375,12 @@ window.CadminApi = (function ($) {
         }
         const match = reference.match(/\/([^/]+)$/);
         return match ? decodeId(match[1]) : "";
+    }
+
+    function referenceType(ref) {
+        const reference = typeof ref === "string" ? ref : ((ref && ref.reference) || "");
+        const match = String(reference).match(/^([A-Za-z][A-Za-z0-9]+)\//);
+        return match ? match[1] : "";
     }
 
     const PAGE_SIZE = 10;
@@ -428,7 +610,82 @@ window.CadminApi = (function ($) {
         consentPolicy: "http://hl7.org/fhir/ValueSet/consent-policy",
         consentDataMeaning: "http://hl7.org/fhir/ValueSet/consent-data-meaning",
         flagStatus: "http://hl7.org/fhir/ValueSet/flag-status",
-        flagCategory: "http://hl7.org/fhir/ValueSet/flag-category"
+        flagCategory: "http://hl7.org/fhir/ValueSet/flag-category",
+        flagCode: "https://cadmin.io/fhir/ValueSet/flag-code",
+        listStatus: "http://hl7.org/fhir/ValueSet/list-status",
+        listMode: "http://hl7.org/fhir/ValueSet/list-mode",
+        listExampleCodes: "http://hl7.org/fhir/ValueSet/list-example-codes",
+        listEmptyReason: "http://hl7.org/fhir/ValueSet/list-empty-reason",
+        listItemFlag: "http://hl7.org/fhir/ValueSet/list-item-flag",
+        codesystemContent: "http://hl7.org/fhir/ValueSet/codesystem-content-mode",
+        practitionerRole: "http://hl7.org/fhir/ValueSet/practitioner-role",
+        c80PracticeCodes: "http://hl7.org/fhir/ValueSet/c80-practice-codes",
+        deviceAssociationStatus: "http://hl7.org/fhir/ValueSet/deviceassociation-status",
+        deviceAssociationStatusReason: "http://hl7.org/fhir/ValueSet/deviceassociation-status-reason",
+        deviceAssociationOperationStatus: "http://hl7.org/fhir/ValueSet/deviceassociation-operationstatus"
+    };
+
+    const VALUE_SET_FALLBACKS = {
+        practitionerRole: [
+            { code: "doctor", display: "Doctor",
+                system: "http://terminology.hl7.org/CodeSystem/practitioner-role" },
+            { code: "nurse", display: "Nurse",
+                system: "http://terminology.hl7.org/CodeSystem/practitioner-role" },
+            { code: "pharmacist", display: "Pharmacist",
+                system: "http://terminology.hl7.org/CodeSystem/practitioner-role" },
+            { code: "researcher", display: "Researcher",
+                system: "http://terminology.hl7.org/CodeSystem/practitioner-role" },
+            { code: "teacher", display: "Teacher",
+                system: "http://terminology.hl7.org/CodeSystem/practitioner-role" },
+            { code: "ict", display: "ICT professional",
+                system: "http://terminology.hl7.org/CodeSystem/practitioner-role" }
+        ],
+        c80PracticeCodes: [
+            { code: "394814009", display: "General practice", system: "http://snomed.info/sct" },
+            { code: "394579002", display: "Cardiology", system: "http://snomed.info/sct" },
+            { code: "394584008", display: "Gastroenterology", system: "http://snomed.info/sct" },
+            { code: "394610002", display: "Surgery-Dental", system: "http://snomed.info/sct" },
+            { code: "394587001", display: "Psychiatry", system: "http://snomed.info/sct" },
+            { code: "394537008", display: "Pediatrics", system: "http://snomed.info/sct" },
+            { code: "394585009", display: "Obstetrics and gynecology", system: "http://snomed.info/sct" },
+            { code: "394802001", display: "General medicine", system: "http://snomed.info/sct" }
+        ],
+        deviceAssociationStatus: [
+            { code: "implanted", display: "Implanted",
+                system: "http://hl7.org/fhir/deviceassociation-status" },
+            { code: "explanted", display: "Explanted",
+                system: "http://hl7.org/fhir/deviceassociation-status" },
+            { code: "attached", display: "Attached",
+                system: "http://hl7.org/fhir/deviceassociation-status" },
+            { code: "entered-in-error", display: "Entered in error",
+                system: "http://hl7.org/fhir/deviceassociation-status" },
+            { code: "unknown", display: "Unknown",
+                system: "http://hl7.org/fhir/deviceassociation-status" }
+        ],
+        deviceAssociationStatusReason: [
+            { code: "attached", display: "Attached",
+                system: "http://hl7.org/fhir/deviceassociation-status-reason" },
+            { code: "disconnected", display: "Disconnected",
+                system: "http://hl7.org/fhir/deviceassociation-status-reason" },
+            { code: "failed", display: "Failed",
+                system: "http://hl7.org/fhir/deviceassociation-status-reason" },
+            { code: "placed", display: "Placed",
+                system: "http://hl7.org/fhir/deviceassociation-status-reason" },
+            { code: "replaced", display: "Replaced",
+                system: "http://hl7.org/fhir/deviceassociation-status-reason" }
+        ],
+        deviceAssociationOperationStatus: [
+            { code: "on", display: "On",
+                system: "http://hl7.org/fhir/deviceassociation-operationstatus" },
+            { code: "off", display: "Off",
+                system: "http://hl7.org/fhir/deviceassociation-operationstatus" },
+            { code: "standby", display: "Stand by",
+                system: "http://hl7.org/fhir/deviceassociation-operationstatus" },
+            { code: "defective", display: "Defective",
+                system: "http://hl7.org/fhir/deviceassociation-operationstatus" },
+            { code: "unknown", display: "Unknown",
+                system: "http://hl7.org/fhir/deviceassociation-operationstatus" }
+        ]
     };
 
     const valueSetCache = {};
@@ -459,21 +716,27 @@ window.CadminApi = (function ($) {
         const opts = options || {};
         const count = opts.count || 500;
         const filter = opts.filter || "";
-        const key = String(url) + "|" + count + "|" + filter;
-        if (valueSetCache[key]) {
+        const offset = opts.offset || 0;
+        const key = String(url) + "|" + count + "|" + filter + "|" + offset;
+        if (!opts.nocache && valueSetCache[key]) {
             return $.Deferred().resolve(valueSetCache[key]).promise();
         }
         let path = "/ValueSet/$expand?url=" + encodeURIComponent(url) + "&count=" + encodeURIComponent(String(count));
         if (filter) {
             path += "&filter=" + encodeURIComponent(filter);
         }
-        return fhir(path).then(function (valueSet) {
+        if (offset) {
+            path += "&offset=" + encodeURIComponent(String(offset));
+        }
+        return fhir(path, "GET", null, { silent: true }).then(function (valueSet) {
             const contains = ((valueSet && valueSet.expansion) || {}).contains || [];
             const concepts = sortConcepts(flattenExpansion(contains, []));
-            if (!concepts.length) {
+            if (!concepts.length && !opts.allowEmpty) {
                 return $.Deferred().reject(valueSet).promise();
             }
-            valueSetCache[key] = concepts;
+            if (!opts.nocache) {
+                valueSetCache[key] = concepts;
+            }
             return concepts;
         });
     }
@@ -565,6 +828,14 @@ window.CadminApi = (function ($) {
         return get("/api/geocode" + (params.length ? "?" + params.join("&") : ""));
     }
 
+    function npiLookup(number, kind) {
+        let url = "/api/npi?number=" + encodeURIComponent(String(number || "").replace(/\D/g, ""));
+        if (kind) {
+            url += "&kind=" + encodeURIComponent(kind);
+        }
+        return get(url);
+    }
+
     function valueSetDisplay(concepts, code) {
         const match = (concepts || []).find(function (item) { return item.code === code; });
         return match ? match.display : (code || "—");
@@ -575,7 +846,18 @@ window.CadminApi = (function ($) {
         Organization: { type: "Organization", noun: "organizations" },
         Patient: { type: "Patient", noun: "patients" },
         Practitioner: { type: "Practitioner", noun: "practitioners" },
-        RelatedPerson: { type: "RelatedPerson", noun: "caregivers" }
+        RelatedPerson: { type: "RelatedPerson", noun: "caregivers" },
+        Location: { type: "Location", noun: "locations" },
+        HealthcareService: { type: "HealthcareService", noun: "healthcare services" },
+        Endpoint: { type: "Endpoint", noun: "endpoints" },
+        Device: { type: "Device", noun: "devices", sort: "-_lastUpdated", queryParam: "device-name" },
+        List: { type: "List", noun: "lists", sort: "title", queryParam: "title" },
+        Flag: { type: "Flag", noun: "flags", sort: "-_lastUpdated", queryParam: "_id" },
+        Consent: { type: "Consent", noun: "consents", sort: "-_lastUpdated", queryParam: "_id" },
+        Endpoint: { type: "Endpoint", noun: "endpoints", sort: "name", queryParam: "name" },
+        Questionnaire: { type: "Questionnaire", noun: "questionnaires", sort: "title", queryParam: "title" },
+        CodeSystem: { type: "CodeSystem", noun: "code systems", sort: "title", queryParam: "title" },
+        ValueSet: { type: "ValueSet", noun: "value sets", sort: "title", queryParam: "title" }
     };
 
     function selectElement(selector) {
@@ -632,9 +914,25 @@ window.CadminApi = (function ($) {
         return [given, name.family].filter(Boolean).join(" ") || (resource && resource.id) || "Unnamed";
     }
 
+    function deviceSelectLabel(resource) {
+        const names = (resource && (resource.name || resource.deviceName)) || [];
+        const preferred = names.find(function (item) { return item && item.display === true; })
+            || names.find(function (item) { return item && item.type === "user-friendly-name"; })
+            || names[0];
+        const named = preferred && (preferred.value || preferred.name);
+        if (named) {
+            return named;
+        }
+        return [resource && resource.manufacturer, resource && resource.modelNumber].filter(Boolean).join(" ")
+            || (resource && resource.id) || "";
+    }
+
     function fhirSelectLabel(resource) {
         if (!resource) {
             return "";
+        }
+        if (resource.resourceType === "Device") {
+            return deviceSelectLabel(resource);
         }
         if (resource.resourceType === "Organization") {
             return resource.name || resource.id || "";
@@ -645,13 +943,96 @@ window.CadminApi = (function ($) {
         return resource.name || resource.id || "";
     }
 
-    function fhirSearchPath(resourceType, query, page) {
-        let path = "/" + resourceType + "?_sort=name";
+    function patientGenderLabel(code) {
+        const labels = { male: "Male", female: "Female", other: "Other", unknown: "Unknown" };
+        return labels[code] || (code || "");
+    }
+
+    function formatPatientBirthDate(iso) {
+        if (!iso) {
+            return "";
+        }
+        const date = new Date(String(iso) + (String(iso).indexOf("T") >= 0 ? "" : "T00:00:00"));
+        return isNaN(date.getTime()) ? String(iso) : date.toLocaleDateString();
+    }
+
+    function patientBirthdateQuery(query) {
         const q = String(query || "").trim();
+        if (/^\d{4}(?:-\d{2}(?:-\d{2})?)?$/.test(q)) {
+            return q;
+        }
+        const numeric = q.match(/^(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})$/);
+        if (numeric) {
+            return numeric[3] + "-" + numeric[1].padStart(2, "0") + "-" + numeric[2].padStart(2, "0");
+        }
+        if (/\d{4}/.test(q) && /jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(q)) {
+            const date = new Date(q);
+            if (!isNaN(date.getTime())) {
+                const pad = function (n) { return String(n).padStart(2, "0"); };
+                return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate());
+            }
+        }
+        return "";
+    }
+
+    function fhirSelectItem(resource) {
+        const item = {
+            id: resource.id,
+            name: fhirSelectLabel(resource)
+        };
+        if (resource.resourceType === "Patient") {
+            item.gender = resource.gender || "";
+            item.genderLabel = patientGenderLabel(resource.gender);
+            item.birthDate = resource.birthDate || "";
+            item.birthDateDisplay = formatPatientBirthDate(resource.birthDate);
+        }
+        return item;
+    }
+
+    function patientSelectMeta(item) {
+        return [item && item.genderLabel, item && item.birthDateDisplay].filter(Boolean).join(" · ");
+    }
+
+    function fhirSearchPath(resourceType, query, page) {
+        const spec = FHIR_SELECT_TYPES[resourceType];
+        const q = String(query || "").trim();
+        if (!spec) {
+            let path = "/" + resourceType + "?_sort=-_lastUpdated";
+            if (q) {
+                path += "&_id=" + encodeURIComponent(q);
+            }
+            return pagedPath(path, page, FHIR_SELECT_PAGE);
+        }
+        const sort = spec.sort || "name";
+        const queryParam = spec.queryParam || "name";
+        let path = "/" + resourceType + "?_sort=" + sort;
         if (q) {
-            path += "&name=" + encodeURIComponent(q);
+            const birthdate = spec.type === "Patient" ? patientBirthdateQuery(q) : "";
+            if (birthdate) {
+                path += "&birthdate=" + encodeURIComponent(birthdate);
+            } else {
+                path += "&" + queryParam + "=" + encodeURIComponent(q);
+            }
         }
         return pagedPath(path, page, FHIR_SELECT_PAGE);
+    }
+
+    function conceptCode(cc) {
+        if (cc == null || cc === "") {
+            return "";
+        }
+        if (typeof cc === "string") {
+            return cc;
+        }
+        const item = Array.isArray(cc) ? cc[0] : cc;
+        if (item == null) {
+            return "";
+        }
+        if (typeof item === "string") {
+            return item;
+        }
+        const coding = (item.coding && item.coding[0]) || {};
+        return coding.code || item.code || item.text || "";
     }
 
     function pageFromSearchPath(path) {
@@ -699,10 +1080,11 @@ window.CadminApi = (function ($) {
         destroySelect(el);
         el.innerHTML = '<option value="">' + escapeHtml(placeholder) + "</option>";
         let inFlight = null;
+        const patientSelect = spec.type === "Patient";
         const ts = new TomSelect(el, {
             valueField: "id",
             labelField: "name",
-            searchField: ["name"],
+            searchField: patientSelect ? ["name", "birthDate", "birthDateDisplay"] : ["name"],
             maxItems: 1,
             maxOptions: 200,
             preload: "focus",
@@ -730,9 +1112,7 @@ window.CadminApi = (function ($) {
                     const excludeId = opts.excludeId || "";
                     const items = bundleResources(bundle, spec.type).filter(function (resource) {
                         return resource.id !== excludeId;
-                    }).map(function (resource) {
-                        return { id: resource.id, name: fhirSelectLabel(resource) };
-                    });
+                    }).map(fhirSelectItem);
                     const parsed = pageFromSearchPath(url);
                     if (bundleHasNext(bundle, parsed.page, items.length, parsed.size, bundle.total)) {
                         self.setNextUrl(query, fhirSearchPath(spec.type, query, parsed.page + 1));
@@ -746,10 +1126,24 @@ window.CadminApi = (function ($) {
             },
             render: {
                 option: function (item, escape) {
-                    return "<div>" + escape(item.name) + "</div>";
+                    if (!patientSelect) {
+                        return "<div>" + escape(item.name) + "</div>";
+                    }
+                    const meta = patientSelectMeta(item);
+                    return '<div class="cadmin-patient-option">' +
+                        "<div>" + escape(item.name || "") + "</div>" +
+                        (meta ? '<div class="cadmin-patient-option-meta">' + escape(meta) + "</div>" : "") +
+                        "</div>";
                 },
                 item: function (item, escape) {
-                    return "<div>" + escape(item.name) + "</div>";
+                    if (!patientSelect) {
+                        return "<div>" + escape(item.name) + "</div>";
+                    }
+                    const meta = patientSelectMeta(item);
+                    return '<div class="cadmin-patient-option">' +
+                        escape(item.name || "") +
+                        (meta ? '<span class="cadmin-patient-option-meta"> · ' + escape(meta) + "</span>" : "") +
+                        "</div>";
                 },
                 loading_more: function () {
                     return '<div class="loading-more-results py-2 d-flex align-items-center">' +
@@ -767,6 +1161,14 @@ window.CadminApi = (function ($) {
                 name: previousLabel && previousLabel !== placeholder ? previousLabel : previousValue
             });
             ts.setValue(previousValue, true);
+            if (patientSelect) {
+                fhir("/Patient/" + encodeURIComponent(previousValue), "GET", null, { silent: true }).done(function (patient) {
+                    if (!patient || !el.tomselect) {
+                        return;
+                    }
+                    el.tomselect.updateOption(previousValue, fhirSelectItem(patient));
+                });
+            }
         }
         return ts;
     }
@@ -787,6 +1189,407 @@ window.CadminApi = (function ($) {
         return bindFhirSelect(selector, "RelatedPerson", options);
     }
 
+    function terminologyLabel(resource) {
+        if (!resource) {
+            return "";
+        }
+        return resource.title || resource.name || resource.url || resource.id || "";
+    }
+
+    function looksLikeCanonical(value) {
+        const text = String(value || "").trim();
+        return /^[a-z][a-z0-9+.-]*:/i.test(text) || text.indexOf("/") >= 0;
+    }
+
+    function terminologySearchPath(resourceType, query, page) {
+        let path = "/" + resourceType + "?_sort=title";
+        const q = String(query || "").trim();
+        if (q) {
+            if (looksLikeCanonical(q)) {
+                path += "&url=" + encodeURIComponent(q);
+            } else {
+                path += "&title=" + encodeURIComponent(q);
+            }
+        }
+        return pagedPath(path, page, FHIR_SELECT_PAGE);
+    }
+
+    function flattenCodeSystemConcepts(concepts, parent, out) {
+        const rows = out || [];
+        (concepts || []).forEach(function (item) {
+            if (!item || !item.code) {
+                return;
+            }
+            rows.push({
+                code: item.code,
+                display: item.display || "",
+                definition: item.definition || "",
+                parent: parent || ""
+            });
+            if (item.concept && item.concept.length) {
+                flattenCodeSystemConcepts(item.concept, item.code, rows);
+            }
+        });
+        return rows;
+    }
+
+    function nestCodeSystemConcepts(rows) {
+        const byCode = {};
+        (rows || []).forEach(function (row) {
+            if (!row || !row.code) {
+                return;
+            }
+            const node = { code: row.code };
+            if (row.display) {
+                node.display = row.display;
+            }
+            if (row.definition) {
+                node.definition = row.definition;
+            }
+            byCode[row.code] = node;
+        });
+        const roots = [];
+        (rows || []).forEach(function (row) {
+            if (!row || !row.code || !byCode[row.code]) {
+                return;
+            }
+            const node = byCode[row.code];
+            const parent = row.parent && byCode[row.parent] && row.parent !== row.code
+                ? byCode[row.parent]
+                : null;
+            if (parent) {
+                parent.concept = parent.concept || [];
+                parent.concept.push(node);
+            } else {
+                roots.push(node);
+            }
+        });
+        return roots;
+    }
+
+    function bindTerminologySelect(selector, resourceType, options) {
+        const opts = options || {};
+        const spec = {
+            type: resourceType,
+            noun: resourceType === "ValueSet" ? "value sets" : "code systems"
+        };
+        const el = selectElement(selector);
+        if (!el || typeof TomSelect !== "function") {
+            return null;
+        }
+        const placeholder = opts.placeholder || ("Search " + spec.noun + "…");
+        const previousValue = opts.selectedUrl !== undefined ? opts.selectedUrl : selectValue(el);
+        const previousLabel = opts.selectedLabel !== undefined ? opts.selectedLabel : selectLabel(el);
+        destroySelect(el);
+        el.innerHTML = '<option value="">' + escapeHtml(placeholder) + "</option>";
+        let inFlight = null;
+        const ts = new TomSelect(el, {
+            valueField: "url",
+            labelField: "name",
+            searchField: ["name", "url"],
+            maxItems: 1,
+            maxOptions: 200,
+            preload: "focus",
+            loadThrottle: 300,
+            persist: !!opts.create,
+            create: opts.create ? function (input) {
+                const url = String(input || "").trim();
+                if (!url) {
+                    return false;
+                }
+                return { url: url, name: url };
+            } : false,
+            createOnBlur: !!opts.create,
+            createFilter: function (input) {
+                return String(input || "").trim().length > 0;
+            },
+            allowEmptyOption: opts.allowEmpty !== false,
+            placeholder: placeholder,
+            plugins: ["virtual_scroll", "clear_button"],
+            dropdownParent: "body",
+            firstUrl: function (query) {
+                return terminologySearchPath(spec.type, query, 0);
+            },
+            shouldLoad: function () {
+                return true;
+            },
+            load: function (query, callback) {
+                if (inFlight) {
+                    inFlight.abort();
+                }
+                inFlight = new AbortController();
+                const url = this.getUrl(query);
+                const self = this;
+                fhirFetch(url, inFlight.signal).then(function (bundle) {
+                    const items = bundleResources(bundle, spec.type).map(function (resource) {
+                        const canonical = resource.url || "";
+                        return {
+                            url: canonical || resource.id,
+                            name: terminologyLabel(resource),
+                            id: resource.id
+                        };
+                    }).filter(function (item) {
+                        return !!item.url;
+                    });
+                    const parsed = pageFromSearchPath(url);
+                    if (bundleHasNext(bundle, parsed.page, items.length, parsed.size, bundle.total)) {
+                        self.setNextUrl(query, terminologySearchPath(spec.type, query, parsed.page + 1));
+                    }
+                    callback(items);
+                }).catch(function (error) {
+                    if (!error || error.name !== "AbortError") {
+                        callback();
+                    }
+                });
+            },
+            render: {
+                option: function (item, escape) {
+                    const secondary = item.url && item.url !== item.name
+                        ? '<div class="small text-muted text-truncate">' + escape(item.url) + "</div>"
+                        : "";
+                    return "<div>" + escape(item.name) + secondary + "</div>";
+                },
+                item: function (item, escape) {
+                    return "<div>" + escape(item.name) + "</div>";
+                },
+                loading_more: function () {
+                    return '<div class="loading-more-results py-2 d-flex align-items-center">' +
+                        '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>' +
+                        "Loading more " + spec.noun + "…</div>";
+                },
+                no_more_results: function () {
+                    return '<div class="no-more-results py-2 text-muted">No more ' + spec.noun + "</div>";
+                }
+            }
+        });
+        if (previousValue) {
+            ts.addOption({
+                url: previousValue,
+                name: previousLabel && previousLabel !== placeholder ? previousLabel : previousValue
+            });
+            ts.setValue(previousValue, true);
+        }
+        if (typeof opts.onChange === "function") {
+            ts.on("change", function (value) {
+                opts.onChange(value || "");
+            });
+        }
+        return ts;
+    }
+
+    function bindValueSetPicker(selector, options) {
+        return bindTerminologySelect(selector, "ValueSet", options);
+    }
+
+    function bindCodeSystemPicker(selector, options) {
+        return bindTerminologySelect(selector, "CodeSystem", options);
+    }
+
+    function conceptOptionId(item) {
+        return (item.system || "") + "|" + String(item.code || "");
+    }
+
+    function conceptToOption(item) {
+        return {
+            id: conceptOptionId(item),
+            code: item.code,
+            display: item.display || item.code,
+            name: item.display || item.code,
+            system: item.system || ""
+        };
+    }
+
+    function expandSelectPath(valueSetUrl, query, page) {
+        const offset = Math.max(0, (parseInt(page, 10) || 0) * FHIR_SELECT_PAGE);
+        let path = "/ValueSet/$expand?url=" + encodeURIComponent(valueSetUrl) +
+            "&count=" + encodeURIComponent(String(FHIR_SELECT_PAGE));
+        if (offset) {
+            path += "&offset=" + encodeURIComponent(String(offset));
+        }
+        const q = String(query || "").trim();
+        if (q) {
+            path += "&filter=" + encodeURIComponent(q);
+        }
+        return path;
+    }
+
+    function pageFromExpandPath(path) {
+        const query = String(path || "");
+        const qIndex = query.indexOf("?");
+        const params = new URLSearchParams(qIndex >= 0 ? query.slice(qIndex + 1) : "");
+        const size = parseInt(params.get("count"), 10) || FHIR_SELECT_PAGE;
+        const offset = parseInt(params.get("offset"), 10) || 0;
+        return { page: Math.floor(offset / size), size: size };
+    }
+
+    function bindConceptSelect(selector, valueSetUrl, options) {
+        const opts = options || {};
+        const el = selectElement(selector);
+        if (!el || typeof TomSelect !== "function") {
+            if (el && (opts.fallback || []).length) {
+                fillSelectOptions(el, opts.fallback, opts);
+            }
+            return null;
+        }
+        const placeholder = opts.placeholder || "Search codes…";
+        const selected = opts.selected || {};
+        const selectedCode = selected.code || opts.selectedCode || "";
+        const selectedSystem = selected.system || opts.selectedSystem || "";
+        const selectedDisplay = selected.display || opts.selectedDisplay || selectedCode;
+        destroySelect(el);
+        el.innerHTML = '<option value="">' + escapeHtml(placeholder) + "</option>";
+
+        if (!valueSetUrl) {
+            const tsLocal = new TomSelect(el, {
+                valueField: "id",
+                labelField: "name",
+                searchField: ["name", "code"],
+                maxItems: 1,
+                options: (opts.fallback || []).map(conceptToOption),
+                maxOptions: 200,
+                persist: false,
+                create: false,
+                allowEmptyOption: opts.allowEmpty !== false,
+                placeholder: placeholder,
+                plugins: ["clear_button"],
+                dropdownParent: "body"
+            });
+            if (selectedCode) {
+                const prior = conceptToOption({
+                    code: selectedCode,
+                    display: selectedDisplay,
+                    system: selectedSystem
+                });
+                tsLocal.addOption(prior);
+                tsLocal.setValue(prior.id, true);
+            }
+            if (typeof opts.onChange === "function") {
+                tsLocal.on("change", function () {
+                    opts.onChange(selectCoding(el, selectedSystem));
+                });
+            }
+            return tsLocal;
+        }
+
+        let inFlight = null;
+        const ts = new TomSelect(el, {
+            valueField: "id",
+            labelField: "name",
+            searchField: ["name", "code"],
+            maxItems: 1,
+            maxOptions: 200,
+            preload: "focus",
+            loadThrottle: 300,
+            persist: false,
+            create: false,
+            allowEmptyOption: opts.allowEmpty !== false,
+            placeholder: placeholder,
+            plugins: ["virtual_scroll", "clear_button"],
+            dropdownParent: "body",
+            firstUrl: function (query) {
+                return expandSelectPath(valueSetUrl, query, 0);
+            },
+            shouldLoad: function () {
+                return true;
+            },
+            load: function (query, callback) {
+                if (inFlight) {
+                    inFlight.abort();
+                }
+                inFlight = new AbortController();
+                const url = this.getUrl(query);
+                const self = this;
+                fhirFetch(url, inFlight.signal).then(function (valueSet) {
+                    const contains = ((valueSet && valueSet.expansion) || {}).contains || [];
+                    const items = flattenExpansion(contains, []).map(conceptToOption);
+                    const parsed = pageFromExpandPath(url);
+                    const total = valueSet && valueSet.expansion && valueSet.expansion.total;
+                    if (typeof total === "number"
+                            ? (parsed.page + 1) * parsed.size < total
+                            : items.length >= parsed.size) {
+                        self.setNextUrl(query, expandSelectPath(valueSetUrl, query, parsed.page + 1));
+                    }
+                    callback(items);
+                }).catch(function (error) {
+                    if (!error || error.name !== "AbortError") {
+                        callback(opts.fallback ? (opts.fallback || []).map(conceptToOption) : []);
+                    }
+                });
+            },
+            render: {
+                option: function (item, escape) {
+                    const code = item.code && item.code !== item.name
+                        ? '<span class="small text-muted ms-1">' + escape(item.code) + "</span>"
+                        : "";
+                    return "<div>" + escape(item.name) + code + "</div>";
+                },
+                item: function (item, escape) {
+                    return "<div>" + escape(item.name) + "</div>";
+                },
+                loading_more: function () {
+                    return '<div class="loading-more-results py-2 d-flex align-items-center">' +
+                        '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>' +
+                        "Loading more codes…</div>";
+                },
+                no_more_results: function () {
+                    return '<div class="no-more-results py-2 text-muted">No more codes</div>';
+                }
+            }
+        });
+        if (selectedCode) {
+            const prior = conceptToOption({
+                code: selectedCode,
+                display: selectedDisplay,
+                system: selectedSystem
+            });
+            ts.addOption(prior);
+            ts.setValue(prior.id, true);
+        }
+        if (typeof opts.onChange === "function") {
+            ts.on("change", function () {
+                opts.onChange(selectCoding(el, selectedSystem));
+            });
+        }
+        return ts;
+    }
+
+    function selectCoding(selector, fallbackSystem) {
+        const el = selectElement(selector);
+        if (el && el.tomselect) {
+            const value = el.tomselect.getValue();
+            if (!value) {
+                return null;
+            }
+            const opt = el.tomselect.options[value];
+            if (!opt) {
+                return null;
+            }
+            return {
+                system: opt.system || fallbackSystem || "",
+                code: opt.code || "",
+                display: opt.display || opt.name || opt.code || ""
+            };
+        }
+        const code = (el && el.value) || "";
+        if (!code) {
+            return null;
+        }
+        const label = selectLabel(el);
+        return {
+            system: fallbackSystem || "",
+            code: code,
+            display: label && label !== code ? label : code
+        };
+    }
+
+    function companionValueSetUrl(codeSystemUrl) {
+        const url = String(codeSystemUrl || "");
+        if (url.indexOf("/CodeSystem/") >= 0) {
+            return url.replace("/CodeSystem/", "/ValueSet/");
+        }
+        return url ? url.replace(/\/?$/, "") + "-valueset" : "";
+    }
+
     return {
         get: get,
         post: function (url, data) { return send(url, "POST", data); },
@@ -794,13 +1597,16 @@ window.CadminApi = (function ($) {
         login: login,
         logout: logout,
         fhir: fhir,
+        wiremock: wiremock,
         showAlert: showAlert,
         showToast: showToast,
+        showFhirError: showFhirError,
         escapeHtml: escapeHtml,
         resourceLink: resourceLink,
         detailHref: detailHref,
         routeParamId: routeParamId,
         referenceId: referenceId,
+        referenceType: referenceType,
         createdResourceId: createdResourceId,
         pageSize: PAGE_SIZE,
         pageSizes: PAGE_SIZES,
@@ -809,12 +1615,14 @@ window.CadminApi = (function ($) {
         bundleResources: bundleResources,
         renderPager: renderPager,
         valueSets: VALUE_SETS,
+        valueSetFallbacks: VALUE_SET_FALLBACKS,
         expandValueSet: expandValueSet,
         fillSelectOptions: fillSelectOptions,
         fillValueSetSelect: fillValueSetSelect,
         fillValueSetChecks: fillValueSetChecks,
         valueSetDisplay: valueSetDisplay,
         geocode: geocode,
+        npiLookup: npiLookup,
         destroySelect: destroySelect,
         destroySelects: destroySelects,
         selectValue: selectValue,
@@ -823,6 +1631,15 @@ window.CadminApi = (function ($) {
         bindOrganizationSelect: bindOrganizationSelect,
         bindPatientSelect: bindPatientSelect,
         bindPractitionerSelect: bindPractitionerSelect,
-        bindCaregiverSelect: bindCaregiverSelect
+        bindCaregiverSelect: bindCaregiverSelect,
+        bindValueSetPicker: bindValueSetPicker,
+        bindCodeSystemPicker: bindCodeSystemPicker,
+        bindConceptSelect: bindConceptSelect,
+        selectCoding: selectCoding,
+        flattenCodeSystemConcepts: flattenCodeSystemConcepts,
+        nestCodeSystemConcepts: nestCodeSystemConcepts,
+        companionValueSetUrl: companionValueSetUrl,
+        terminologyLabel: terminologyLabel,
+        conceptCode: conceptCode
     };
 }(jQuery));

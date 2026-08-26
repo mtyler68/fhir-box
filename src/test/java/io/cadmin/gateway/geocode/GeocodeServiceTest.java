@@ -87,6 +87,10 @@ class GeocodeServiceTest {
                 new CadminProperties.Fhir("http://localhost:8081"),
                 new CadminProperties.Geocode(
                         "https://nominatim.openstreetmap.org",
-                        "FHIR-Box/0.1 (io.cadmin.gateway; location-geocoder)"));
+                        "FHIR-Box/0.1 (io.cadmin.gateway; location-geocoder)"),
+                new CadminProperties.NpiRegistry(
+                        "https://npiregistry.cms.hhs.gov/api/",
+                        "2.1"),
+                new CadminProperties.Wiremock("http://localhost:9090"));
     }
 }

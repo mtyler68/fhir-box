@@ -2,18 +2,27 @@ window.CadminWorkspace = (function ($) {
     const ROUTES = {
         patients: { type: "Patient", path: "/Patient/", icon: "bi-person", listLabel: "Patients" },
         caregivers: { type: "RelatedPerson", path: "/RelatedPerson/", icon: "bi-person-heart", listLabel: "Caregivers" },
-        practitioners: { type: "Practitioner", path: "/Practitioner/", icon: "bi-person-badge", listLabel: "Practitioners" },
+        practitioners: { type: "Practitioner", path: "/Practitioner/", icon: "mdi:doctor", listLabel: "Practitioners" },
         devices: { type: "Device", path: "/Device/", icon: "bi-cpu", listLabel: "Devices" },
+        "device-associations": { type: "DeviceAssociation", path: "/DeviceAssociation/", icon: "bi-link-45deg",
+            listLabel: "Device associations" },
         flags: { type: "Flag", path: "/Flag/", icon: "bi-flag", listLabel: "Flags" },
+        lists: { type: "List", path: "/List/", icon: "bi-list-ul", listLabel: "Lists" },
         organizations: { type: "Organization", path: "/Organization/", icon: "bi-building", listLabel: "Organizations" },
-        "care-teams": { type: "CareTeam", path: "/CareTeam/", icon: "bi-people", listLabel: "Care teams" },
+        "care-teams": { type: "CareTeam", path: "/CareTeam/", icon: "bi-people-fill", listLabel: "Care teams" },
         locations: { type: "Location", path: "/Location/", icon: "bi-geo-alt", listLabel: "Locations" },
-        "pds-policies": { type: "Library", path: "/Library/", icon: "bi-shield-check", listLabel: "PDS Policies" },
+        "healthcare-services": { type: "HealthcareService", path: "/HealthcareService/", icon: "mdi:medical-bag",
+            listLabel: "Healthcare services" },
+        "pds-policies": { type: "Library", path: "/Library/", icon: "bi-journal-text", listLabel: "PDS Policies" },
         questionnaires: { type: "Questionnaire", path: "/Questionnaire/", icon: "bi-ui-checks", listLabel: "Questionnaires" },
-        subscriptions: { type: "Subscription", path: "/Subscription/", icon: "bi-bell", listLabel: "Subscriptions" },
-        "subscription-topics": { type: "SubscriptionTopic", path: "/SubscriptionTopic/", icon: "bi-broadcast", listLabel: "Subscription topics" },
-        endpoints: { type: "Endpoint", path: "/Endpoint/", icon: "bi-plug", listLabel: "Endpoints" },
-        consents: { type: "Consent", path: "/Consent/", icon: "bi-file-earmark-check", listLabel: "Consents" }
+        "code-systems": { type: "CodeSystem", path: "/CodeSystem/", icon: "bi-braces", listLabel: "Code systems" },
+        "value-sets": { type: "ValueSet", path: "/ValueSet/", icon: "bi-tags", listLabel: "Value sets" },
+        subscriptions: { type: "Subscription", path: "/Subscription/", icon: "bi-broadcast", listLabel: "Subscriptions" },
+        "subscription-topics": { type: "SubscriptionTopic", path: "/SubscriptionTopic/", icon: "bi-bookmark-star", listLabel: "Subscription topics" },
+        endpoints: { type: "Endpoint", path: "/Endpoint/", icon: "bi-hdd-network", listLabel: "Endpoints" },
+        consents: { type: "Consent", path: "/Consent/", icon: "bi-file-earmark-check", listLabel: "Consents" },
+        "practitioner-roles": { type: "PractitionerRole", path: "/PractitionerRole/", icon: "bi-person-vcard",
+            listLabel: "Practitioner roles" }
     };
     const LIST_LABELS = {
         dashboard: "Dashboard",
@@ -22,7 +31,12 @@ window.CadminWorkspace = (function ($) {
         "demo-data": "Demo data",
         users: "Users",
         settings: "Settings",
-        "search-parameters": "Search parameters"
+        "search-parameters": "Search parameters",
+        "code-systems": "Code systems",
+        "value-sets": "Value sets",
+        "wiremock-mappings": "WireMock mappings",
+        "wiremock-requests": "WireMock requests",
+        "wiremock-scenarios": "WireMock scenarios"
     };
     const BOOKMARK_STORE = "cadmin-workspace-bookmarks";
     const TAB_STORE = "cadmin-workspace-open-tabs";
@@ -49,6 +63,16 @@ window.CadminWorkspace = (function ($) {
         return ROUTES[routeName] || null;
     }
 
+    function iconHtml(icon, extraClass) {
+        const name = String(icon || "bi-file-earmark");
+        const extra = extraClass ? " " + extraClass : "";
+        if (name.indexOf(":") !== -1) {
+            return '<iconify-icon class="content-tab-icon' + extra + '" icon="' +
+                CadminApi.escapeHtml(name) + '" aria-hidden="true"></iconify-icon>';
+        }
+        return '<i class="bi ' + CadminApi.escapeHtml(name) + extra + '" aria-hidden="true"></i>';
+    }
+
     function routeNameForType(type) {
         const names = Object.keys(ROUTES);
         for (let i = 0; i < names.length; i++) {
@@ -61,6 +85,15 @@ window.CadminWorkspace = (function ($) {
 
     function tabKey(type, id) {
         return type + "/" + id;
+    }
+
+    function tabTooltip(tab) {
+        const title = (tab && tab.title) || "";
+        const type = (tab && tab.type) || "";
+        if (!type || type === title) {
+            return title || type;
+        }
+        return type + " · " + title;
     }
 
     function routeKey(route) {
@@ -101,6 +134,27 @@ window.CadminWorkspace = (function ($) {
     function titleOf(resource) {
         if (!resource) {
             return "Details";
+        }
+        if (resource.resourceType === "PractitionerRole") {
+            const person = (resource.practitioner && resource.practitioner.display) || "";
+            const code = resource.code;
+            const coding = (Array.isArray(code) ? code[0] : code) || {};
+            const first = (coding.coding && coding.coding[0]) || {};
+            const role = coding.text || first.display || first.code || "";
+            if (person && role) {
+                return person + " · " + role;
+            }
+            return person || role || resource.id || "Practitioner role";
+        }
+        if (resource.resourceType === "DeviceAssociation") {
+            const device = (resource.device && resource.device.display) || "";
+            const status = window.CadminApi && typeof CadminApi.conceptCode === "function"
+                ? CadminApi.conceptCode(resource.status)
+                : (typeof resource.status === "string" ? resource.status : "");
+            if (device && status) {
+                return device + " · " + status;
+            }
+            return device || status || resource.id || "Device association";
         }
         const named = humanName(resource);
         if (named) {
@@ -148,14 +202,21 @@ window.CadminWorkspace = (function ($) {
         organizations: true,
         "care-teams": true,
         locations: true,
+        "healthcare-services": true,
         "pds-policies": true,
         "search-parameters": true,
         questionnaires: true,
+        "code-systems": true,
+        "value-sets": true,
         "demo-data": true,
         "subscription-topics": true,
         subscriptions: true,
         endpoints: true,
-        consents: true
+        consents: true,
+        "practitioner-roles": true,
+        "wiremock-mappings": true,
+        "wiremock-requests": true,
+        "wiremock-scenarios": true
     };
 
     function sessionStoreKey() {
@@ -185,7 +246,7 @@ window.CadminWorkspace = (function ($) {
             type: spec.type,
             id: id,
             hash: snap.hash || "#/" + routeName + "/" + encodeURIComponent(id),
-            icon: snap.icon || spec.icon,
+            icon: spec.icon,
             title: snap.title || spec.type,
             load: function () {
                 return CadminApi.fhir(spec.path + encodeURIComponent(id));
@@ -363,7 +424,7 @@ window.CadminWorkspace = (function ($) {
             return '<li class="workspace-bookmark-row">' +
                 '<a class="dropdown-item text-truncate" href="' + CadminApi.escapeHtml(item.hash) +
                 '" data-bookmark-open="' + CadminApi.escapeHtml(item.key) + '">' +
-                '<i class="bi ' + CadminApi.escapeHtml(item.icon || "bi-bookmark") + ' me-2" aria-hidden="true"></i>' +
+                iconHtml(item.icon || "bi-bookmark", "me-2") +
                 CadminApi.escapeHtml(item.title || item.key) + "</a>" +
                 '<button type="button" class="workspace-bookmark-remove" data-bookmark-remove="' +
                 CadminApi.escapeHtml(item.key) + '" title="Remove bookmark" aria-label="Remove bookmark">&times;</button></li>';
@@ -376,7 +437,7 @@ window.CadminWorkspace = (function ($) {
     function historyItemHtml(item, attr, extraClass) {
         return '<li><button type="button" class="dropdown-item text-truncate' + extraClass + '" ' + attr + '="' +
             CadminApi.escapeHtml(item.key) + '">' +
-            '<i class="bi ' + CadminApi.escapeHtml(item.icon || "bi-file-earmark") + ' me-2" aria-hidden="true"></i>' +
+            iconHtml(item.icon || "bi-file-earmark", "me-2") +
             CadminApi.escapeHtml(item.title || item.key) + "</button></li>";
     }
 
@@ -914,9 +975,9 @@ window.CadminWorkspace = (function ($) {
                 '<button class="nav-link' + active + pinned + '" type="button" draggable="true" data-workspace-drag="' +
                 CadminApi.escapeHtml(key) + '" data-workspace-tab="' +
                 CadminApi.escapeHtml(key) + '" data-bs-toggle="tooltip" data-bs-title="' +
-                CadminApi.escapeHtml(tab.title).replace(/"/g, "&quot;") + '">' +
+                CadminApi.escapeHtml(tabTooltip(tab)).replace(/"/g, "&quot;") + '">' +
                 (tab.pinned ? '<i class="bi bi-pin-angle-fill content-tab-pin" aria-hidden="true"></i>' : "") +
-                '<i class="bi ' + CadminApi.escapeHtml(tab.icon) + '" aria-hidden="true"></i>' +
+                iconHtml(tab.icon) +
                 '<span class="content-tab-label">' + CadminApi.escapeHtml(tab.title) + "</span>" +
                 '<span class="content-tab-close" data-workspace-close="' + CadminApi.escapeHtml(key) +
                 '" title="Close" aria-label="Close">&times;</span></button></li>';
@@ -986,6 +1047,9 @@ window.CadminWorkspace = (function ($) {
         }
         if (window.CadminResourceGraph && typeof CadminResourceGraph.destroy === "function") {
             CadminResourceGraph.destroy();
+        }
+        if (window.CadminResourceHistory && typeof CadminResourceHistory.reset === "function") {
+            CadminResourceHistory.reset();
         }
         if (window.CadminLocationDetail && typeof CadminLocationDetail.destroyMap === "function") {
             CadminLocationDetail.destroyMap();
@@ -1346,6 +1410,9 @@ window.CadminWorkspace = (function ($) {
         });
         if (writtenKey && tabs[writtenKey]) {
             renderTabStrip();
+        }
+        if (window.CadminResourceHistory && typeof CadminResourceHistory.onWrite === "function") {
+            CadminResourceHistory.onWrite(info);
         }
     }
 

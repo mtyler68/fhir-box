@@ -12,7 +12,7 @@ Security is switchable:
 ## Requirements
 
 - Java 21+
-- Docker and Docker Compose v2 (for Keycloak and HAPI FHIR)
+- Docker and Docker Compose v2 (for Keycloak, HAPI FHIR, and WireMock)
 - Maven Wrapper is included (`./mvnw`)
 
 ## Quick start (local users)
@@ -23,7 +23,7 @@ Security is switchable:
 
 Open http://localhost:8080 and sign in with `admin` / `admin` (or `clinician` / `clinician`).
 
-The SPA is served from the gateway. Calls to `/fhir/**` are proxied to HAPI FHIR at `http://localhost:8081` (start that stack separately).
+The SPA is served from the gateway. Calls to `/fhir/**` are proxied to HAPI FHIR at `http://localhost:8081`, and `/wiremock/**` is proxied to WireMock at `http://localhost:9090` (start those stacks separately).
 
 ## Live reload (DevTools)
 
@@ -62,6 +62,8 @@ docker compose -f docker/fhir/compose.yml up -d
 | PostgreSQL | localhost:5432 (`admin` / `admin`, database `hapi`) |
 
 HAPI assigns **UUID** resource IDs (`hapi.fhir.server_id_strategy: UUID`). Recreate the Postgres volume after changing `fhir_version` or the ID strategy.
+
+REST-hook subscription processing is on (`hapi.fhir.subscription.resthook_enabled`). After changing `docker/fhir/hapi.application.yaml`, restart the HAPI container (`docker compose -f docker/fhir/compose.yml up -d --force-recreate hapi-fhir`). Subscription endpoints must be reachable from that container (for WireMock on the host, use `http://host.docker.internal:9090/...`).
 
 The gateway route `/fhir/**` forwards to `cadmin.fhir.uri` (default `http://localhost:8081`) and strips the browser session cookie so HAPI does not see it. In OIDC mode the same route also applies `TokenRelay` so the access token is sent downstream.
 
@@ -106,7 +108,27 @@ export CADMIN_OIDC_CLIENT_SECRET=cadmin-gateway-secret
 docker compose up -d
 ```
 
-That include file starts FHIR and Keycloak together. Run the gateway on the host so the browser, Spring, and Keycloak all share `localhost` hostnames.
+That include file starts FHIR, Keycloak, and WireMock together. Run the gateway on the host so the browser, Spring, and Keycloak all share `localhost` hostnames.
+
+## WireMock
+
+```bash
+docker compose -f docker/wiremock/compose.yml up -d
+```
+
+| Service | URL / port |
+| --- | --- |
+| WireMock | http://localhost:9090 |
+| Admin API (direct) | http://localhost:9090/__admin |
+| Admin API (via gateway) | http://localhost:8080/wiremock/__admin |
+
+The gateway route `/wiremock/**` forwards to `cadmin.wiremock.uri` (default `http://localhost:9090`), strips the first path segment, and removes the browser session cookie. The WireMock admin pages in the SPA (`Mappings`, `Requests`, `Scenarios`) call that proxy. Stubbed HTTP APIs remain available on port 9090.
+
+Override the WireMock origin:
+
+```bash
+export CADMIN_WIREMOCK_URI=http://localhost:9090
+```
 
 ## Configuration
 
@@ -115,7 +137,8 @@ That include file starts FHIR and Keycloak together. Run the gateway on the host
 | `cadmin.security.mode` | `local` | `local` or `oidc` |
 | `cadmin.security.users` | admin, clinician | Local form-login accounts |
 | `cadmin.fhir.uri` | `http://localhost:8081` | Downstream HAPI FHIR origin |
-| `spring.cloud.gateway.server.webflux.routes` | `/fhir/**` | Additional proxy routes |
+| `cadmin.wiremock.uri` | `http://localhost:9090` | Downstream WireMock origin |
+| `spring.cloud.gateway.server.webflux.routes` | `/fhir/**`, `/wiremock/**` | Additional proxy routes |
 
 Local users are defined in `src/main/resources/application.yml`. Passwords are treated as plaintext unless they already use a Spring `{id}` prefix such as `{bcrypt}...`.
 
@@ -138,6 +161,7 @@ src/main/java/io/cadmin/gateway/   Gateway, security, JSON API
 src/main/resources/static/          FHIR Box UI (Bootstrap / jQuery)
 docker/fhir/                        HAPI FHIR + PostgreSQL
 docker/keycloak/                    Keycloak + PostgreSQL + realm import
+docker/wiremock/                    WireMock mappings and files
 ```
 
 ## Tests

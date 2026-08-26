@@ -810,7 +810,14 @@ window.CadminDemoData = (function () {
                         implied: true,
                         resource: withDemoMeta({
                             resourceType: "DeviceAssociation",
-                            status: "attached"
+                            status: {
+                                coding: [{
+                                    system: "http://hl7.org/fhir/deviceassociation-status",
+                                    code: "attached",
+                                    display: "Attached"
+                                }],
+                                text: "Attached"
+                            }
                         }),
                         bind: function (resource, created) {
                             const device = referenceOf(created, key);

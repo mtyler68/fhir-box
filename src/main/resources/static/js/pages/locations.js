@@ -34,8 +34,11 @@ function renderLocationList(initialQuery) {
     $root.html(
         '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
             '<h1 class="h3 mb-0 page-title">Locations</h1>' +
-            '<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-location-modal">' +
-                '<i class="bi bi-plus-lg me-1"></i>New location</button>' +
+            CadminResourceDocument.splitButton({
+                label: "New location",
+                modalTarget: "#create-location-modal",
+                resourceType: "Location"
+            }) +
         '</div>' +
         '<div id="location-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +

@@ -17,12 +17,13 @@ window.CadminFlagDetail = (function () {
             system: "http://terminology.hl7.org/CodeSystem/flag-category" },
         { code: "safety", display: "Safety", system: "http://terminology.hl7.org/CodeSystem/flag-category" }
     ];
-    const codeCatalog = [
-        { code: "fall-risk", display: "Fall risk" },
-        { code: "isolation", display: "Isolation precautions" },
-        { code: "interpreter", display: "Interpreter needed" },
-        { code: "admin-hold", display: "Administrative hold" },
-        { code: "advance-directive", display: "Advance directive on file" }
+    const FLAG_CODE_SYSTEM = "https://cadmin.io/fhir/CodeSystem/flag-code";
+    let codeCatalog = [
+        { code: "fall-risk", display: "Fall risk", system: FLAG_CODE_SYSTEM },
+        { code: "isolation", display: "Isolation precautions", system: FLAG_CODE_SYSTEM },
+        { code: "interpreter", display: "Interpreter needed", system: FLAG_CODE_SYSTEM },
+        { code: "admin-hold", display: "Administrative hold", system: FLAG_CODE_SYSTEM },
+        { code: "advance-directive", display: "Advance directive on file", system: FLAG_CODE_SYSTEM }
     ];
 
     let flag = null;
@@ -215,9 +216,11 @@ window.CadminFlagDetail = (function () {
             CadminApi.fillSelectOptions("#fd-category", categoryOptions, { selected: categoryCode });
         });
         const code = currentCode(flag.code);
-        CadminApi.fillSelectOptions("#fd-code", codeCatalog, {
+        CadminApi.fillValueSetSelect("#fd-code", CadminApi.valueSets.flagCode, {
+            fallback: codeCatalog,
             prepend: [{ code: "", display: "Custom message" }],
-            selected: code
+            selected: code,
+            onConcepts: function (concepts) { codeCatalog = concepts; }
         });
         $("#fd-text").val((flag.code && flag.code.text) || conceptLabel(flag.code) || "");
         $("#fd-start").val((flag.period && flag.period.start) || "");
@@ -258,7 +261,7 @@ window.CadminFlagDetail = (function () {
             display: CadminApi.selectLabel("#fd-subject")
         };
         flag.code = { text: text };
-        const code = codingFromSelect("#fd-code", codeCatalog, "https://cadmin.io/fhir/CodeSystem/flag-code");
+        const code = codingFromSelect("#fd-code", codeCatalog, FLAG_CODE_SYSTEM);
         if (code) {
             flag.code.coding = [code];
         }
@@ -329,6 +332,7 @@ window.CadminFlagDetail = (function () {
                 "</div>" +
                 '<div class="card-body" id="fd-basics"></div>' +
             "</div>" +
+            CadminResourceHistory.card() +
             CadminResourceGraph.card() +
             '<div class="modal fade" id="fd-edit-modal" tabindex="-1">' +
                 '<div class="modal-dialog">' +
@@ -357,6 +361,7 @@ window.CadminFlagDetail = (function () {
         );
         CadminResourceSource.mount(function () { return flag; });
         CadminResourceGraph.mount(flag);
+        CadminResourceHistory.mount(flag);
         renderHeader();
         renderBasics();
         bind();

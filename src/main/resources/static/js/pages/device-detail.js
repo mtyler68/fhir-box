@@ -34,6 +34,7 @@ window.CadminDeviceDetail = (function () {
 
     let device = null;
     let association = null;
+    let associations = [];
 
     function esc(value) {
         return CadminApi.escapeHtml(value);
@@ -44,6 +45,9 @@ window.CadminDeviceDetail = (function () {
     }
 
     function conceptLabel(cc) {
+        if (typeof cc === "string") {
+            return cc || "—";
+        }
         const item = Array.isArray(cc) ? cc[0] : cc;
         if (!item) {
             return "—";
@@ -98,8 +102,26 @@ window.CadminDeviceDetail = (function () {
         return match ? match.display : (code || "—");
     }
 
+    function formatPeriod(period) {
+        if (!period || (!period.start && !period.end)) {
+            return "—";
+        }
+        return [period.start || "…", period.end || "…"].join(" – ");
+    }
+
     function dateOnly(value) {
         return (value || "").slice(0, 10);
+    }
+
+    function attachedStatus() {
+        return {
+            coding: [{
+                system: "http://hl7.org/fhir/deviceassociation-status",
+                code: "attached",
+                display: "Attached"
+            }],
+            text: "Attached"
+        };
     }
 
     function statusBadge(status) {
@@ -171,8 +193,10 @@ window.CadminDeviceDetail = (function () {
         return '<div class="card shadow mb-4">' +
             '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
                 "<h6 class=\"m-0\">" + title + "</h6>" +
-                '<button class="btn btn-sm btn-primary" type="button" data-bs-toggle="modal" data-bs-target="' + addTarget + '">' +
-                    '<i class="bi bi-plus-lg me-1"></i>' + addLabel + "</button>" +
+                (addTarget
+                    ? '<button class="btn btn-sm btn-primary" type="button" data-bs-toggle="modal" data-bs-target="' +
+                        addTarget + '"><i class="bi bi-plus-lg me-1"></i>' + addLabel + "</button>"
+                    : "") +
             "</div>" +
             '<div class="card-body">' +
                 '<div class="table-responsive">' +
@@ -246,6 +270,8 @@ window.CadminDeviceDetail = (function () {
                 '<div class="col-lg-6">' + editCard("Basic details", "dev-basic-details", "#dd-basic-modal") + "</div>" +
                 '<div class="col-lg-6">' + editCard("Assignment", "dev-assign-details", "#dd-assign-modal") + "</div>" +
             "</div>" +
+            card("Associations", "dev-assoc-rows",
+                ["Subject", "Status", "Period", ""], "", "") +
             '<div class="row">' +
                 '<div class="col-lg-6">' + card("Names", "dev-name-rows",
                     ["Name", "Type", ""], "#dd-name-modal", "Add") + "</div>" +
@@ -258,6 +284,7 @@ window.CadminDeviceDetail = (function () {
                 '<div class="col-lg-6">' + card("Contacts", "dev-contact-rows",
                     ["System", "Value", ""], "#dd-contact-modal", "Add") + "</div>" +
             "</div>" +
+            CadminResourceHistory.card() +
             CadminResourceGraph.card() +
             modal("dd-basic-modal", "Edit basic details",
                 field("Status", '<select class="form-select" id="dd-status">' + optionsHtml(statusOptions) + "</select>") +
@@ -304,6 +331,7 @@ window.CadminDeviceDetail = (function () {
         );
         CadminResourceSource.mount(function () { return device; });
         CadminResourceGraph.mount(device);
+        CadminResourceHistory.mount(device);
         renderBasics();
         renderAssignment();
         renderNames();
@@ -338,7 +366,12 @@ window.CadminDeviceDetail = (function () {
         $("#dev-assign-details").html(
             '<dl class="row mb-0">' +
                 '<dt class="col-sm-4">Patient</dt><dd class="col-sm-8">' +
-                    refLink("Patient", association && association.subject, "#/patients/") + "</dd>" +
+                    refLink("Patient", association && association.subject, "#/patients/") +
+                    (association && association.id
+                        ? ' <a class="small ms-2" href="#/device-associations/' +
+                            encodeURIComponent(association.id) + '">Open</a>'
+                        : "") +
+                    "</dd>" +
                 '<dt class="col-sm-4">Owner</dt><dd class="col-sm-8">' +
                     refLink("Organization", device.owner, ownerHref) + "</dd>" +
                 '<dt class="col-sm-4">Location</dt><dd class="col-sm-8">' +
@@ -446,18 +479,44 @@ window.CadminDeviceDetail = (function () {
     }
 
     function currentAssociation(resource) {
+        const status = CadminApi.conceptCode(resource && resource.status);
         return resource && resource.resourceType === "DeviceAssociation"
-            && resource.status !== "explanted" && resource.status !== "entered-in-error";
+            && status !== "explanted" && status !== "entered-in-error";
+    }
+
+    function renderAssociations() {
+        if (!associations.length) {
+            $("#dev-assoc-rows").html(emptyRow(4, "No device associations."));
+            return;
+        }
+        $("#dev-assoc-rows").html(associations.map(function (item) {
+            const subjectType = ((item.subject && item.subject.reference) || "Patient/").split("/")[0];
+            const subjectId = refId(item.subject);
+            const subjectHtml = subjectId
+                ? CadminApi.resourceLink(CadminApi.detailHref(subjectType || "Patient", subjectId), refLabel(item.subject))
+                : esc(refLabel(item.subject));
+            return "<tr><td>" + subjectHtml + "</td>" +
+                "<td>" + esc(conceptLabel(item.status)) + "</td>" +
+                "<td>" + esc(formatPeriod(item.period)) + "</td>" +
+                '<td class="text-end"><a class="btn btn-sm btn-outline-primary" href="#/device-associations/' +
+                encodeURIComponent(item.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a></td></tr>';
+        }).join(""));
     }
 
     function loadAssociation() {
         CadminApi.fhir("/DeviceAssociation?device=" + encodeURIComponent("Device/" + device.id) + "&_count=50")
             .done(function (bundle) {
-                association = bundleResources(bundle).find(currentAssociation) || null;
+                associations = bundleResources(bundle).filter(function (resource) {
+                    return resource.resourceType === "DeviceAssociation";
+                });
+                association = associations.find(currentAssociation) || null;
                 renderAssignment();
+                renderAssociations();
             }).fail(function () {
                 association = null;
+                associations = [];
                 renderAssignment();
+                renderAssociations();
             });
     }
 
@@ -479,7 +538,7 @@ window.CadminDeviceDetail = (function () {
         }
         const payload = {
             resourceType: "DeviceAssociation",
-            status: "attached",
+            status: attachedStatus(),
             device: {
                 reference: "Device/" + device.id,
                 display: deviceLabel(device)
@@ -619,7 +678,7 @@ window.CadminDeviceDetail = (function () {
             saveDevice(function () {
                 syncPatientAssociation(patientId, patientDisplay, function () {
                     hideModal("dd-assign-modal");
-                    renderAssignment();
+                    loadAssociation();
                     alertMsg("success", "Assignment updated.");
                 });
             });

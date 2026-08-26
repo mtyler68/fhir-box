@@ -38,6 +38,8 @@ CadminApp.register("dashboard", function () {
                     '<div class="card-body">' +
                         '<a class="btn btn-primary me-2 mb-2" href="#/patients">Browse patients</a>' +
                         '<a class="btn btn-outline-primary me-2 mb-2" href="#/flags">Browse flags</a>' +
+                        '<a class="btn btn-outline-primary me-2 mb-2" href="#/lists">Browse lists</a>' +
+                        '<a class="btn btn-outline-primary me-2 mb-2" href="#/device-associations">Device associations</a>' +
                         '<a class="btn btn-outline-primary me-2 mb-2" href="#/resources">Open FHIR browser</a>' +
                         '<a class="btn btn-outline-primary me-2 mb-2" href="#/capabilities">FHIR capabilities</a>' +
                         (CadminApp.isAdmin()
@@ -45,7 +47,11 @@ CadminApp.register("dashboard", function () {
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/subscription-topics">Subscription topics</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/subscriptions">Subscriptions</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/endpoints">Endpoints</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/practitioner-roles">Practitioner roles</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/healthcare-services">Healthcare services</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/questionnaires">Questionnaires</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/code-systems">Code systems</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/value-sets">Value sets</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/consents">Consents</a>'
                             : "") +
                         '<a class="btn btn-outline-secondary mb-2" href="#/settings">Settings</a>' +
@@ -80,17 +86,23 @@ CadminApp.register("dashboard", function () {
         { type: "RelatedPerson", label: "Caregivers", href: "#/caregivers", icon: "bi-person-heart", border: "info" },
         { type: "Practitioner", label: "Practitioners", href: "#/practitioners", iconify: "mdi:doctor", border: "success" },
         { type: "Device", label: "Devices", href: "#/devices", iconify: "mdi:devices", border: "warning" },
+        { type: "DeviceAssociation", label: "Device associations", href: "#/device-associations", icon: "bi-link-45deg", border: "secondary" },
         { type: "Flag", label: "Flags", href: "#/flags", icon: "bi-flag", border: "danger" },
+        { type: "List", label: "Lists", href: "#/lists", icon: "bi-list-ul", border: "primary" },
         { type: "Organization", label: "Organizations", href: "#/organizations", icon: "bi-building", border: "primary", admin: true },
         { type: "Location", label: "Locations", href: "#/locations", icon: "bi-geo-alt", border: "info", admin: true },
         { type: "CareTeam", label: "Care teams", href: "#/care-teams", icon: "bi-people-fill", border: "success", admin: true },
+        { type: "PractitionerRole", label: "Practitioner roles", href: "#/practitioner-roles", icon: "bi-person-vcard", border: "info", admin: true },
+        { type: "HealthcareService", label: "Healthcare services", href: "#/healthcare-services", iconify: "mdi:medical-bag", border: "success", admin: true },
         { type: "Consent", label: "Consents", href: "#/consents", icon: "bi-shield-check", border: "warning", admin: true },
         { type: "Subscription", label: "Subscriptions", href: "#/subscriptions", icon: "bi-broadcast", border: "info", admin: true },
         { type: "Endpoint", label: "Endpoints", href: "#/endpoints", icon: "bi-hdd-network", border: "secondary", admin: true },
         { type: "SubscriptionTopic", label: "Topics", href: "#/subscription-topics", icon: "bi-bookmark-star", border: "primary", admin: true },
         { type: "Library", label: "Libraries", href: "#/pds-policies", icon: "bi-journal-text", border: "success", admin: true },
         { type: "SearchParameter", label: "Search params", href: "#/search-parameters", icon: "bi-search", border: "warning", admin: true },
-        { type: "Questionnaire", label: "Questionnaires", href: "#/questionnaires", icon: "bi-ui-checks", border: "info", admin: true }
+        { type: "Questionnaire", label: "Questionnaires", href: "#/questionnaires", icon: "bi-ui-checks", border: "info", admin: true },
+        { type: "CodeSystem", label: "Code systems", href: "#/code-systems", icon: "bi-braces", border: "primary", admin: true },
+        { type: "ValueSet", label: "Value sets", href: "#/value-sets", icon: "bi-tags", border: "success", admin: true }
     ];
 
     function featuredMetrics() {
@@ -191,14 +203,15 @@ CadminApp.register("dashboard", function () {
             renderCounts(counts);
         }
 
-        CadminApi.fhir("/$get-resource-counts")
+        CadminApi.fhir("/$get-resource-counts", "GET", null, { silent: true })
             .done(function (parameters) {
                 Object.assign(cached, parseCountParameters(parameters));
             })
             .always(finish);
 
         featured.forEach(function (metric) {
-            CadminApi.fhir("/" + encodeURIComponent(metric.type) + "?_summary=count&_count=0&_total=accurate")
+            CadminApi.fhir("/" + encodeURIComponent(metric.type) +
+                "?_summary=count&_count=0&_total=accurate", "GET", null, { silent: true })
                 .done(function (bundle) {
                     if (typeof bundle.total === "number") {
                         live[metric.type] = bundle.total;

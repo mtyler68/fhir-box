@@ -383,6 +383,12 @@ window.CadminLocationDetail = (function () {
                 '<div class="col-lg-6">' + card("Practitioners", "loc-role-rows",
                     ["Practitioner", "Role", "Status", ""], "#ld-role-modal", "Add") + "</div>" +
             "</div>" +
+            '<div class="row">' +
+                '<div class="col-lg-6">' + card("Healthcare services", "loc-service-rows",
+                    ["Name", "Organization", "Type", ""], "#ld-service-modal", "Add",
+                    '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#ld-svc-attach-modal">Attach</button>') + "</div>" +
+            "</div>" +
+            CadminResourceHistory.card() +
             CadminResourceGraph.card() +
             modal("ld-basic-modal", "Edit basic details",
                 field("Name", '<input class="form-control" id="ld-name" required>') +
@@ -448,10 +454,17 @@ window.CadminLocationDetail = (function () {
             modal("ld-role-modal", "Add practitioner role",
                 field("Practitioner", '<select class="form-select" id="ld-pr-practitioner"><option value="">Select…</option></select>') +
                 field("Role", '<select class="form-select" id="ld-pr-role">' + optionsHtml(practitionerRoles) + "</select>"),
-                "ld-role-form")
+                "ld-role-form") +
+            modal("ld-service-modal", "Add healthcare service",
+                field("Name", '<input class="form-control" id="ld-svc-name" required>'),
+                "ld-service-form") +
+            modal("ld-svc-attach-modal", "Attach healthcare service",
+                field("Healthcare service", '<select class="form-select" id="ld-svc-attach" required></select>'),
+                "ld-svc-attach-form")
         );
         CadminResourceSource.mount(function () { return loc; });
         CadminResourceGraph.mount(loc);
+        CadminResourceHistory.mount(loc);
         renderBasics();
         renderAddress();
         renderRelationships();
@@ -460,6 +473,7 @@ window.CadminLocationDetail = (function () {
         loadChildren();
         loadEndpoints();
         loadRoles();
+        loadServices();
         bindForms();
 
         $("#ld-rel-modal").on("show.bs.modal", function () {
@@ -475,6 +489,13 @@ window.CadminLocationDetail = (function () {
         $("#ld-ep-attach-modal").on("show.bs.modal", fillEndpointAttach);
         $("#ld-role-modal").on("show.bs.modal", function () {
             CadminApi.bindPractitionerSelect("#ld-pr-practitioner", { placeholder: "Select…" });
+            CadminApi.fillValueSetSelect("#ld-pr-role", CadminApi.valueSets.practitionerRole, {
+                fallback: CadminApi.valueSetFallbacks.practitionerRole,
+                selected: "doctor"
+            });
+        });
+        $("#ld-svc-attach-modal").on("show.bs.modal", function () {
+            CadminApi.bindFhirSelect("#ld-svc-attach", "HealthcareService", { placeholder: "Select…" });
         });
         $("#ld-basic-modal").on("show.bs.modal", populateBasicForm);
         $("#ld-address-modal").on("show.bs.modal", populateAddressForm);
@@ -652,12 +673,43 @@ window.CadminLocationDetail = (function () {
                     : esc(name);
                 return "<tr><td>" + nameHtml + "</td><td>" + esc(conceptLabel(role.code)) + "</td><td>" +
                     codeStatusBadge(role.active === false ? "inactive" : "active") + "</td>" +
-                    '<td class="text-end"><button class="btn btn-sm btn-outline-danger" type="button" data-delete="/PractitionerRole/' +
+                    '<td class="text-end">' +
+                    '<a class="btn btn-sm btn-outline-primary me-1" href="#/practitioner-roles/' +
+                    encodeURIComponent(role.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a>' +
+                    '<button class="btn btn-sm btn-outline-danger" type="button" data-delete="/PractitionerRole/' +
                     encodeURIComponent(role.id) + '" data-reload="roles" title="Remove" aria-label="Remove"><i class="bi bi-trash"></i></button></td></tr>';
             }).join(""));
         }).fail(function (xhr) {
             $("#loc-role-rows").html(emptyRow(4, "Unable to load practitioners."));
             fail("Load practitioners", xhr);
+        });
+    }
+
+    function loadServices() {
+        CadminApi.fhir("/HealthcareService?location=" + encodeURIComponent(loc.id) +
+            "&_count=50&_sort=name").done(function (bundle) {
+            const rows = bundleResources(bundle);
+            if (!rows.length) {
+                $("#loc-service-rows").html(emptyRow(4, "No healthcare services."));
+                return;
+            }
+            $("#loc-service-rows").html(rows.map(function (item) {
+                const orgId = refId(item.providedBy);
+                const orgHtml = orgId
+                    ? CadminApi.resourceLink(CadminApi.detailHref("Organization", orgId), refLabel(item.providedBy))
+                    : esc(refLabel(item.providedBy));
+                return "<tr>" +
+                    "<td>" + CadminApi.resourceLink(CadminApi.detailHref("HealthcareService", item.id),
+                        item.name || item.id) + "</td>" +
+                    "<td>" + orgHtml + "</td>" +
+                    "<td>" + esc(conceptLabel(item.type) !== "—" ? conceptLabel(item.type) : conceptLabel(item.specialty)) + "</td>" +
+                    '<td class="text-end"><button class="btn btn-sm btn-outline-secondary" type="button" data-unlink-service="' +
+                        esc(item.id) + '" title="Unlink" aria-label="Unlink"><i class="bi bi-x-lg"></i></button></td>' +
+                    "</tr>";
+            }).join(""));
+        }).fail(function (xhr) {
+            $("#loc-service-rows").html(emptyRow(4, "Unable to load healthcare services."));
+            fail("Load healthcare services", xhr);
         });
     }
 
@@ -721,6 +773,26 @@ window.CadminLocationDetail = (function () {
                 loadRoles();
             }).fail(function (xhr) {
                 fail("Remove", xhr);
+            });
+        });
+
+        $root.on("click.locdetail", "[data-unlink-service]", function () {
+            const id = $(this).attr("data-unlink-service");
+            CadminApi.fhir("/HealthcareService/" + encodeURIComponent(id)).done(function (item) {
+                item.location = (item.location || []).filter(function (ref) {
+                    return refId(ref) !== loc.id;
+                });
+                if (!item.location.length) {
+                    delete item.location;
+                }
+                CadminApi.fhir("/HealthcareService/" + encodeURIComponent(id), "PUT", item).done(function () {
+                    alertMsg("success", "Healthcare service unlinked.");
+                    loadServices();
+                }).fail(function (xhr) {
+                    fail("Unlink", xhr);
+                });
+            }).fail(function (xhr) {
+                fail("Unlink", xhr);
             });
         });
 
@@ -1040,7 +1112,10 @@ window.CadminLocationDetail = (function () {
                 alertMsg("danger", "Select a practitioner.");
                 return;
             }
-            const role = findOption(practitionerRoles, $("#ld-pr-role").val());
+            const role = findOption(practitionerRoles, $("#ld-pr-role").val())
+                || ($("#ld-pr-role").val()
+                    ? { code: $("#ld-pr-role").val(), display: $("#ld-pr-role option:selected").text() }
+                    : null);
             const resource = {
                 resourceType: "PractitionerRole",
                 active: true,
@@ -1068,6 +1143,53 @@ window.CadminLocationDetail = (function () {
                 loadRoles();
             }).fail(function (xhr) {
                 fail("Create practitioner role", xhr);
+            });
+        });
+
+        $("#ld-service-form").on("submit", function (event) {
+            event.preventDefault();
+            const resource = {
+                resourceType: "HealthcareService",
+                active: true,
+                name: $("#ld-svc-name").val().trim(),
+                location: [{ reference: "Location/" + loc.id, display: loc.name }]
+            };
+            if (loc.managingOrganization) {
+                resource.providedBy = loc.managingOrganization;
+            }
+            CadminApi.fhir("/HealthcareService", "POST", resource).done(function () {
+                hideModal("ld-service-modal");
+                $("#ld-svc-name").val("");
+                alertMsg("success", "Healthcare service created.");
+                loadServices();
+            }).fail(function (xhr) {
+                fail("Create healthcare service", xhr);
+            });
+        });
+
+        $("#ld-svc-attach-form").on("submit", function (event) {
+            event.preventDefault();
+            const id = CadminApi.selectValue("#ld-svc-attach");
+            if (!id) {
+                alertMsg("danger", "Select a healthcare service.");
+                return;
+            }
+            CadminApi.fhir("/HealthcareService/" + encodeURIComponent(id)).done(function (item) {
+                item.location = item.location || [];
+                if (item.location.some(function (ref) { return refId(ref) === loc.id; })) {
+                    alertMsg("danger", "Already linked.");
+                    return;
+                }
+                item.location.push({ reference: "Location/" + loc.id, display: loc.name });
+                CadminApi.fhir("/HealthcareService/" + encodeURIComponent(id), "PUT", item).done(function () {
+                    hideModal("ld-svc-attach-modal");
+                    alertMsg("success", "Healthcare service attached.");
+                    loadServices();
+                }).fail(function (xhr) {
+                    fail("Attach healthcare service", xhr);
+                });
+            }).fail(function (xhr) {
+                fail("Attach healthcare service", xhr);
             });
         });
     }

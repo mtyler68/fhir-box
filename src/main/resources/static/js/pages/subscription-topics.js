@@ -36,8 +36,11 @@ function renderSubscriptionTopicList(initialQuery) {
     $root.html(
         '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
             '<h1 class="h3 mb-0 page-title">Subscription topics</h1>' +
-            '<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-topic-modal">' +
-                '<i class="bi bi-plus-lg me-1"></i>New topic</button>' +
+            CadminResourceDocument.splitButton({
+                label: "New topic",
+                modalTarget: "#create-topic-modal",
+                resourceType: "SubscriptionTopic"
+            }) +
         "</div>" +
         '<div id="topic-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
@@ -52,8 +55,8 @@ function renderSubscriptionTopicList(initialQuery) {
             '<div class="card-body">' +
                 '<div class="table-responsive">' +
                     '<table class="table table-hover align-middle">' +
-                        "<thead><tr><th>Title</th><th>URL</th><th>Resource</th><th>Status</th><th>ID</th><th></th></tr></thead>" +
-                        '<tbody id="topic-rows"><tr><td colspan="6" class="text-muted">Loading…</td></tr></tbody>' +
+                        "<thead><tr><th>Title</th><th>URL</th><th>Version</th><th>Resource</th><th>Status</th><th>ID</th><th></th></tr></thead>" +
+                        '<tbody id="topic-rows"><tr><td colspan="7" class="text-muted">Loading…</td></tr></tbody>' +
                     "</table>" +
                 "</div>" +
                 '<div class="list-pager" id="topic-pager"></div>' +
@@ -65,11 +68,17 @@ function renderSubscriptionTopicList(initialQuery) {
                     '<div class="modal-header"><h5 class="modal-title">Create subscription topic</h5>' +
                         '<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>' +
                     '<div class="modal-body">' +
-                        '<div class="mb-3"><label class="form-label">URL</label>' +
-                            '<input class="form-control font-monospace" id="topic-url" required ' +
+                        '<div class="mb-3"><label class="form-label" for="topic-title">Title</label>' +
+                            '<input class="form-control" id="topic-title" name="title" required></div>' +
+                        '<div class="mb-3"><label class="form-label" for="topic-id">ID</label>' +
+                            '<input class="form-control font-monospace" id="topic-id" name="id" autocomplete="off" maxlength="64">' +
+                            '<div class="form-text">Optional. Leave blank for a server-assigned ID. Provide an ID to create and manage a known topic (for example <code>patient-changes</code>) that subscriptions can bind to by that identity.</div>' +
+                            '<div class="invalid-feedback" id="topic-id-feedback">A subscription topic with this ID already exists.</div></div>' +
+                        '<div class="mb-3"><label class="form-label" for="topic-url">URL</label>' +
+                            '<input class="form-control font-monospace" id="topic-url" name="url" ' +
                             'placeholder="https://cadmin.io/fhir/SubscriptionTopic/patient-changes"></div>' +
-                        '<div class="mb-3"><label class="form-label">Title</label>' +
-                            '<input class="form-control" id="topic-title" required></div>' +
+                        '<div class="mb-3"><label class="form-label" for="topic-version">Version</label>' +
+                            '<input class="form-control" id="topic-version" name="version" value="1.0.0" autocomplete="off"></div>' +
                         '<div class="mb-3"><label class="form-label">Name</label>' +
                             '<input class="form-control font-monospace" id="topic-name" placeholder="Optional computer name"></div>' +
                         '<div class="mb-3"><label class="form-label">Status</label>' +
@@ -137,12 +146,46 @@ function renderSubscriptionTopicList(initialQuery) {
     }
 
     function triggerResource(topic) {
-        const trigger = (topic.trigger && topic.trigger[0]) || {};
-        return trigger.resource || "—";
+        const items = topic.resourceTrigger || topic.trigger || [];
+        const names = items.map(function (item) { return item.resource; }).filter(Boolean);
+        return names.join(", ") || "—";
     }
 
     function topicLabel(topic) {
         return topic.title || topic.name || topic.url || topic.id || "Untitled";
+    }
+
+    function slugName(title) {
+        return String(title || "subscription-topic").toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-|-$/g, "")
+            .slice(0, 64) || "subscription-topic";
+    }
+
+    function defaultUrl(title, id) {
+        const slug = String(id || "").trim() || slugName(title);
+        return "https://cadmin.io/fhir/SubscriptionTopic/" + slug;
+    }
+
+    function ensureNewId(id, $field) {
+        const deferred = $.Deferred();
+        const value = String(id || "").trim();
+        if (!value) {
+            return deferred.resolve("").promise();
+        }
+        CadminApi.fhir("/SubscriptionTopic/" + encodeURIComponent(value), "GET", null, { silent: true }).done(function () {
+            $field.addClass("is-invalid");
+            CadminApi.showToast("danger", "A subscription topic with ID \"" + value + "\" already exists.");
+            deferred.reject();
+        }).fail(function (xhr) {
+            if (xhr.status === 404) {
+                deferred.resolve(value);
+                return;
+            }
+            CadminApi.showToast("danger", "Unable to check ID (" + xhr.status + ").");
+            deferred.reject();
+        });
+        return deferred.promise();
     }
 
     function hideModal(id, then) {
@@ -185,13 +228,14 @@ function renderSubscriptionTopicList(initialQuery) {
                 onPage: function (nextPage) { load(query, nextPage); }
             });
             if (!entries.length) {
-                $("#topic-rows").html('<tr><td colspan="6" class="text-muted">No subscription topics found. Create one or start HAPI FHIR.</td></tr>');
+                $("#topic-rows").html('<tr><td colspan="7" class="text-muted">No subscription topics found. Create one or start HAPI FHIR.</td></tr>');
                 return;
             }
             const rows = entries.map(function (topic) {
                 return "<tr>" +
                     "<td>" + CadminApi.resourceLink("#/subscription-topics/" + encodeURIComponent(topic.id), topicLabel(topic)) + "</td>" +
                     "<td><code>" + esc(topic.url || "—") + "</code></td>" +
+                    "<td>" + esc(topic.version || "—") + "</td>" +
                     "<td>" + esc(triggerResource(topic)) + "</td>" +
                     "<td>" + statusBadge(topic.status) + "</td>" +
                     "<td><code>" + esc(topic.id) + "</code></td>" +
@@ -202,7 +246,7 @@ function renderSubscriptionTopicList(initialQuery) {
             $("#topic-rows").html(rows.join(""));
         }).fail(function (xhr) {
             $("#topic-pager").empty();
-            $("#topic-rows").html('<tr><td colspan="6" class="text-danger">Unable to load subscription topics from /fhir.</td></tr>');
+            $("#topic-rows").html('<tr><td colspan="7" class="text-danger">Unable to load subscription topics from /fhir.</td></tr>');
             CadminApi.showAlert("#topic-alert", "danger",
                 "FHIR request failed (" + xhr.status + "). Is the HAPI FHIR stack running?");
         });
@@ -213,47 +257,90 @@ function renderSubscriptionTopicList(initialQuery) {
         load($("#topic-query").val());
     });
 
+    let urlTouched = false;
+
+    function syncDefaultUrl() {
+        if (!urlTouched) {
+            $("#topic-url").val(defaultUrl($("#topic-title").val(), $("#topic-id").val()));
+        }
+    }
+
+    $("#topic-title").on("input", syncDefaultUrl);
+    $("#topic-id").on("input", function () {
+        $("#topic-id").removeClass("is-invalid");
+        syncDefaultUrl();
+    });
+    $("#topic-url").on("input", function () {
+        urlTouched = !!$(this).val();
+    });
+    $("#create-topic-modal").on("show.bs.modal", function () {
+        urlTouched = false;
+        $("#topic-title").val("");
+        $("#topic-id").val("").removeClass("is-invalid");
+        $("#topic-url").val("");
+        $("#topic-version").val("1.0.0");
+        $("#topic-name").val("");
+        $("#topic-description").val("");
+        $("#topic-status").val("draft");
+    });
+
     $("#create-topic-form").on("submit", function (event) {
         event.preventDefault();
+        $("#topic-id").removeClass("is-invalid");
         const interactions = [];
         $(".topic-interaction:checked").each(function () {
             interactions.push($(this).val());
         });
+        const title = $("#topic-title").val().trim();
+        const assignedId = $("#topic-id").val().trim();
         const resource = {
             resourceType: "SubscriptionTopic",
-            url: $("#topic-url").val().trim(),
-            title: $("#topic-title").val().trim(),
+            url: $("#topic-url").val().trim() || defaultUrl(title, assignedId),
+            title: title,
             status: $("#topic-status").val() || "draft",
-            trigger: [{
+            resourceTrigger: [{
                 resource: $("#topic-resource").val(),
                 supportedInteraction: interactions
             }]
         };
         const name = $("#topic-name").val().trim();
         const description = $("#topic-description").val().trim();
+        const version = $("#topic-version").val().trim();
         if (name) {
             resource.name = name;
         }
         if (description) {
             resource.description = description;
         }
-        CadminApi.fhir("/SubscriptionTopic", "POST", resource).done(function (created, _status, xhr) {
-            const id = CadminApi.createdResourceId(created, xhr, "SubscriptionTopic");
-            hideModal("create-topic-modal", function () {
-                CadminApi.showToast("success", "Subscription topic created.");
-                load($("#topic-query").val());
-                if (id) {
-                    pendingTopic = {
-                        id: id,
-                        url: resource.url,
-                        title: resource.title
-                    };
-                    $("#offer-topic-name").text(resource.title || resource.url);
-                    showModal("offer-subscription-modal");
-                }
+        if (version) {
+            resource.version = version;
+        }
+        ensureNewId(assignedId, $("#topic-id")).done(function () {
+            const path = assignedId
+                ? "/SubscriptionTopic/" + encodeURIComponent(assignedId)
+                : "/SubscriptionTopic";
+            const method = assignedId ? "PUT" : "POST";
+            if (assignedId) {
+                resource.id = assignedId;
+            }
+            CadminApi.fhir(path, method, resource).done(function (created, _status, xhr) {
+                const id = assignedId || CadminApi.createdResourceId(created, xhr, "SubscriptionTopic");
+                hideModal("create-topic-modal", function () {
+                    CadminApi.showToast("success", "Subscription topic created.");
+                    load($("#topic-query").val());
+                    if (id) {
+                        pendingTopic = {
+                            id: id,
+                            url: resource.url,
+                            title: resource.title
+                        };
+                        $("#offer-topic-name").text(resource.title || resource.url);
+                        showModal("offer-subscription-modal");
+                    }
+                });
+            }).fail(function (xhr) {
+                CadminApi.showToast("danger", "Create failed (" + xhr.status + ").");
             });
-        }).fail(function (xhr) {
-            CadminApi.showToast("danger", "Create failed (" + xhr.status + ").");
         });
     });
 

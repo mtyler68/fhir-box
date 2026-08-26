@@ -29,9 +29,13 @@ window.CadminApp = (function ($) {
         if ((route.name === "organizations" || route.name === "care-teams"
                 || route.name === "locations" || route.name === "pds-policies"
                 || route.name === "search-parameters" || route.name === "questionnaires"
+                || route.name === "code-systems" || route.name === "value-sets"
                 || route.name === "demo-data"
                 || route.name === "subscription-topics" || route.name === "subscriptions"
-                || route.name === "endpoints" || route.name === "consents")
+                || route.name === "endpoints" || route.name === "consents"
+                || route.name === "practitioner-roles" || route.name === "healthcare-services"
+                || route.name === "wiremock-mappings" || route.name === "wiremock-requests"
+                || route.name === "wiremock-scenarios")
                 && !isAdmin(currentUser)) {
             window.location.hash = "#/dashboard";
             return;
@@ -84,6 +88,9 @@ window.CadminApp = (function ($) {
             .done(function (configRes, meRes) {
                 config = configRes[0];
                 applyUser(meRes[0]);
+                if (window.CadminTargetList) {
+                    CadminTargetList.init();
+                }
                 if (window.CadminWorkspace && typeof CadminWorkspace.restore === "function") {
                     CadminWorkspace.restore();
                 }

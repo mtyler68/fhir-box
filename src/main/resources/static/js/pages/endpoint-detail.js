@@ -220,6 +220,7 @@ window.CadminEndpointDetail = (function () {
                 '<div class="col-lg-6">' + card("Used by", "ed-used-rows",
                     ["Resource", "Name", ""], "", "") + "</div>" +
             "</div>" +
+            CadminResourceHistory.card() +
             CadminResourceGraph.card() +
             modal("ed-basic-modal", "Edit basics",
                 field("Name", '<input class="form-control" id="ed-name" required>') +
@@ -254,6 +255,7 @@ window.CadminEndpointDetail = (function () {
         );
         CadminResourceSource.mount(function () { return endpoint; });
         CadminResourceGraph.mount(endpoint);
+        CadminResourceHistory.mount(endpoint);
         renderBasics();
         renderPayload();
         renderHeaders();
@@ -342,19 +344,25 @@ window.CadminEndpointDetail = (function () {
         const id = endpoint.id;
         $.when(
             CadminApi.fhir("/Organization?endpoint=" + encodeURIComponent(id) + "&_count=50&_sort=name"),
-            CadminApi.fhir("/Location?endpoint=" + encodeURIComponent(id) + "&_count=50&_sort=name")
-        ).done(function (orgRes, locRes) {
+            CadminApi.fhir("/Location?endpoint=" + encodeURIComponent(id) + "&_count=50&_sort=name"),
+            CadminApi.fhir("/HealthcareService?endpoint=" + encodeURIComponent(id) + "&_count=50&_sort=name")
+        ).done(function (orgRes, locRes, svcRes) {
             const orgs = bundleResources(orgRes[0]);
             const locs = bundleResources(locRes[0]);
+            const services = bundleResources(svcRes[0]);
             const rows = orgs.map(function (org) {
                 return "<tr><td>Organization</td><td><a href=\"#/organizations/" +
                     encodeURIComponent(org.id) + '">' + esc(org.name || org.id) + "</a></td><td></td></tr>";
             }).concat(locs.map(function (loc) {
                 return "<tr><td>Location</td><td><a href=\"#/locations/" +
                     encodeURIComponent(loc.id) + '">' + esc(loc.name || loc.id) + "</a></td><td></td></tr>";
+            })).concat(services.map(function (item) {
+                return "<tr><td>Healthcare service</td><td>" +
+                    CadminApi.resourceLink(CadminApi.detailHref("HealthcareService", item.id), item.name || item.id) +
+                    "</td><td></td></tr>";
             }));
             if (!rows.length) {
-                $("#ed-used-rows").html(emptyRow(3, "No organizations or locations reference this endpoint."));
+                $("#ed-used-rows").html(emptyRow(3, "No organizations, locations, or healthcare services reference this endpoint."));
                 return;
             }
             $("#ed-used-rows").html(rows.join(""));
@@ -387,8 +395,9 @@ window.CadminEndpointDetail = (function () {
         const id = endpoint.id;
         $.when(
             CadminApi.fhir("/Organization?endpoint=" + encodeURIComponent(id) + "&_count=50"),
-            CadminApi.fhir("/Location?endpoint=" + encodeURIComponent(id) + "&_count=50")
-        ).done(function (orgRes, locRes) {
+            CadminApi.fhir("/Location?endpoint=" + encodeURIComponent(id) + "&_count=50"),
+            CadminApi.fhir("/HealthcareService?endpoint=" + encodeURIComponent(id) + "&_count=50")
+        ).done(function (orgRes, locRes, svcRes) {
             const updates = [];
             bundleResources(orgRes[0]).forEach(function (org) {
                 org.endpoint = dropRef(org.endpoint, id);
@@ -403,6 +412,13 @@ window.CadminEndpointDetail = (function () {
                     delete loc.endpoint;
                 }
                 updates.push(CadminApi.fhir("/Location/" + encodeURIComponent(loc.id), "PUT", loc));
+            });
+            bundleResources(svcRes[0]).forEach(function (item) {
+                item.endpoint = dropRef(item.endpoint, id);
+                if (!item.endpoint.length) {
+                    delete item.endpoint;
+                }
+                updates.push(CadminApi.fhir("/HealthcareService/" + encodeURIComponent(item.id), "PUT", item));
             });
             if (!updates.length) {
                 done();
@@ -450,7 +466,7 @@ window.CadminEndpointDetail = (function () {
         });
 
         $root.on("click.epdetail", "#ed-delete", function () {
-            if (!window.confirm("Delete this endpoint? It will be unlinked from organizations and locations first.")) {
+            if (!window.confirm("Delete this endpoint? It will be unlinked from organizations, locations, and healthcare services first.")) {
                 return;
             }
             unlinkUsers(function () {

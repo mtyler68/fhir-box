@@ -1,0 +1,20 @@
+{
+  "id" : "031a770f-9e66-4de3-843b-ec1efd39c45e",
+  "name" : "hello",
+  "request" : {
+    "urlPath" : "/hello",
+    "method" : "GET"
+  },
+  "response" : {
+    "status" : 200,
+    "jsonBody" : {
+      "message" : "Hello from WireMock"
+    },
+    "headers" : {
+      "Content-Type" : "application/json"
+    }
+  },
+  "uuid" : "031a770f-9e66-4de3-843b-ec1efd39c45e",
+  "persistent" : true,
+  "insertionIndex" : 0
+}

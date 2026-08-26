@@ -2,6 +2,7 @@ window.CadminResourceSource = (function () {
     const MODAL_ID = "cadmin-resource-source-modal";
     let currentResource = null;
     let currentGetter = null;
+    let snapshotResource = null;
     let editor = null;
     let bound = false;
 
@@ -19,13 +20,20 @@ window.CadminResourceSource = (function () {
         return currentGetter ? currentGetter() : currentResource;
     }
 
+    function displayResource() {
+        return snapshotResource || activeResource();
+    }
+
     function sourceText() {
-        return editor ? editor.getValue() : pretty(activeResource());
+        return editor ? editor.getValue() : pretty(displayResource());
     }
 
     function button() {
-        return '<button class="btn btn-outline-primary" type="button" data-fhir-source>' +
-            '<i class="bi bi-code-slash me-1"></i>FHIR resource</button>';
+        const extra = window.CadminTargetList ? CadminTargetList.button() : "";
+        return '<div class="d-flex flex-wrap gap-2 justify-content-end">' +
+            extra +
+            '<button class="btn btn-outline-primary" type="button" data-fhir-source>' +
+            '<i class="bi bi-code-slash me-1"></i>FHIR resource</button></div>';
     }
 
     function ensureModal() {
@@ -65,6 +73,13 @@ window.CadminResourceSource = (function () {
                 lineWrapping: false,
                 readOnly: true,
                 matchBrackets: true,
+                foldGutter: true,
+                gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"],
+                extraKeys: {
+                    "Ctrl-Q": function (cm) {
+                        cm.foldCode(cm.getCursor());
+                    }
+                },
                 viewportMargin: Infinity
             });
             editor.getWrapperElement().classList.add("resource-source-editor");
@@ -77,6 +92,9 @@ window.CadminResourceSource = (function () {
         });
         $("#" + MODAL_ID + "-copy").on("click", copySource);
         $("#" + MODAL_ID + "-download").on("click", downloadSource);
+        $("#" + MODAL_ID).on("hidden.bs.modal", function () {
+            snapshotResource = null;
+        });
     }
 
     function showCopySuccess() {
@@ -137,7 +155,7 @@ window.CadminResourceSource = (function () {
 
     function downloadSource() {
         const text = sourceText();
-        const name = fileName(activeResource());
+        const name = fileName(displayResource());
         const blob = new Blob([text], { type: "application/fhir+json" });
         if (typeof window.showSaveFilePicker !== "function") {
             fallbackDownload(blob, name);
@@ -166,7 +184,30 @@ window.CadminResourceSource = (function () {
         });
     }
 
+    function fillEditor(resource, titleSuffix) {
+        const data = resource;
+        if (!data) {
+            return;
+        }
+        ensureModal();
+        const text = pretty(data);
+        const fullTitle = titleSuffix && titleSuffix.charAt(0) !== " " && titleSuffix.indexOf(" ·") !== 0;
+        const title = fullTitle
+            ? titleSuffix
+            : (data.resourceType || "Resource") +
+                (data.id ? " / " + data.id : "") +
+                (titleSuffix || "");
+        $("#" + MODAL_ID + "-title").text(title);
+        if (editor) {
+            editor.setValue(text);
+        } else {
+            $("#" + MODAL_ID + "-text").val(text);
+        }
+        bootstrap.Modal.getOrCreateInstance(document.getElementById(MODAL_ID)).show();
+    }
+
     function open(resource) {
+        snapshotResource = null;
         if (resource) {
             currentResource = resource;
             currentGetter = null;
@@ -176,17 +217,18 @@ window.CadminResourceSource = (function () {
             return;
         }
         currentResource = data;
-        ensureModal();
-        const text = pretty(data);
-        const title = (data.resourceType || "Resource") +
-            (data.id ? " / " + data.id : "");
-        $("#" + MODAL_ID + "-title").text(title);
-        if (editor) {
-            editor.setValue(text);
-        } else {
-            $("#" + MODAL_ID + "-text").val(text);
+        fillEditor(data, "");
+    }
+
+    function show(resource, titleSuffix) {
+        if (!resource) {
+            return;
         }
-        bootstrap.Modal.getOrCreateInstance(document.getElementById(MODAL_ID)).show();
+        snapshotResource = resource;
+        const vid = resource.meta && resource.meta.versionId
+            ? " · v" + resource.meta.versionId
+            : "";
+        fillEditor(resource, titleSuffix != null ? titleSuffix : vid);
     }
 
     function hide() {
@@ -209,6 +251,9 @@ window.CadminResourceSource = (function () {
             currentResource = resource || null;
         }
         bindOnce();
+        if (window.CadminTargetList) {
+            CadminTargetList.mount(resource);
+        }
     }
 
     function bindOnce() {
@@ -227,6 +272,7 @@ window.CadminResourceSource = (function () {
         button: button,
         mount: mount,
         open: open,
+        show: show,
         hide: hide
     };
 }());

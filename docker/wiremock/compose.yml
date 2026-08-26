@@ -1,0 +1,20 @@
+name: cadmin-wiremock
+
+services:
+  wiremock:
+    image: wiremock/wiremock:3.13.1
+    container_name: cadmin-wiremock
+    restart: unless-stopped
+    ports:
+      - "9090:8080"
+    volumes:
+      - ./mappings:/home/wiremock/mappings
+      - ./__files:/home/wiremock/__files
+    command: ["--global-response-templating"]
+    networks:
+      - fhir-box-network-link
+
+networks:
+  fhir-box-network-link:
+    external: true
+    name: fhir-box-network

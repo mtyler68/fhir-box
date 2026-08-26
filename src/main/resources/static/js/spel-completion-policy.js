@@ -30,7 +30,19 @@ window.CadminSpelPolicyCompletion = (function () {
                 }
             },
             SubjectModel: {
-                detail: "Request subject (model to be defined)"
+                detail: "Request subject (model to be defined)",
+                properties: {
+                    id: { type: "String", detail: "ID of the subject" },
+                    jwt: { type: "JwtModel", detail: "JWT provided by the requesting subject" },
+                }
+            },
+            JwtModel: {
+                detail: "JWT Authorization provided by requestor",
+                properties: {
+                    sub: { type: "String", detail: "Subject identifier" },
+                    role: { type: "String[]", detail: "Role identifiers" },
+                    scope: { type: "String[]", detail: "Scopes" }
+                }
             },
             ResponseModel: {
                 detail: "Authorization response",

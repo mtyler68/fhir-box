@@ -23,8 +23,11 @@ function renderQuestionnaireList(initialQuery) {
     $root.html(
         '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
             '<h1 class="h3 mb-0 page-title">Questionnaires</h1>' +
-            '<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-questionnaire-modal">' +
-                '<i class="bi bi-plus-lg me-1"></i>New questionnaire</button>' +
+            CadminResourceDocument.splitButton({
+                label: "New questionnaire",
+                modalTarget: "#create-questionnaire-modal",
+                resourceType: "Questionnaire"
+            }) +
         "</div>" +
         '<div id="questionnaire-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
@@ -54,6 +57,10 @@ function renderQuestionnaireList(initialQuery) {
                     '<div class="modal-body">' +
                         '<div class="mb-3"><label class="form-label" for="qn-title">Title</label>' +
                             '<input class="form-control" id="qn-title" name="title" required></div>' +
+                        '<div class="mb-3"><label class="form-label" for="qn-name">Name</label>' +
+                            '<input class="form-control font-monospace" id="qn-name" name="name" ' +
+                                'placeholder="intakeQuestionnaire" autocomplete="off">' +
+                            '<div class="form-text">Computer-friendly name. Letters, digits, and hyphens.</div></div>' +
                         '<div class="mb-3"><label class="form-label" for="qn-status">Status</label>' +
                             '<select class="form-select" id="qn-status" name="status">' +
                                 statusOptions.map(function (option) {
@@ -189,15 +196,35 @@ function renderQuestionnaireList(initialQuery) {
         load($("#questionnaire-query").val());
     });
 
+    let nameTouched = false;
+    $("#create-questionnaire-modal").on("show.bs.modal", function () {
+        nameTouched = false;
+        $("#qn-title").val("");
+        $("#qn-name").val("");
+        $("#qn-url").val("");
+        $("#qn-version").val("1.0.0");
+        $("#qn-status").val("draft");
+    });
+    $("#qn-title").on("input", function () {
+        if (!nameTouched) {
+            $("#qn-name").val(slugName($(this).val()));
+        }
+    });
+    $("#qn-name").on("input", function () {
+        nameTouched = true;
+    });
+
     $("#create-questionnaire-form").on("submit", function (event) {
         event.preventDefault();
         const fields = this.elements;
         const title = String((fields.namedItem("title") || {}).value || "").trim();
+        const typedName = String((fields.namedItem("name") || {}).value || "").trim()
+            .replace(/[^A-Za-z0-9._-]+/g, "");
         const resource = {
             resourceType: "Questionnaire",
             status: String((fields.namedItem("status") || {}).value || "draft").trim() || "draft",
             title: title,
-            name: slugName(title),
+            name: typedName || slugName(title),
             version: String((fields.namedItem("version") || {}).value || "").trim() || "1.0.0",
             item: []
         };

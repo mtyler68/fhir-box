@@ -1,0 +1,28 @@
+{
+  "id" : "82ad9c38-f594-44e5-811c-441c057ccfb3",
+  "name" : "fhir-practitioner-created",
+  "request" : {
+    "url" : "/fhir/practitioner-created",
+    "method" : "POST",
+    "headers" : {
+      "Accept" : {
+        "equalTo" : "application/fhir+json;q=1.0, application/json+fhir;q=0.9"
+      },
+      "Content-Type" : {
+        "equalTo" : "application/fhir+json; charset=UTF-8",
+        "caseInsensitive" : true
+      }
+    },
+    "bodyPatterns" : [ {
+      "matchesJsonPath" : "$[?(@.resourceType == 'Bundle')]"
+    }, {
+      "matchesJsonPath" : "$[?(@.type == 'subscription-notification')]"
+    } ]
+  },
+  "response" : {
+    "status" : 204
+  },
+  "uuid" : "82ad9c38-f594-44e5-811c-441c057ccfb3",
+  "persistent" : true,
+  "insertionIndex" : 1
+}

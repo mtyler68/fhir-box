@@ -212,6 +212,9 @@ window.CadminCareTeamDetail = (function () {
         if (type === "Organization") {
             return "#/organizations/" + encodeURIComponent(id);
         }
+        if (type === "HealthcareService") {
+            return CadminApi.detailHref("HealthcareService", id);
+        }
         return "#/resources/" + encodeURIComponent(type) + "/" + encodeURIComponent(id);
     }
 
@@ -262,6 +265,11 @@ window.CadminCareTeamDetail = (function () {
                 '<div class="col-lg-6">' + card("Practitioners", "ctd-practitioner-rows",
                     ["Name", "Role", ""], "#ctd-practitioner-modal", "Add") + "</div>" +
             "</div>" +
+            '<div class="row">' +
+                '<div class="col-lg-6">' + card("Healthcare services", "ctd-service-rows",
+                    ["Name", ""], "#ctd-service-modal", "Add") + "</div>" +
+            "</div>" +
+            CadminResourceHistory.card() +
             CadminResourceGraph.card() +
             modal("ctd-basic-modal", "Edit basic details",
                 field("Name", '<input class="form-control" id="ctd-name" required>') +
@@ -285,13 +293,18 @@ window.CadminCareTeamDetail = (function () {
                     '<option value="">Select…</option></select>') +
                 field("Role", '<select class="form-select" id="ctd-pr-role">' +
                     optionsHtml(practitionerRoles) + "</select>"),
-                "ctd-practitioner-form")
+                "ctd-practitioner-form") +
+            modal("ctd-service-modal", "Add healthcare service",
+                field("Healthcare service", '<select class="form-select" id="ctd-svc" required></select>'),
+                "ctd-service-form")
         );
         CadminResourceSource.mount(function () { return team; });
         CadminResourceGraph.mount(team);
+        CadminResourceHistory.mount(team);
         renderBasics();
         renderCaregivers();
         renderPractitioners();
+        renderServices();
         bindForms();
     }
 
@@ -353,10 +366,30 @@ window.CadminCareTeamDetail = (function () {
         renderMemberRows("#ctd-practitioner-rows", "Practitioner");
     }
 
+    function renderServices() {
+        const rows = membersOfType("HealthcareService");
+        if (!rows.length) {
+            $("#ctd-service-rows").html(emptyRow(2, "None."));
+            return;
+        }
+        $("#ctd-service-rows").html(rows.map(function (item) {
+            const id = refId(item.member);
+            const name = refLabel(item.member);
+            const nameHtml = id
+                ? CadminApi.resourceLink(memberHref("HealthcareService", id), name)
+                : esc(name);
+            return "<tr><td>" + nameHtml + "</td>" +
+                '<td class="text-end"><button class="btn btn-sm btn-outline-danger" type="button" data-remove-member="1" data-ref="' +
+                esc((item.member && item.member.reference) || "") +
+                '" title="Remove"><i class="bi bi-trash"></i></button></td></tr>';
+        }).join(""));
+    }
+
     function refreshLists() {
         renderBasics();
         renderCaregivers();
         renderPractitioners();
+        renderServices();
     }
 
     function saveTeam(next) {
@@ -424,6 +457,10 @@ window.CadminCareTeamDetail = (function () {
             $("#ctd-pr-role").val("doctor");
         });
 
+        $("#ctd-service-modal").on("show.bs.modal", function () {
+            CadminApi.bindFhirSelect("#ctd-svc", "HealthcareService", { placeholder: "Select…" });
+        });
+
         $("#ctd-basic-form").on("submit", function (event) {
             event.preventDefault();
             team.name = $("#ctd-name").val().trim();
@@ -489,6 +526,19 @@ window.CadminCareTeamDetail = (function () {
                 role, "http://terminology.hl7.org/CodeSystem/practitioner-role"), function () {
                 hideModal("ctd-practitioner-modal");
                 alertMsg("success", "Practitioner added.");
+            });
+        });
+
+        $("#ctd-service-form").on("submit", function (event) {
+            event.preventDefault();
+            const id = CadminApi.selectValue("#ctd-svc");
+            if (!id) {
+                alertMsg("danger", "Select a healthcare service.");
+                return;
+            }
+            addParticipant(participantFrom("HealthcareService", id, CadminApi.selectLabel("#ctd-svc")), function () {
+                hideModal("ctd-service-modal");
+                alertMsg("success", "Healthcare service added.");
             });
         });
     }

@@ -149,7 +149,16 @@ window.CadminSubscriptionDetail = (function () {
     }
 
     function topicFilters() {
-        return ((topicResource && topicResource.trigger && topicResource.trigger[0]) || {}).canFilterBy || [];
+        if (!topicResource) {
+            return [];
+        }
+        if (topicResource.canFilterBy && topicResource.canFilterBy.length) {
+            return topicResource.canFilterBy;
+        }
+        const trigger = (topicResource.resourceTrigger && topicResource.resourceTrigger[0])
+            || (topicResource.trigger && topicResource.trigger[0])
+            || {};
+        return trigger.canFilterBy || [];
     }
 
     function filterDef(name) {
@@ -234,6 +243,7 @@ window.CadminSubscriptionDetail = (function () {
                         ["Name", "Value", ""], "#sd-param-modal", "Add") +
                 "</div>" +
             "</div>" +
+            CadminResourceHistory.card() +
             CadminResourceGraph.card() +
             modal("sd-basic-modal", "Edit basics",
                 field("Name", '<input class="form-control" id="sd-name">') +
@@ -272,6 +282,7 @@ window.CadminSubscriptionDetail = (function () {
         );
         CadminResourceSource.mount(function () { return subscription; });
         CadminResourceGraph.mount(subscription);
+        CadminResourceHistory.mount(subscription);
         renderHeader();
         renderBasics();
         renderChannel();
@@ -317,6 +328,8 @@ window.CadminSubscriptionDetail = (function () {
             actions += '<button class="btn btn-outline-primary" type="button" id="sd-rerequest">' +
                 '<i class="bi bi-arrow-repeat me-1"></i>Re-request</button>';
         }
+        actions += '<button class="btn btn-outline-danger" type="button" id="sd-delete">' +
+            '<i class="bi bi-trash me-1"></i>Delete</button>';
         actions += CadminResourceSource.button();
         $("#sd-actions").html(actions);
     }
@@ -505,6 +518,18 @@ window.CadminSubscriptionDetail = (function () {
             subscription.status = "requested";
             saveSubscription(function () {
                 CadminApi.showToast("success", "Subscription re-requested.");
+            });
+        });
+
+        $root.on("click.subdetail", "#sd-delete", function () {
+            if (!window.confirm("Delete this subscription?")) {
+                return;
+            }
+            CadminApi.fhir("/Subscription/" + encodeURIComponent(subscription.id), "DELETE").done(function () {
+                CadminApi.showToast("success", "Subscription deleted.");
+                window.location.hash = "#/subscriptions";
+            }).fail(function (xhr) {
+                fail("Delete subscription", xhr);
             });
         });
 

@@ -44,6 +44,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/theme/material-darker.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/hint/show-hint.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/fold/foldgutter.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vis-network@9.1.13/styles/vis-network.min.css">
     <link href="/css/cadmin.css" rel="stylesheet">
@@ -128,6 +129,11 @@
                     <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
                         <li><h6 class="dropdown-header" id="topbar-role">Authenticated</h6></li>
                         <li><a class="dropdown-item" href="#/settings"><i class="bi bi-gear me-2"></i>Settings</a></li>
+                        <li class="admin-only">
+                            <button type="button" class="dropdown-item" id="upload-transaction-bundle">
+                                <i class="bi bi-file-earmark-arrow-up me-2"></i>Upload transaction bundle
+                            </button>
+                        </li>
                         <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" href="#" id="logout-link"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
                     </ul>
@@ -165,6 +171,9 @@
                     <li class="nav-item" data-route="devices">
                         <a class="nav-link" href="#/devices"><iconify-icon class="nav-icon" icon="mdi:devices" aria-hidden="true"></iconify-icon><p>Devices</p></a>
                     </li>
+                    <li class="nav-item" data-route="device-associations">
+                        <a class="nav-link" href="#/device-associations"><i class="nav-icon bi bi-link-45deg"></i><p>Device associations</p></a>
+                    </li>
                     <li class="nav-item" data-route="flags">
                         <a class="nav-link" href="#/flags"><i class="nav-icon bi bi-flag"></i><p>Flags</p></a>
                     </li>
@@ -175,8 +184,17 @@
                     <li class="nav-item admin-only" data-route="locations">
                         <a class="nav-link" href="#/locations"><i class="nav-icon bi bi-geo-alt"></i><p>Locations</p></a>
                     </li>
+                    <li class="nav-item admin-only" data-route="healthcare-services">
+                        <a class="nav-link" href="#/healthcare-services"><iconify-icon class="nav-icon" icon="mdi:medical-bag" aria-hidden="true"></iconify-icon><p>Healthcare services</p></a>
+                    </li>
                     <li class="nav-item admin-only" data-route="care-teams">
                         <a class="nav-link" href="#/care-teams"><i class="nav-icon bi bi-people-fill"></i><p>Care Teams</p></a>
+                    </li>
+                    <li class="nav-item" data-route="lists">
+                        <a class="nav-link" href="#/lists"><i class="nav-icon bi bi-list-ul"></i><p>Lists</p></a>
+                    </li>
+                    <li class="nav-item admin-only" data-route="practitioner-roles">
+                        <a class="nav-link" href="#/practitioner-roles"><i class="nav-icon bi bi-person-vcard"></i><p>Practitioner roles</p></a>
                     </li>
                     <li class="nav-header">Administration</li>
                     <li class="nav-item" data-route="users">
@@ -195,6 +213,12 @@
                     <li class="nav-item admin-only" data-route="questionnaires">
                         <a class="nav-link" href="#/questionnaires"><i class="nav-icon bi bi-ui-checks"></i><p>Questionnaires</p></a>
                     </li>
+                    <li class="nav-item admin-only" data-route="code-systems">
+                        <a class="nav-link" href="#/code-systems"><i class="nav-icon bi bi-braces"></i><p>Code systems</p></a>
+                    </li>
+                    <li class="nav-item admin-only" data-route="value-sets">
+                        <a class="nav-link" href="#/value-sets"><i class="nav-icon bi bi-tags"></i><p>Value sets</p></a>
+                    </li>
                     <li class="nav-header admin-only">Privacy</li>
                     <li class="nav-item admin-only" data-route="consents">
                         <a class="nav-link" href="#/consents"><i class="nav-icon bi bi-shield-check"></i><p>Consents</p></a>
@@ -208,6 +232,16 @@
                     </li>
                     <li class="nav-item admin-only" data-route="endpoints">
                         <a class="nav-link" href="#/endpoints"><i class="nav-icon bi bi-hdd-network"></i><p>Endpoints</p></a>
+                    </li>
+                    <li class="nav-header admin-only">WireMock</li>
+                    <li class="nav-item admin-only" data-route="wiremock-mappings">
+                        <a class="nav-link" href="#/wiremock-mappings"><i class="nav-icon bi bi-signpost-split"></i><p>Mappings</p></a>
+                    </li>
+                    <li class="nav-item admin-only" data-route="wiremock-requests">
+                        <a class="nav-link" href="#/wiremock-requests"><i class="nav-icon bi bi-inbox"></i><p>Requests</p></a>
+                    </li>
+                    <li class="nav-item admin-only" data-route="wiremock-scenarios">
+                        <a class="nav-link" href="#/wiremock-scenarios"><i class="nav-icon bi bi-shuffle"></i><p>Scenarios</p></a>
                     </li>
                     <li class="nav-header">Utils</li>
                     <li class="nav-item" data-route="resources">
@@ -246,6 +280,10 @@
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/edit/matchbrackets.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/search/searchcursor.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/search/match-highlighter.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/fold/foldcode.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/fold/foldgutter.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/fold/brace-fold.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/fold/indent-fold.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/mode/yaml/yaml.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/mode/javascript/javascript.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/hint/show-hint.js"></script>
@@ -253,7 +291,14 @@
 <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.13/standalone/umd/vis-network.min.js"></script>
 <script src="/js/api.js"></script>
 <script src="/js/resource-source.js"></script>
+<script src="/js/target-list.js"></script>
+<script src="/js/fhir-json-source.js"></script>
+<script src="/js/resource-document.js"></script>
+<script src="/js/npi-practitioner.js"></script>
+<script src="/js/npi-organization.js"></script>
+<script src="/js/transaction-bundle.js"></script>
 <script src="/js/resource-graph.js"></script>
+<script src="/js/resource-history.js"></script>
 <script src="/js/spel-completion-policy.js"></script>
 <script src="/js/app.js"></script>
 <script src="/js/workspace.js"></script>
@@ -266,19 +311,31 @@
 <script src="/js/pages/practitioners.js"></script>
 <script src="/js/pages/device-detail.js"></script>
 <script src="/js/pages/devices.js"></script>
+<script src="/js/pages/device-association-detail.js"></script>
+<script src="/js/pages/device-associations.js"></script>
 <script src="/js/pages/flag-detail.js"></script>
 <script src="/js/pages/flags.js"></script>
+<script src="/js/pages/list-detail.js"></script>
+<script src="/js/pages/lists.js"></script>
 <script src="/js/pages/organization-detail.js"></script>
 <script src="/js/pages/organizations.js"></script>
 <script src="/js/pages/care-team-detail.js"></script>
 <script src="/js/pages/care-teams.js"></script>
+<script src="/js/pages/practitioner-role-detail.js"></script>
+<script src="/js/pages/practitioner-roles.js"></script>
 <script src="/js/pages/location-detail.js"></script>
 <script src="/js/pages/locations.js"></script>
+<script src="/js/pages/healthcare-service-detail.js"></script>
+<script src="/js/pages/healthcare-services.js"></script>
 <script src="/js/pages/pds-policy-detail.js"></script>
 <script src="/js/pages/pds-policies.js"></script>
 <script src="/js/pages/search-parameters.js"></script>
 <script src="/js/pages/questionnaire-detail.js"></script>
 <script src="/js/pages/questionnaires.js"></script>
+<script src="/js/pages/code-system-detail.js"></script>
+<script src="/js/pages/code-systems.js"></script>
+<script src="/js/pages/value-set-detail.js"></script>
+<script src="/js/pages/value-sets.js"></script>
 <script src="/js/pages/subscription-topic-detail.js"></script>
 <script src="/js/pages/subscription-topics.js"></script>
 <script src="/js/pages/subscription-detail.js"></script>
@@ -293,5 +350,11 @@
 <script src="/js/pages/demo-data.js"></script>
 <script src="/js/pages/users.js"></script>
 <script src="/js/pages/settings.js"></script>
+<script src="/js/wiremock.js"></script>
+<script src="/js/pages/wiremock-mapping-detail.js"></script>
+<script src="/js/pages/wiremock-mappings.js"></script>
+<script src="/js/pages/wiremock-request-detail.js"></script>
+<script src="/js/pages/wiremock-requests.js"></script>
+<script src="/js/pages/wiremock-scenarios.js"></script>
 </body>
 </html>

@@ -16,6 +16,13 @@ spring:
                 - Path=/fhir/**
               filters:
                 - RemoveRequestHeader=Cookie
+            - id: wiremock
+              uri: ${cadmin.wiremock.uri}
+              predicates:
+                - Path=/wiremock/**
+              filters:
+                - StripPrefix=1
+                - RemoveRequestHeader=Cookie
 
 server:
   port: ${CADMIN_PORT:8080}
@@ -38,6 +45,11 @@ cadmin:
   geocode:
     uri: ${CADMIN_GEOCODE_URI:https://nominatim.openstreetmap.org}
     user-agent: FHIR-Box/0.1 (io.cadmin.gateway; location-geocoder)
+  npi-registry:
+    uri: ${CADMIN_NPI_URI:https://npiregistry.cms.hhs.gov/api/}
+    version: "2.1"
+  wiremock:
+    uri: ${CADMIN_WIREMOCK_URI:http://localhost:9090}
 
 management:
   endpoints:
@@ -58,10 +70,10 @@ info:
 
 logging:
   level:
-    io.cadmin: DEBUG
-    org.springframework.cloud.gateway: DEBUG
-    org.springframework.security: DEBUG
-    org.springframework.web: DEBUG
-    org.springframework.web.server: DEBUG
-    org.springframework.http.server.reactive: DEBUG
-    reactor.netty.http.server: DEBUG
+    io.cadmin: INFO
+    org.springframework.cloud.gateway: INFO
+    org.springframework.security: INFO
+    org.springframework.web: INFO
+    org.springframework.web.server: INFO
+    org.springframework.http.server.reactive: INFO
+    reactor.netty.http.server: INFO

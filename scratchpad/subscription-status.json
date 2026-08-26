@@ -1,0 +1,36 @@
+{
+  "resourceType": "Bundle",
+  "id": "e7e6e04f-66c3-4ce5-a519-4f2183ea8b24",
+  "type": "subscription-notification",
+  "entry": [
+    {
+      "fullUrl": "23e74dad-fbba-48ed-81f2-50e98850726f",
+      "resource": {
+        "resourceType": "SubscriptionStatus",
+        "id": "23e74dad-fbba-48ed-81f2-50e98850726f",
+        "status": "active",
+        "type": "event-notification",
+        "eventsSinceSubscriptionStart": 1,
+        "notificationEvent": [
+          {
+            "eventNumber": 1,
+            "focus": {
+              "reference": "Practitioner/778923e2-8d11-4dd6-ab8a-a53ce92c770d"
+            }
+          }
+        ],
+        "subscription": {
+          "reference": "Subscription/sub-practitioner-created-v1.0.1"
+        },
+        "topic": "https://insulet.com/fhir/SubscriptionTopic/stp-practitioner-created"
+      }
+    },
+    {
+      "fullUrl": "Practitioner/778923e2-8d11-4dd6-ab8a-a53ce92c770d/_history/1",
+      "request": {
+        "method": "POST",
+        "url": "Practitioner"
+      }
+    }
+  ]
+}

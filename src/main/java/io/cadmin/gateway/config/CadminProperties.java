@@ -7,9 +7,11 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 
 @ConfigurationProperties(prefix = "cadmin")
 public record CadminProperties(
-        @DefaultValue Security security,
-        @DefaultValue Fhir fhir,
-        @DefaultValue Geocode geocode
+    @DefaultValue Security security,
+    @DefaultValue Fhir fhir,
+    @DefaultValue Geocode geocode,
+    @DefaultValue NpiRegistry npiRegistry,
+    @DefaultValue Wiremock wiremock
 ) {
 
     public record Security(
@@ -50,5 +52,14 @@ public record CadminProperties(
             @DefaultValue("https://nominatim.openstreetmap.org") String uri,
             @DefaultValue("FHIR-Box/0.1 (io.cadmin.gateway; location-geocoder)") String userAgent
     ) {
+    }
+
+    public record NpiRegistry(
+            @DefaultValue("https://npiregistry.cms.hhs.gov/api/") String uri,
+            @DefaultValue("2.1") String version
+    ) {
+    }
+
+    public record Wiremock(@DefaultValue("http://localhost:9090") String uri) {
     }
 }

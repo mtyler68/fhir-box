@@ -4,16 +4,22 @@ window.CadminResourceGraph = (function () {
         RelatedPerson: "#/caregivers/",
         Practitioner: "#/practitioners/",
         Device: "#/devices/",
+        DeviceAssociation: "#/device-associations/",
         Flag: "#/flags/",
         Organization: "#/organizations/",
         CareTeam: "#/care-teams/",
         Location: "#/locations/",
+        HealthcareService: "#/healthcare-services/",
         Consent: "#/consents/",
         Subscription: "#/subscriptions/",
         SubscriptionTopic: "#/subscription-topics/",
         Endpoint: "#/endpoints/",
         Library: "#/pds-policies/",
-        Questionnaire: "#/questionnaires/"
+        Questionnaire: "#/questionnaires/",
+        CodeSystem: "#/code-systems/",
+        ValueSet: "#/value-sets/",
+        PractitionerRole: "#/practitioner-roles/",
+        List: "#/lists/"
     };
     const TYPE_COLORS = {
         Patient: "#36b9cc",
@@ -21,6 +27,7 @@ window.CadminResourceGraph = (function () {
         Practitioner: "#4e73df",
         Organization: "#f6c23e",
         Location: "#e74a3b",
+        HealthcareService: "#20c997",
         CareTeam: "#858796",
         Device: "#5a5c69",
         Flag: "#d63384",
@@ -30,9 +37,12 @@ window.CadminResourceGraph = (function () {
         SubscriptionTopic: "#0d6efd",
         Library: "#6610f2",
         Questionnaire: "#198754",
+        CodeSystem: "#6f42c1",
+        ValueSet: "#20c997",
         PractitionerRole: "#4e73df",
         OrganizationAffiliation: "#f6c23e",
-        Endpoint: "#36b9cc"
+        Endpoint: "#36b9cc",
+        List: "#0d6efd"
     };
     const DEPTH_MIN = 1;
     const DEPTH_MAX = 4;
@@ -62,11 +72,52 @@ window.CadminResourceGraph = (function () {
         return raw;
     }
 
+    function parseRgb(color) {
+        const text = String(color || "").trim();
+        let match = text.match(/^#([0-9a-f]{3})$/i);
+        if (match) {
+            const hex = match[1];
+            return [
+                parseInt(hex.charAt(0) + hex.charAt(0), 16),
+                parseInt(hex.charAt(1) + hex.charAt(1), 16),
+                parseInt(hex.charAt(2) + hex.charAt(2), 16)
+            ];
+        }
+        match = text.match(/^#([0-9a-f]{6})$/i);
+        if (match) {
+            return [
+                parseInt(match[1].slice(0, 2), 16),
+                parseInt(match[1].slice(2, 4), 16),
+                parseInt(match[1].slice(4, 6), 16)
+            ];
+        }
+        match = text.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+        if (match) {
+            return [Number(match[1]), Number(match[2]), Number(match[3])];
+        }
+        return null;
+    }
+
+    function luminance(color) {
+        const rgb = parseRgb(color);
+        if (!rgb) {
+            return 0.5;
+        }
+        const linear = rgb.map(function (channel) {
+            const value = channel / 255;
+            return value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+        });
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+    }
+
+    function contrastingInk(fill, theme) {
+        return luminance(fill) > 0.42 ? "#212529" : (theme.onPrimary || "#fff");
+    }
+
     function themePalette() {
         return {
             canvas: cssColor("--bs-body-bg", "#fff"),
             nodeBg: cssColor("--bs-body-bg", "#fff"),
-            nodeHover: cssColor("--bs-secondary-bg", "#f8f9fc"),
             text: cssColor("--bs-body-color", "#5a5c69"),
             muted: cssColor("--bs-secondary-color", "#858796"),
             border: cssColor("--bs-border-color", "#dee2e6"),
@@ -174,6 +225,10 @@ window.CadminResourceGraph = (function () {
                     '<button class="btn btn-sm btn-outline-secondary ms-2" type="button" id="resource-graph-declutter" title="Arrange nodes so connectors do not overlap">' +
                         '<i class="bi bi-distribute-vertical" aria-hidden="true"></i>' +
                         '<span class="ms-1">Declutter</span>' +
+                    "</button>" +
+                    '<button class="btn btn-sm btn-outline-secondary ms-2" type="button" id="resource-graph-bundle" title="Open a Bundle of every resource shown in the graph">' +
+                        '<i class="bi bi-collection" aria-hidden="true"></i>' +
+                        '<span class="ms-1">Bundle</span>' +
                     "</button>" +
                     '<div class="btn-group btn-group-sm ms-2 resource-graph-export">' +
                         '<button class="btn btn-outline-secondary" type="button" id="resource-graph-export-png" title="Open the current graph as a PNG image">' +
@@ -963,6 +1018,9 @@ window.CadminResourceGraph = (function () {
             const subtitle = abbreviate(node.title, 28)
                 || (usesRoleCodeTitle(node.type) ? "" : node.id);
             const label = node.type + (subtitle ? "\n" + subtitle : "");
+            const labelColor = focus ? contrastingInk(theme.primary, theme) : theme.text;
+            const activeFill = focus ? theme.primary : color;
+            const activeInk = contrastingInk(activeFill, theme);
             return {
                 id: key,
                 label: label,
@@ -971,22 +1029,41 @@ window.CadminResourceGraph = (function () {
                 shape: "box",
                 margin: 10,
                 borderWidth: focus ? 3 : 2,
+                chosen: {
+                    node: function (values, _id, selected, hovering) {
+                        if (!selected && !hovering) {
+                            return;
+                        }
+                        values.color = activeFill;
+                        values.borderColor = activeFill;
+                        values.borderWidth = 3;
+                    },
+                    label: function (values, _id, selected, hovering) {
+                        if (!selected && !hovering) {
+                            return;
+                        }
+                        values.color = activeInk;
+                        values.strokeWidth = 0;
+                    }
+                },
                 color: focus
                     ? {
                         background: theme.primary,
                         border: theme.primary,
-                        highlight: { background: theme.primary, border: theme.primary }
+                        highlight: { background: theme.primary, border: theme.primary },
+                        hover: { background: theme.primary, border: theme.primary }
                     }
                     : {
                         background: theme.nodeBg,
                         border: color,
-                        highlight: { background: theme.nodeHover, border: color }
+                        highlight: { background: activeFill, border: activeFill },
+                        hover: { background: activeFill, border: activeFill }
                     },
                 font: {
                     face: "system-ui, sans-serif",
                     size: 13,
-                    color: focus ? theme.onPrimary : theme.text,
-                    bold: { color: focus ? theme.onPrimary : theme.text }
+                    color: labelColor,
+                    bold: { color: labelColor }
                 }
             };
         });
@@ -1294,6 +1371,93 @@ window.CadminResourceGraph = (function () {
         finish(new Blob([bytes], { type: "image/png" }));
     }
 
+    function isFullResource(resource) {
+        return !!(resource && resource.resourceType && resource.id && !resource._display);
+    }
+
+    function cloneForBundle(resource) {
+        const copy = JSON.parse(JSON.stringify(resource));
+        delete copy._display;
+        return copy;
+    }
+
+    function collectDisplayedResources() {
+        const deferred = $.Deferred();
+        const keys = Object.keys((lastGraph && lastGraph.nodes) || {});
+        const collected = [];
+        let pending = keys.length;
+        if (!pending) {
+            return deferred.resolve([]).promise();
+        }
+        keys.forEach(function (key) {
+            const cached = mountedByKey && mountedByKey[key];
+            function keep(resource) {
+                if (isFullResource(resource)) {
+                    collected.push(resource);
+                }
+                pending -= 1;
+                if (pending === 0) {
+                    collected.sort(function (left, right) {
+                        const leftKey = keyOf(left);
+                        const rightKey = keyOf(right);
+                        if (leftKey === focusKey) {
+                            return -1;
+                        }
+                        if (rightKey === focusKey) {
+                            return 1;
+                        }
+                        return leftKey.localeCompare(rightKey);
+                    });
+                    deferred.resolve(collected);
+                }
+            }
+            if (isFullResource(cached)) {
+                keep(cached);
+                return;
+            }
+            const node = lastGraph.nodes[key];
+            CadminApi.fhir("/" + encodeURIComponent(node.type) + "/" + encodeURIComponent(node.id),
+                "GET", null, { silent: true })
+                .done(function (resource) { keep(resource); })
+                .fail(function () { keep(null); });
+        });
+        return deferred.promise();
+    }
+
+    function graphBundle(resources) {
+        return {
+            resourceType: "Bundle",
+            type: "collection",
+            timestamp: new Date().toISOString(),
+            entry: resources.map(function (resource) {
+                return {
+                    fullUrl: resource.resourceType + "/" + resource.id,
+                    resource: cloneForBundle(resource)
+                };
+            })
+        };
+    }
+
+    function openGraphBundle() {
+        if (!lastGraph || !lastGraph.nodes || !Object.keys(lastGraph.nodes).length) {
+            CadminApi.showToast("warning", "The reference graph has no resources yet.");
+            return;
+        }
+        if (!window.CadminResourceSource) {
+            return;
+        }
+        const $btn = $("#resource-graph-bundle").prop("disabled", true);
+        collectDisplayedResources().done(function (resources) {
+            if (!resources.length) {
+                CadminApi.showToast("warning", "Unable to load the resources shown in the graph.");
+                return;
+            }
+            CadminResourceSource.show(graphBundle(resources), "Reference graph bundle");
+        }).always(function () {
+            $btn.prop("disabled", false);
+        });
+    }
+
     function exportGraphSvg() {
         if (!network) {
             return;
@@ -1458,7 +1622,7 @@ window.CadminResourceGraph = (function () {
             if (index >= paths.length) {
                 return $.Deferred().reject().promise();
             }
-            return CadminApi.fhir(paths[index]).then(null, function () {
+            return CadminApi.fhir(paths[index], "GET", null, { silent: true }).then(null, function () {
                 return next(index + 1);
             });
         }
@@ -1595,6 +1759,10 @@ window.CadminResourceGraph = (function () {
     $(document).on("click.resourcegraphdeclutter", "#resource-graph-declutter", function (event) {
         event.preventDefault();
         declutter();
+    });
+    $(document).on("click.resourcegraphbundle", "#resource-graph-bundle", function (event) {
+        event.preventDefault();
+        openGraphBundle();
     });
     $(document).on("click.resourcegraphexportpng", "#resource-graph-export-png, #resource-graph-export-png-item", function (event) {
         event.preventDefault();

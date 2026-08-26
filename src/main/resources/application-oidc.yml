@@ -35,3 +35,10 @@ spring:
               filters:
                 - TokenRelay=
                 - RemoveRequestHeader=Cookie
+            - id: wiremock
+              uri: ${cadmin.wiremock.uri}
+              predicates:
+                - Path=/wiremock/**
+              filters:
+                - StripPrefix=1
+                - RemoveRequestHeader=Cookie

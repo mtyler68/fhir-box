@@ -35,8 +35,11 @@ function renderDeviceList(initialQuery) {
     $root.html(
         '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
             '<h1 class="h3 mb-0 page-title">Devices</h1>' +
-            '<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-device-modal">' +
-                '<i class="bi bi-plus-lg me-1"></i>New device</button>' +
+            CadminResourceDocument.splitButton({
+                label: "New device",
+                modalTarget: "#create-device-modal",
+                resourceType: "Device"
+            }) +
         "</div>" +
         '<div id="device-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
@@ -157,8 +160,9 @@ function renderDeviceList(initialQuery) {
     }
 
     function currentAssociation(resource) {
+        const status = CadminApi.conceptCode(resource && resource.status);
         return resource && resource.resourceType === "DeviceAssociation"
-            && resource.status !== "explanted" && resource.status !== "entered-in-error";
+            && status !== "explanted" && status !== "entered-in-error";
     }
 
     let listPage = 0;
@@ -276,7 +280,14 @@ function renderDeviceList(initialQuery) {
             if (patientId && id) {
                 CadminApi.fhir("/DeviceAssociation", "POST", {
                     resourceType: "DeviceAssociation",
-                    status: "attached",
+                    status: {
+                        coding: [{
+                            system: "http://hl7.org/fhir/deviceassociation-status",
+                            code: "attached",
+                            display: "Attached"
+                        }],
+                        text: "Attached"
+                    },
                     device: {
                         reference: "Device/" + id,
                         display: resource.name[0].value

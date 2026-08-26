@@ -19,6 +19,8 @@ services:
       timeout: 5s
       retries: 8
       start_period: 10s
+    networks:
+      - fhir-box-network-link
 
   hapi-fhir:
     image: hapiproject/hapi:latest
@@ -44,6 +46,13 @@ services:
       timeout: 10s
       retries: 15
       start_period: 90s
+    networks:
+      - fhir-box-network-link
 
 volumes:
   hapi-fhir-postgres:
+
+networks:
+  fhir-box-network-link:
+    external: true
+    name: fhir-box-network

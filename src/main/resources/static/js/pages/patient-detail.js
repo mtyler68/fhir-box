@@ -109,12 +109,13 @@ window.CadminPatientDetail = (function () {
             system: "http://terminology.hl7.org/CodeSystem/flag-category" },
         { code: "safety", display: "Safety", system: "http://terminology.hl7.org/CodeSystem/flag-category" }
     ];
-    const flagCodes = [
-        { code: "fall-risk", display: "Fall risk" },
-        { code: "isolation", display: "Isolation precautions" },
-        { code: "interpreter", display: "Interpreter needed" },
-        { code: "admin-hold", display: "Administrative hold" },
-        { code: "advance-directive", display: "Advance directive on file" }
+    const FLAG_CODE_SYSTEM = "https://cadmin.io/fhir/CodeSystem/flag-code";
+    let flagCodes = [
+        { code: "fall-risk", display: "Fall risk", system: FLAG_CODE_SYSTEM },
+        { code: "isolation", display: "Isolation precautions", system: FLAG_CODE_SYSTEM },
+        { code: "interpreter", display: "Interpreter needed", system: FLAG_CODE_SYSTEM },
+        { code: "admin-hold", display: "Administrative hold", system: FLAG_CODE_SYSTEM },
+        { code: "advance-directive", display: "Advance directive on file", system: FLAG_CODE_SYSTEM }
     ];
 
     let patient = null;
@@ -217,6 +218,38 @@ window.CadminPatientDetail = (function () {
         return CadminApp.isAdmin();
     }
 
+    function showFhirOutcome(body, xhr) {
+        const resource = body && typeof body === "object"
+            ? body
+            : (CadminFhirJsonSource.bodyFromXhr(xhr, body));
+        if (!resource) {
+            return false;
+        }
+        CadminResourceSource.show(resource, " · $everything");
+        return true;
+    }
+
+    function runEverything($btn) {
+        if (!patient || !patient.id) {
+            return;
+        }
+        $btn.prop("disabled", true);
+        CadminApi.fhir("/Patient/" + encodeURIComponent(patient.id) + "/$everything", "GET", null, { silent: true })
+            .done(function (body, _status, xhr) {
+                if (!showFhirOutcome(body, xhr)) {
+                    fail("$everything", xhr || { status: "empty" });
+                }
+            })
+            .fail(function (xhr) {
+                if (!showFhirOutcome(null, xhr)) {
+                    fail("$everything", xhr);
+                }
+            })
+            .always(function () {
+                $btn.prop("disabled", false);
+            });
+    }
+
     function fillSelect(selector, path, labelFn, placeholder, selectedId) {
         const $select = $(selector);
         CadminApi.fhir(path).done(function (bundle) {
@@ -312,8 +345,9 @@ window.CadminPatientDetail = (function () {
             return '<span class="text-muted">—</span>';
         }
         return items.map(function (item) {
-            return '<span class="badge text-bg-secondary me-1 mb-1">' +
-                esc(conceptLabel(item.language || item)) + "</span>";
+            return '<span class="badge text-bg-' + (item.preferred ? "primary" : "secondary") +
+                ' me-1 mb-1">' + esc(conceptLabel(item.language || item)) +
+                (item.preferred ? " · Preferred" : "") + "</span>";
         }).join("");
     }
 
@@ -391,8 +425,9 @@ window.CadminPatientDetail = (function () {
     }
 
     function currentAssociation(resource) {
+        const status = CadminApi.conceptCode(resource && resource.status);
         return resource && resource.resourceType === "DeviceAssociation"
-            && resource.status !== "explanted" && resource.status !== "entered-in-error";
+            && status !== "explanted" && status !== "entered-in-error";
     }
 
     function participantRole(item) {
@@ -436,7 +471,12 @@ window.CadminPatientDetail = (function () {
                     "</nav>" +
                     '<h1 class="h3 mb-0 page-title">Patient</h1>' +
                 "</div>" +
-                CadminResourceSource.button() +
+                '<div class="d-flex flex-wrap gap-2">' +
+                    '<button class="btn btn-outline-primary" type="button" id="pd-everything" ' +
+                        'title="Fetch all resources related to this patient">' +
+                        '<i class="bi bi-collection me-1"></i>$everything</button>' +
+                    CadminResourceSource.button() +
+                "</div>" +
             "</div>" +
             '<div class="row">' +
                 '<div class="col-md-3">' +
@@ -493,6 +533,7 @@ window.CadminPatientDetail = (function () {
                                         tabButton("pd-tab-privacy", "Privacy", false)
                                     : "") +
                                 tabButton("pd-tab-graph", "Graph", false) +
+                                tabButton("pd-tab-history", "History", false) +
                             "</ul>" +
                         "</div>" +
                         '<div class="card-body">' +
@@ -535,6 +576,7 @@ window.CadminPatientDetail = (function () {
                                             false)
                                     : "") +
                                 tabPane("pd-tab-graph", CadminResourceGraph.card(), false) +
+                                tabPane("pd-tab-history", CadminResourceHistory.card(), false) +
                             "</div>" +
                         "</div>" +
                     "</div>" +
@@ -577,7 +619,10 @@ window.CadminPatientDetail = (function () {
                     '<input class="form-control" id="pd-country"></div></div>',
                 "pd-address-form") +
             modal("pd-lang-modal", "Add language",
-                field("Language", '<select class="form-select" id="pd-lang">' + optionsHtml(languageOptions) + "</select>"),
+                field("Language", '<select class="form-select" id="pd-lang">' + optionsHtml(languageOptions) + "</select>") +
+                '<div class="form-check mb-0">' +
+                    '<input class="form-check-input" type="checkbox" id="pd-lang-preferred">' +
+                    '<label class="form-check-label" for="pd-lang-preferred">Preferred language</label></div>',
                 "pd-lang-form") +
             modal("pd-device-modal", "Add device",
                 field("Existing device", '<select class="form-select" id="pd-dev-existing">' +
@@ -644,6 +689,7 @@ window.CadminPatientDetail = (function () {
         );
         CadminResourceSource.mount(function () { return patient; });
         CadminResourceGraph.mount(patient);
+        CadminResourceHistory.mount(patient);
         renderBasics();
         renderIdentifiers();
         renderTelecom();
@@ -727,10 +773,27 @@ window.CadminPatientDetail = (function () {
         }
         $("#pd-lang-rows").html(items.map(function (item, index) {
             const lang = item.language || item;
-            return "<tr><td>" + esc(conceptLabel(lang)) + "</td>" +
-                '<td class="text-end"><button class="btn btn-sm btn-outline-danger" type="button" data-remove="communication" data-index="' +
-                index + '" title="Remove"><i class="bi bi-trash"></i></button></td></tr>';
+            return "<tr><td>" + esc(conceptLabel(lang)) +
+                (item.preferred ? ' <span class="badge text-bg-primary">Preferred</span>' : "") + "</td>" +
+                '<td class="text-end text-nowrap">' +
+                    '<button class="btn btn-sm ' + (item.preferred ? "btn-primary" : "btn-outline-secondary") +
+                        ' me-1" type="button" data-prefer-lang="' + index + '" title="' +
+                        (item.preferred ? "Preferred language" : "Set as preferred") +
+                        '" aria-label="' + (item.preferred ? "Preferred language" : "Set as preferred") + '">' +
+                        '<i class="bi ' + (item.preferred ? "bi-star-fill" : "bi-star") + '"></i></button>' +
+                    '<button class="btn btn-sm btn-outline-danger" type="button" data-remove="communication" data-index="' +
+                    index + '" title="Remove"><i class="bi bi-trash"></i></button></td></tr>';
         }).join(""));
+    }
+
+    function setPreferredLanguage(index, preferred) {
+        (patient.communication || []).forEach(function (item, i) {
+            if (i === index && preferred) {
+                item.preferred = true;
+            } else {
+                delete item.preferred;
+            }
+        });
     }
 
     function refreshPatientLists() {
@@ -739,6 +802,7 @@ window.CadminPatientDetail = (function () {
         renderTelecom();
         renderAddresses();
         renderLanguages();
+        renderProfile();
     }
 
     function savePatient(next) {
@@ -793,8 +857,11 @@ window.CadminPatientDetail = (function () {
                 ? CadminApi.resourceLink("#/devices/" + encodeURIComponent(deviceId), label)
                 : esc(label);
             return "<tr><td>" + nameHtml + "</td><td>" + esc(conceptLabel(device.type)) + "</td>" +
-                "<td>" + codeBadge(assoc.status || device.status, "attached") + "</td>" +
-                '<td class="text-end"><button class="btn btn-sm btn-outline-danger" type="button" data-unassign="' +
+                "<td>" + codeBadge(CadminApi.conceptCode(assoc.status) || assoc.status || device.status, "attached") + "</td>" +
+                '<td class="text-end">' +
+                '<a class="btn btn-sm btn-outline-primary me-1" href="#/device-associations/' +
+                encodeURIComponent(assoc.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a>' +
+                '<button class="btn btn-sm btn-outline-danger" type="button" data-unassign="' +
                 esc(assoc.id) + '" title="Unassign"><i class="bi bi-trash"></i></button></td></tr>';
         }).join(""));
     }
@@ -1002,10 +1069,26 @@ window.CadminPatientDetail = (function () {
         const $root = $(CadminWorkspace.root());
         $root.off(".ptdetail");
 
+        $root.on("click.ptdetail", "#pd-everything", function () {
+            runEverything($(this));
+        });
+
         $root.on("shown.bs.tab.ptdetail", "#pd-tab-graph-btn", function () {
             if (typeof CadminResourceGraph.resize === "function") {
                 CadminResourceGraph.resize();
             }
+        });
+
+        $root.on("click.ptdetail", "[data-prefer-lang]", function () {
+            const index = Number($(this).attr("data-prefer-lang"));
+            const item = (patient.communication || [])[index];
+            if (!item) {
+                return;
+            }
+            setPreferredLanguage(index, !item.preferred);
+            savePatient(function () {
+                alertMsg("success", item.preferred ? "Preferred language set." : "Preferred language cleared.");
+            });
         });
 
         $root.on("click.ptdetail", "[data-remove]", function () {
@@ -1151,9 +1234,11 @@ window.CadminPatientDetail = (function () {
                 }
                 CadminApi.fillSelectOptions("#pd-flag-category", flagCategories, { selected: "safety" });
             });
-            CadminApi.fillSelectOptions("#pd-flag-code", flagCodes, {
+            CadminApi.fillValueSetSelect("#pd-flag-code", CadminApi.valueSets.flagCode, {
+                fallback: flagCodes,
                 prepend: [{ code: "", display: "Custom message" }],
-                selected: "fall-risk"
+                selected: "fall-risk",
+                onConcepts: function (concepts) { flagCodes = concepts; }
             });
             $("#pd-flag-text").val("Fall risk");
             $("#pd-flag-start").val("");
@@ -1288,6 +1373,9 @@ window.CadminPatientDetail = (function () {
             });
         });
 
+        $("#pd-lang-modal").on("show.bs.modal", function () {
+            $("#pd-lang-preferred").prop("checked", false);
+        });
         $("#pd-lang-form").on("submit", function (event) {
             event.preventDefault();
             const option = languageOptions.find(function (item) { return item.code === $("#pd-lang").val(); });
@@ -1301,6 +1389,9 @@ window.CadminPatientDetail = (function () {
                     text: option.display
                 }
             });
+            if ($("#pd-lang-preferred").prop("checked")) {
+                setPreferredLanguage(patient.communication.length - 1, true);
+            }
             savePatient(function () {
                 hideModal("pd-lang-modal");
                 alertMsg("success", "Language added.");
@@ -1318,7 +1409,14 @@ window.CadminPatientDetail = (function () {
             function associate(deviceId, display) {
                 CadminApi.fhir("/DeviceAssociation", "POST", {
                     resourceType: "DeviceAssociation",
-                    status: "attached",
+                    status: {
+                        coding: [{
+                            system: "http://hl7.org/fhir/deviceassociation-status",
+                            code: "attached",
+                            display: "Attached"
+                        }],
+                        text: "Attached"
+                    },
                     device: { reference: "Device/" + deviceId, display: display },
                     subject: subject
                 }).done(function () {
@@ -1457,7 +1555,7 @@ window.CadminPatientDetail = (function () {
             const catalog = flagCodes.find(function (item) { return item.code === code; });
             if (catalog) {
                 resource.code.coding = [{
-                    system: "https://cadmin.io/fhir/CodeSystem/flag-code",
+                    system: catalog.system || FLAG_CODE_SYSTEM,
                     code: catalog.code,
                     display: catalog.display
                 }];

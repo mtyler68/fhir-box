@@ -275,7 +275,11 @@ window.CadminOrganizationDetail = (function () {
                     '<a class="small text-decoration-none" href="#/organizations"><i class="bi bi-arrow-left me-1"></i>Organizations</a>' +
                     '<h1 class="h3 mb-0 page-title">' + esc(org.name || "Organization") + "</h1>" +
                 "</div>" +
-                CadminResourceSource.button() +
+                '<div class="d-flex flex-wrap gap-2">' +
+                    '<button class="btn btn-outline-danger" type="button" id="od-delete" data-bs-toggle="modal" data-bs-target="#od-delete-modal">' +
+                        '<i class="bi bi-trash me-1"></i>Delete</button>' +
+                    CadminResourceSource.button() +
+                "</div>" +
             "</div>" +
             editCard("Basic details", "org-basic-details", "#od-basic-modal") +
             '<div class="row">' +
@@ -297,6 +301,11 @@ window.CadminOrganizationDetail = (function () {
                 '<div class="col-lg-6">' + card("Practitioners", "org-role-rows",
                     ["Practitioner", "Role", "Status", ""], "#od-role-modal", "Add") + "</div>" +
             "</div>" +
+            '<div class="row">' +
+                '<div class="col-lg-6">' + card("Healthcare services", "org-service-rows",
+                    ["Name", "Type", "Status", ""], "#od-service-modal", "Add") + "</div>" +
+            "</div>" +
+            CadminResourceHistory.card() +
             CadminResourceGraph.card() +
             modal("od-basic-modal", "Edit basic details",
                 field("Name", '<input class="form-control" id="od-name" required>') +
@@ -365,10 +374,42 @@ window.CadminOrganizationDetail = (function () {
                 field("Role", '<select class="form-select" id="od-pr-edit-role">' + optionsHtml(practitionerRoles, "code", "display") + "</select>") +
                 '<div class="form-check mb-0"><input class="form-check-input" type="checkbox" id="od-pr-edit-active">' +
                     '<label class="form-check-label" for="od-pr-edit-active">Active</label></div>',
-                "od-role-edit-form")
+                "od-role-edit-form") +
+            modal("od-service-modal", "Add healthcare service",
+                field("Name", '<input class="form-control" id="od-svc-name" required>') +
+                field("Type", '<input class="form-control" id="od-svc-type" placeholder="Clinic / Center">'),
+                "od-service-form") +
+            '<div class="modal fade" id="od-delete-modal" tabindex="-1" aria-labelledby="od-delete-title">' +
+                '<div class="modal-dialog">' +
+                    '<div class="modal-content">' +
+                        '<div class="modal-header">' +
+                            '<h5 class="modal-title" id="od-delete-title">Delete organization</h5>' +
+                            '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>' +
+                        "</div>" +
+                        '<div class="modal-body">' +
+                            "<p>Delete <strong>" + esc(org.name || "this organization") + "</strong>?</p>" +
+                            '<p class="text-muted">Locations, healthcare services, practitioner roles, affiliations, ' +
+                                "sub-organizations, and other resources that depend on this organization will be left behind " +
+                                "unless you also delete them.</p>" +
+                            '<div class="form-check">' +
+                                '<input class="form-check-input" type="checkbox" id="od-delete-cascade">' +
+                                '<label class="form-check-label" for="od-delete-cascade">' +
+                                    "Also delete all resources that depend on this organization" +
+                                "</label>" +
+                            "</div>" +
+                        "</div>" +
+                        '<div class="modal-footer">' +
+                            '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>' +
+                            '<button type="button" class="btn btn-danger" id="od-delete-confirm">' +
+                                '<i class="bi bi-trash me-1"></i>Delete</button>' +
+                        "</div>" +
+                    "</div>" +
+                "</div>" +
+            "</div>"
         );
         CadminResourceSource.mount(function () { return org; });
         CadminResourceGraph.mount(org);
+        CadminResourceHistory.mount(org);
         renderBasics();
         loadChildren();
         loadLocations();
@@ -376,6 +417,7 @@ window.CadminOrganizationDetail = (function () {
         loadEndpoints();
         renderContacts();
         loadRoles();
+        loadServices();
         bindForms();
 
         $("#od-basic-modal").on("show.bs.modal", function () {
@@ -395,6 +437,10 @@ window.CadminOrganizationDetail = (function () {
         });
         $("#od-role-modal").on("show.bs.modal", function () {
             CadminApi.bindPractitionerSelect("#od-pr-practitioner", { placeholder: "Select…" });
+            CadminApi.fillValueSetSelect("#od-pr-role", CadminApi.valueSets.practitionerRole, {
+                fallback: CadminApi.valueSetFallbacks.practitionerRole,
+                selected: "doctor"
+            });
         });
         $("#od-ep-attach-modal").on("show.bs.modal", fillEndpointAttach);
         $("#od-role-edit-modal").on("show.bs.modal", populateRoleEditForm);
@@ -638,8 +684,10 @@ window.CadminOrganizationDetail = (function () {
             }
         });
         const code = currentCode(role.code);
-        ensureRoleOption("#od-pr-edit-role", code || practitionerRoles[0].code,
-            role.code ? conceptLabel(role.code) : "");
+        CadminApi.fillValueSetSelect("#od-pr-edit-role", CadminApi.valueSets.practitionerRole, {
+            fallback: CadminApi.valueSetFallbacks.practitionerRole,
+            selected: code || practitionerRoles[0].code
+        });
         $("#od-pr-edit-active").prop("checked", role.active !== false);
     }
 
@@ -709,6 +757,8 @@ window.CadminOrganizationDetail = (function () {
                     "<td>" + esc(conceptLabel(role.code)) + "</td>" +
                     "<td>" + statusBadge(role.active !== false) + "</td>" +
                     '<td class="text-end">' +
+                    '<a class="btn btn-sm btn-outline-primary me-1" href="#/practitioner-roles/' +
+                        encodeURIComponent(role.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a>' +
                     '<button class="btn btn-sm btn-outline-primary me-1" type="button" data-edit-role="' +
                         esc(role.id) + '" title="Edit" aria-label="Edit"><i class="bi bi-pencil"></i></button>' +
                     '<button class="btn btn-sm btn-outline-danger" type="button" data-delete="/PractitionerRole/' +
@@ -730,7 +780,33 @@ window.CadminOrganizationDetail = (function () {
             loadEndpoints();
         } else if (which === "roles") {
             loadRoles();
+        } else if (which === "services") {
+            loadServices();
         }
+    }
+
+    function loadServices() {
+        CadminApi.fhir("/HealthcareService?organization=" + encodeURIComponent(org.id) +
+            "&_count=50&_sort=name").done(function (bundle) {
+            const rows = bundleResources(bundle);
+            if (!rows.length) {
+                $("#org-service-rows").html(emptyRow(4, "No healthcare services."));
+                return;
+            }
+            $("#org-service-rows").html(rows.map(function (item) {
+                return "<tr>" +
+                    "<td>" + CadminApi.resourceLink(CadminApi.detailHref("HealthcareService", item.id),
+                        item.name || item.id) + "</td>" +
+                    "<td>" + esc(conceptLabel(item.type) !== "—" ? conceptLabel(item.type) : conceptLabel(item.specialty)) + "</td>" +
+                    "<td>" + statusBadge(item.active !== false) + "</td>" +
+                    '<td class="text-end"><button class="btn btn-sm btn-outline-secondary" type="button" data-unlink-service="' +
+                        esc(item.id) + '" title="Unlink" aria-label="Unlink"><i class="bi bi-x-lg"></i></button></td>' +
+                    "</tr>";
+            }).join(""));
+        }).fail(function (xhr) {
+            $("#org-service-rows").html(emptyRow(4, "Unable to load healthcare services."));
+            fail("Load healthcare services", xhr);
+        });
     }
 
     function saveOrg(next) {
@@ -806,6 +882,24 @@ window.CadminOrganizationDetail = (function () {
             });
         });
 
+        $("#od-delete-modal").on("show.bs.modal", function () {
+            $("#od-delete-cascade").prop("checked", false);
+        });
+
+        $root.on("click.orgdetail", "#od-delete-confirm", function () {
+            const cascade = $("#od-delete-cascade").is(":checked");
+            const path = "/Organization/" + encodeURIComponent(org.id) + (cascade ? "?_cascade=delete" : "");
+            CadminApi.fhir(path, "DELETE").done(function () {
+                hideModal("od-delete-modal");
+                alertMsg("success", cascade
+                    ? "Organization and dependent resources deleted."
+                    : "Organization deleted.");
+                window.location.hash = "#/organizations";
+            }).fail(function (xhr) {
+                fail("Delete organization", xhr);
+            });
+        });
+
         $root.on("click.orgdetail", "[data-delete]", function () {
             const path = $(this).attr("data-delete");
             const which = $(this).attr("data-reload");
@@ -828,6 +922,21 @@ window.CadminOrganizationDetail = (function () {
             saveOrg(function () {
                 alertMsg("success", "Endpoint unlinked.");
                 loadEndpoints();
+            });
+        });
+
+        $root.on("click.orgdetail", "[data-unlink-service]", function () {
+            const id = $(this).attr("data-unlink-service");
+            CadminApi.fhir("/HealthcareService/" + encodeURIComponent(id)).done(function (item) {
+                delete item.providedBy;
+                CadminApi.fhir("/HealthcareService/" + encodeURIComponent(id), "PUT", item).done(function () {
+                    alertMsg("success", "Healthcare service unlinked.");
+                    loadServices();
+                }).fail(function (xhr) {
+                    fail("Unlink", xhr);
+                });
+            }).fail(function (xhr) {
+                fail("Unlink", xhr);
             });
         });
 
@@ -1132,7 +1241,10 @@ window.CadminOrganizationDetail = (function () {
             const existingId = CadminApi.selectValue("#od-pr-practitioner");
             const family = $("#od-pr-family").val();
             const given = $("#od-pr-given").val();
-            const role = practitionerRoles.find(function (item) { return item.code === $("#od-pr-role").val(); });
+            const role = practitionerRoles.find(function (item) { return item.code === $("#od-pr-role").val(); })
+                || ($("#od-pr-role").val()
+                    ? { code: $("#od-pr-role").val(), display: $("#od-pr-role option:selected").text() }
+                    : null);
 
             function createRole(practitionerId, display) {
                 const resource = {
@@ -1198,6 +1310,29 @@ window.CadminOrganizationDetail = (function () {
                 }).fail(function (xhr) {
                     fail("Update practitioner role", xhr);
                 });
+        });
+
+        $("#od-service-form").on("submit", function (event) {
+            event.preventDefault();
+            const resource = {
+                resourceType: "HealthcareService",
+                active: true,
+                name: $("#od-svc-name").val().trim(),
+                providedBy: { reference: "Organization/" + org.id, display: org.name }
+            };
+            const typeText = $("#od-svc-type").val().trim();
+            if (typeText) {
+                resource.type = [{ text: typeText }];
+            }
+            CadminApi.fhir("/HealthcareService", "POST", resource).done(function () {
+                hideModal("od-service-modal");
+                $("#od-svc-name").val("");
+                $("#od-svc-type").val("");
+                alertMsg("success", "Healthcare service created.");
+                loadServices();
+            }).fail(function (xhr) {
+                fail("Create healthcare service", xhr);
+            });
         });
     }
 

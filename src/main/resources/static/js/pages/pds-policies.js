@@ -25,8 +25,11 @@ function renderPdsPolicyList(initialQuery) {
     $root.html(
         '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
             '<h1 class="h3 mb-0 page-title">PDS Policies</h1>' +
-            '<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-pds-policy-modal">' +
-                '<i class="bi bi-plus-lg me-1"></i>New policy</button>' +
+            CadminResourceDocument.splitButton({
+                label: "New policy",
+                modalTarget: "#create-pds-policy-modal",
+                resourceType: "Library"
+            }) +
         '</div>' +
         '<div id="pds-policy-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
@@ -56,6 +59,10 @@ function renderPdsPolicyList(initialQuery) {
                     '<div class="modal-body">' +
                         '<div class="mb-3"><label class="form-label">Title</label>' +
                             '<input class="form-control" id="pds-title" required></div>' +
+                        '<div class="mb-3"><label class="form-label" for="pds-id">ID</label>' +
+                            '<input class="form-control font-monospace" id="pds-id" autocomplete="off" maxlength="64">' +
+                            '<div class="form-text">Optional. Leave blank for a server-assigned ID.</div>' +
+                            '<div class="invalid-feedback" id="pds-id-feedback">A policy with this ID already exists.</div></div>' +
                         '<div class="mb-3"><label class="form-label">Description</label>' +
                             '<textarea class="form-control" id="pds-description" rows="3"></textarea></div>' +
                         '<div class="mb-0"><label class="form-label">Status</label>' +
@@ -82,6 +89,10 @@ function renderPdsPolicyList(initialQuery) {
                         '<p class="mb-3">Create a new draft from <strong id="dup-source-title"></strong>.</p>' +
                         '<div class="mb-3"><label class="form-label">Current version</label>' +
                             '<div><code id="dup-source-version"></code></div></div>' +
+                        '<div class="mb-3"><label class="form-label" for="dup-id">ID</label>' +
+                            '<input class="form-control font-monospace" id="dup-id" autocomplete="off" maxlength="64">' +
+                            '<div class="form-text">Optional. Leave blank for a server-assigned ID.</div>' +
+                            '<div class="invalid-feedback" id="dup-id-feedback">A policy with this ID already exists.</div></div>' +
                         '<div class="mb-3"><label class="form-label" for="dup-version">New version</label>' +
                             '<input class="form-control" id="dup-version" required placeholder="e.g. 1.0.1">' +
                             '<div class="form-text">Must be a semantic version greater than the policy being duplicated.</div>' +
@@ -252,6 +263,37 @@ function renderPdsPolicyList(initialQuery) {
         return yaml;
     }
 
+    function ensureNewId(id, $field) {
+        const deferred = $.Deferred();
+        const value = String(id || "").trim();
+        if (!value) {
+            return deferred.resolve("").promise();
+        }
+        CadminApi.fhir("/Library/" + encodeURIComponent(value), "GET", null, { silent: true }).done(function () {
+            $field.addClass("is-invalid");
+            CadminApi.showToast("danger", "A policy with ID \"" + value + "\" already exists.");
+            deferred.reject();
+        }).fail(function (xhr) {
+            if (xhr.status === 404) {
+                deferred.resolve(value);
+                return;
+            }
+            CadminApi.showToast("danger", "Unable to check ID (" + xhr.status + ").");
+            deferred.reject();
+        });
+        return deferred.promise();
+    }
+
+    function saveLibrary(resource, assignedId) {
+        const path = assignedId
+            ? "/Library/" + encodeURIComponent(assignedId)
+            : "/Library";
+        if (assignedId) {
+            resource.id = assignedId;
+        }
+        return CadminApi.fhir(path, assignedId ? "PUT" : "POST", resource);
+    }
+
     function cloneLibrary(source, newVersion) {
         const copy = JSON.parse(JSON.stringify(source));
         delete copy.id;
@@ -333,8 +375,19 @@ function renderPdsPolicyList(initialQuery) {
         load($("#pds-policy-query").val());
     });
 
+    $("#create-pds-policy-modal").on("show.bs.modal", function () {
+        $("#pds-title").val("");
+        $("#pds-id").val("").removeClass("is-invalid");
+        $("#pds-description").val("");
+        $("#pds-status").val("draft");
+    });
+    $("#pds-id").on("input", function () {
+        $(this).removeClass("is-invalid");
+    });
+
     $("#create-pds-policy-form").on("submit", function (event) {
         event.preventDefault();
+        const assignedId = $("#pds-id").val().trim();
         const resource = {
             resourceType: "Library",
             status: $("#pds-status").val() || "draft",
@@ -351,16 +404,22 @@ function renderPdsPolicyList(initialQuery) {
         if (description) {
             resource.description = description;
         }
-        CadminApi.fhir("/Library", "POST", resource).done(function () {
-            const modal = bootstrap.Modal.getInstance(document.getElementById("create-pds-policy-modal"));
-            if (modal) {
-                modal.hide();
-            }
-            CadminApi.showToast("success", "PDS policy created.");
-            load($("#pds-policy-query").val());
-        }).fail(function (xhr) {
-            CadminApi.showToast("danger", "Create failed (" + xhr.status + ").");
+        ensureNewId(assignedId, $("#pds-id")).done(function () {
+            saveLibrary(resource, assignedId).done(function () {
+                const modal = bootstrap.Modal.getInstance(document.getElementById("create-pds-policy-modal"));
+                if (modal) {
+                    modal.hide();
+                }
+                CadminApi.showToast("success", "PDS policy created.");
+                load($("#pds-policy-query").val());
+            }).fail(function (xhr) {
+                CadminApi.showToast("danger", "Create failed (" + xhr.status + ").");
+            });
         });
+    });
+
+    $("#dup-id").on("input", function () {
+        $(this).removeClass("is-invalid");
     });
 
     $root.on("click", "[data-duplicate]", function () {
@@ -369,6 +428,7 @@ function renderPdsPolicyList(initialQuery) {
             duplicateSource = library;
             $("#dup-source-title").text(library.title || library.name || library.id);
             $("#dup-source-version").text(library.version || "0.0.0");
+            $("#dup-id").val("").removeClass("is-invalid");
             $("#dup-version").val(suggestNextVersion(library.version));
             clearDupVersionError();
             CadminApi.showAlert("#dup-alert", "info", "");
@@ -384,8 +444,10 @@ function renderPdsPolicyList(initialQuery) {
         if (!duplicateSource) {
             return;
         }
+        const assignedId = ($("#dup-id").val() || "").trim();
         const newVersion = ($("#dup-version").val() || "").trim();
         const currentVersion = duplicateSource.version || "0.0.0";
+        $("#dup-id").removeClass("is-invalid");
         clearDupVersionError();
         if (!parseSemver(newVersion) || !String(newVersion).trim()) {
             showDupVersionError("Enter a semantic version such as 1.0.1.");
@@ -401,16 +463,18 @@ function renderPdsPolicyList(initialQuery) {
             return;
         }
         const copy = cloneLibrary(duplicateSource, newVersion);
-        CadminApi.fhir("/Library", "POST", copy).done(function () {
-            const modal = bootstrap.Modal.getInstance(document.getElementById("duplicate-pds-policy-modal"));
-            if (modal) {
-                modal.hide();
-            }
-            duplicateSource = null;
-            CadminApi.showToast("success", "PDS policy duplicated as draft " + newVersion + ".");
-            load($("#pds-policy-query").val());
-        }).fail(function (xhr) {
-            CadminApi.showToast("danger", "Duplicate failed (" + xhr.status + ").");
+        ensureNewId(assignedId, $("#dup-id")).done(function () {
+            saveLibrary(copy, assignedId).done(function () {
+                const modal = bootstrap.Modal.getInstance(document.getElementById("duplicate-pds-policy-modal"));
+                if (modal) {
+                    modal.hide();
+                }
+                duplicateSource = null;
+                CadminApi.showToast("success", "PDS policy duplicated as draft " + newVersion + ".");
+                load($("#pds-policy-query").val());
+            }).fail(function (xhr) {
+                CadminApi.showToast("danger", "Duplicate failed (" + xhr.status + ").");
+            });
         });
     });
 

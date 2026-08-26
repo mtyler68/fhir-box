@@ -36,8 +36,11 @@ function renderConsentList() {
     $root.html(
         '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
             '<h1 class="h3 mb-0 page-title">Consents</h1>' +
-            '<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-consent-modal">' +
-                '<i class="bi bi-plus-lg me-1"></i>New consent</button>' +
+            CadminResourceDocument.splitButton({
+                label: "New consent",
+                modalTarget: "#create-consent-modal",
+                resourceType: "Consent"
+            }) +
         "</div>" +
         '<div id="consent-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +

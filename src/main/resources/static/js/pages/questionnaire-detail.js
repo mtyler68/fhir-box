@@ -51,6 +51,8 @@ window.CadminQuestionnaireDetail = (function () {
     let selectedPath = "";
     let previewAnswers = {};
     const valueSetCache = {};
+    let dragPath = "";
+    let dropHint = null;
 
     function esc(value) {
         return CadminApi.escapeHtml(value);
@@ -139,6 +141,110 @@ window.CadminQuestionnaireDetail = (function () {
         }
         parent.item = parent.item || [];
         return { list: parent.item, index: parts[parts.length - 1], parent: parent };
+    }
+
+    function isSelfOrDescendant(ancestorPath, path) {
+        if (!ancestorPath) {
+            return false;
+        }
+        return path === ancestorPath || String(path).indexOf(ancestorPath + ".") === 0;
+    }
+
+    function pathOfItem(target) {
+        let found = "";
+        walkItems(questionnaire.item, function (item, path) {
+            if (item === target) {
+                found = path;
+            }
+        });
+        return found;
+    }
+
+    function destFromRow(row, clientY) {
+        const path = $(row).attr("data-select");
+        const item = itemAt(path);
+        const parts = parsePath(path);
+        const parentPath = parts.slice(0, -1).join(".");
+        const index = parts[parts.length - 1];
+        const rect = row.getBoundingClientRect();
+        const y = rect.height ? (clientY - rect.top) / rect.height : 0.5;
+        if (item && item.type === "group") {
+            if (y < 0.28) {
+                return { parentPath: parentPath, index: index, kind: "before", rowPath: path };
+            }
+            if (y > 0.72) {
+                return { parentPath: parentPath, index: index + 1, kind: "after", rowPath: path };
+            }
+            return {
+                parentPath: path,
+                index: (item.item || []).length,
+                kind: "into",
+                rowPath: path
+            };
+        }
+        if (y < 0.5) {
+            return { parentPath: parentPath, index: index, kind: "before", rowPath: path };
+        }
+        return { parentPath: parentPath, index: index + 1, kind: "after", rowPath: path };
+    }
+
+    function destAllowed(from, dest) {
+        if (!from || !dest) {
+            return false;
+        }
+        if (dest.parentPath && isSelfOrDescendant(from, dest.parentPath)) {
+            return false;
+        }
+        return true;
+    }
+
+    function paintDrop(hint) {
+        $("#qd-tree .q-tree-row").removeClass("drop-before drop-after drop-into");
+        if (!hint || !hint.rowPath || !hint.kind) {
+            return;
+        }
+        $("#qd-tree .q-tree-row").filter(function () {
+            return $(this).attr("data-select") === hint.rowPath;
+        }).addClass("drop-" + hint.kind);
+    }
+
+    function clearDrag() {
+        dragPath = "";
+        dropHint = null;
+        $("#qd-tree .q-tree-row").removeClass("is-dragging drop-before drop-after drop-into");
+    }
+
+    function relocateItem(fromPath, dest) {
+        if (!destAllowed(fromPath, dest)) {
+            return;
+        }
+        const fromCtx = parentContext(fromPath);
+        const item = fromCtx.list[fromCtx.index];
+        if (!item) {
+            return;
+        }
+        let destList;
+        if (dest.parentPath === "") {
+            questionnaire.item = questionnaire.item || [];
+            destList = questionnaire.item;
+        } else {
+            const destParent = itemAt(dest.parentPath);
+            if (!destParent || destParent.type !== "group" || destParent === item) {
+                return;
+            }
+            destParent.item = destParent.item || [];
+            destList = destParent.item;
+        }
+        const sameList = destList === fromCtx.list;
+        let insertAt = dest.index;
+        fromCtx.list.splice(fromCtx.index, 1);
+        if (sameList && fromCtx.index < insertAt) {
+            insertAt -= 1;
+        }
+        insertAt = Math.max(0, Math.min(insertAt, destList.length));
+        destList.splice(insertAt, 0, item);
+        selectedPath = pathOfItem(item);
+        refreshItemUi(true);
     }
 
     function walkItems(items, visit, prefix) {
@@ -356,7 +462,12 @@ window.CadminQuestionnaireDetail = (function () {
             '<div class="card shadow mb-4">' +
                 '<div class="card-header py-3"><h6 class="m-0">Preview</h6></div>' +
                 '<div class="card-body" id="qd-preview"></div>' +
+                '<div class="card-footer">' +
+                    '<button class="btn btn-outline-primary" type="button" id="qd-view-response">' +
+                        '<i class="bi bi-code-slash me-1"></i>View Response</button>' +
+                "</div>" +
             "</div>" +
+            CadminResourceHistory.card() +
             CadminResourceGraph.card() +
             '<div class="modal fade" id="qd-meta-modal" tabindex="-1">' +
                 '<div class="modal-dialog modal-lg">' +
@@ -401,6 +512,7 @@ window.CadminQuestionnaireDetail = (function () {
         );
         CadminResourceSource.mount(function () { return questionnaire; });
         CadminResourceGraph.mount(questionnaire);
+        CadminResourceHistory.mount(questionnaire);
         renderMeta();
         renderTree();
         renderInspector();
@@ -454,9 +566,11 @@ window.CadminQuestionnaireDetail = (function () {
         const selected = path === selectedPath ? " selected" : "";
         const label = [item.prefix, item.text || item.linkId || typeLabel(item.type)].filter(Boolean).join(" ");
         return '<div class="q-tree-node" data-path="' + esc(path) + '">' +
-            '<div class="q-tree-row' + selected + '" data-select="' + esc(path) + '" style="padding-left:' +
-                (0.75 + depth * 1.1) + 'rem">' +
+            '<div class="q-tree-row' + selected + '" draggable="true" data-select="' + esc(path) +
+                '" style="padding-left:' + (0.75 + depth * 1.1) + 'rem">' +
                 '<div class="q-tree-label">' +
+                    '<span class="q-tree-grip" title="Drag to move" aria-hidden="true">' +
+                        '<i class="bi bi-grip-vertical"></i></span>' +
                     '<span class="badge q-tree-type me-2">' + esc(typeLabel(item.type)) + "</span>" +
                     "<span>" + esc(label) + "</span>" +
                     '<code class="ms-2 small">' + esc(item.linkId || "") + "</code>" +
@@ -466,10 +580,6 @@ window.CadminQuestionnaireDetail = (function () {
                         ? '<button class="btn btn-outline-primary" type="button" data-add-child="' +
                             esc(path) + '" title="Add child"><i class="bi bi-plus"></i></button>'
                         : "") +
-                    '<button class="btn btn-outline-secondary" type="button" data-move-up="' +
-                        esc(path) + '" title="Move up"><i class="bi bi-arrow-up"></i></button>' +
-                    '<button class="btn btn-outline-secondary" type="button" data-move-down="' +
-                        esc(path) + '" title="Move down"><i class="bi bi-arrow-down"></i></button>' +
                     '<button class="btn btn-outline-secondary" type="button" data-dup-item="' +
                         esc(path) + '" title="Duplicate"><i class="bi bi-copy"></i></button>' +
                     '<button class="btn btn-outline-danger" type="button" data-remove-item="' +
@@ -511,6 +621,7 @@ window.CadminQuestionnaireDetail = (function () {
         const item = itemAt(selectedPath);
         const $el = $("#qd-inspector");
         if (!item) {
+            CadminApi.destroySelects($el[0]);
             $el.html('<div class="text-muted p-3">Select an item or add one.</div>');
             return;
         }
@@ -554,8 +665,15 @@ window.CadminQuestionnaireDetail = (function () {
                 esc(unit) + '">');
         }
         if (canValueSet) {
-            html += field("Answer value set", '<input class="form-control font-monospace" data-item-field="answerValueSet" placeholder="http://…" value="' +
-                esc(item.answerValueSet || "") + '">');
+            html += field("Answer value set",
+                '<select class="form-select" id="qd-answer-valueset"></select>' +
+                '<div class="form-text">' +
+                    "Search this server or paste a canonical URL. " +
+                    '<a href="#/value-sets">Manage value sets</a>' +
+                    (item.answerValueSet
+                        ? ' · <span class="font-monospace">' + esc(item.answerValueSet) + "</span>"
+                        : "") +
+                "</div>");
         }
         if (canOptions) {
             html += '<div class="mb-3"><div class="d-flex justify-content-between align-items-center mb-2">' +
@@ -570,17 +688,51 @@ window.CadminQuestionnaireDetail = (function () {
             html += '<div class="mb-3"><div class="d-flex justify-content-between align-items-center mb-2">' +
                 '<label class="form-label mb-0">Enable when</label>' +
                 '<button class="btn btn-sm btn-outline-primary" type="button" data-add-enable>Add</button></div>' +
+                '<div class="form-text mb-2">Only enable this item when the answers to other questions match these conditions. With no conditions, the item is always enabled.</div>' +
                 (item.enableWhen && item.enableWhen.length
-                    ? field("Behavior", '<select class="form-select" data-item-field="enableBehavior">' +
-                        optionsHtml([
-                            { code: "all", display: "All" },
-                            { code: "any", display: "Any" }
-                        ], item.enableBehavior || "all") + "</select>")
+                    ? '<div class="row">' +
+                        '<div class="col-md-6">' +
+                            field("Behavior", '<select class="form-select" data-item-field="enableBehavior">' +
+                                optionsHtml([
+                                    { code: "all", display: "All" },
+                                    { code: "any", display: "Any" }
+                                ], item.enableBehavior || "all") + "</select>") +
+                        "</div>" +
+                        '<div class="col-md-6">' +
+                            field("Disabled display", '<select class="form-select" data-item-field="disabledDisplay">' +
+                                optionsHtml([
+                                    { code: "", display: "Default" },
+                                    { code: "hidden", display: "Hidden" },
+                                    { code: "protected", display: "Protected" }
+                                ], item.disabledDisplay || "") + "</select>") +
+                            '<div class="form-text">When enable-when is false: hide the item, or keep it visible but not editable.</div>' +
+                        "</div></div>"
                     : "") +
                 enableRows(item, questions) +
                 "</div>";
         }
+        CadminApi.destroySelects("#qd-inspector");
         $el.html(html);
+        if (canValueSet) {
+            CadminApi.bindValueSetPicker("#qd-answer-valueset", {
+                selectedUrl: item.answerValueSet || "",
+                selectedLabel: item.answerValueSet || "",
+                placeholder: "Search or enter a value set URL…",
+                create: true,
+                onChange: function (url) {
+                    const current = itemAt(selectedPath);
+                    if (!current) {
+                        return;
+                    }
+                    if (url) {
+                        current.answerValueSet = url;
+                    } else {
+                        delete current.answerValueSet;
+                    }
+                    renderPreview();
+                }
+            });
+        }
     }
 
     function check(fieldName, label, on) {
@@ -809,6 +961,14 @@ window.CadminQuestionnaireDetail = (function () {
             item.enableBehavior = value || "all";
             return;
         }
+        if (fieldName === "disabledDisplay") {
+            if (value) {
+                item.disabledDisplay = value;
+            } else {
+                delete item.disabledDisplay;
+            }
+            return;
+        }
         if (fieldName === "initial") {
             setInitial(item, value);
             return;
@@ -856,21 +1016,6 @@ window.CadminQuestionnaireDetail = (function () {
         parent.item = parent.item || [];
         parent.item.push(emptyItem("string", parent));
         selectedPath = path + "." + (parent.item.length - 1);
-        refreshItemUi(true);
-    }
-
-    function moveItem(path, delta) {
-        const ctx = parentContext(path);
-        const next = ctx.index + delta;
-        if (ctx.index < 0 || next < 0 || next >= ctx.list.length) {
-            return;
-        }
-        const swap = ctx.list[ctx.index];
-        ctx.list[ctx.index] = ctx.list[next];
-        ctx.list[next] = swap;
-        const parts = parsePath(path);
-        parts[parts.length - 1] = next;
-        selectedPath = parts.join(".");
         refreshItemUi(true);
     }
 
@@ -984,10 +1129,10 @@ window.CadminQuestionnaireDetail = (function () {
         return item.enableBehavior === "any" ? results.some(Boolean) : results.every(Boolean);
     }
 
-    function previewControl(item) {
+    function previewControl(item, locked) {
         const value = previewValue(item);
         const name = "pv-" + item.linkId;
-        const disabled = item.readOnly ? " disabled" : "";
+        const disabled = item.readOnly || locked ? " disabled" : "";
         if (item.type === "boolean") {
             return '<div class="form-check"><input class="form-check-input" type="checkbox" data-preview="' +
                 esc(item.linkId) + '"' + (value === true ? " checked" : "") + disabled + ">" +
@@ -1034,7 +1179,7 @@ window.CadminQuestionnaireDetail = (function () {
         }
         if (item.type === "coding" && item.answerValueSet) {
             const concepts = valueSetCache[item.answerValueSet];
-            if (!concepts) {
+            if (!Array.isArray(concepts)) {
                 expandValueSet(item.answerValueSet);
                 return '<select class="form-select" data-preview="' + esc(item.linkId) + '" disabled>' +
                     "<option>Loading value set…</option></select>";
@@ -1059,10 +1204,9 @@ window.CadminQuestionnaireDetail = (function () {
             return;
         }
         valueSetCache[url] = "pending";
-        CadminApi.fhir("/ValueSet/$expand?url=" + encodeURIComponent(url) + "&count=50").done(function (vs) {
-            const contains = (vs.expansion && vs.expansion.contains) || [];
-            valueSetCache[url] = contains.map(function (item) {
-                return { code: item.code, display: item.display || item.code };
+        CadminApi.expandValueSet(url, { count: 50, allowEmpty: true }).done(function (concepts) {
+            valueSetCache[url] = (concepts || []).map(function (item) {
+                return { code: item.code, display: item.display || item.code, system: item.system || "" };
             });
             renderPreview();
         }).fail(function () {
@@ -1072,14 +1216,16 @@ window.CadminQuestionnaireDetail = (function () {
     }
 
     function previewBlock(item, depth) {
-        if (!isEnabled(item)) {
+        const enabled = isEnabled(item);
+        if (!enabled && item.disabledDisplay !== "protected") {
             return "";
         }
+        const locked = !enabled && item.disabledDisplay === "protected";
         if (item.type === "display") {
             return '<p class="text-muted mb-3">' + esc(item.text || "") + "</p>";
         }
         if (item.type === "group") {
-            return '<fieldset class="q-preview-group mb-3">' +
+            return '<fieldset class="q-preview-group mb-3"' + (locked ? " disabled" : "") + ">" +
                 "<legend class=\"h6\">" + esc([item.prefix, item.text].filter(Boolean).join(" ") || "Group") +
                 "</legend>" +
                 (item.item || []).map(function (child) {
@@ -1092,7 +1238,7 @@ window.CadminQuestionnaireDetail = (function () {
         return '<div class="mb-3">' +
             '<label class="form-label">' + esc([item.prefix, item.text || item.linkId].filter(Boolean).join(" ")) +
             required + repeats + "</label>" +
-            previewControl(item) +
+            previewControl(item, locked) +
             "</div>";
     }
 
@@ -1107,9 +1253,307 @@ window.CadminQuestionnaireDetail = (function () {
         }).join(""));
     }
 
+    function previewEnableKey() {
+        const keys = [];
+        walkItems(questionnaire.item, function (item) {
+            keys.push(String(item.linkId || "") + ":" + (isEnabled(item) ? "1" : "0"));
+        });
+        return keys.join("|");
+    }
+
+    function restorePreviewFocus(linkId, selectionStart, selectionEnd) {
+        if (!linkId) {
+            return;
+        }
+        const next = $("#qd-preview [data-preview]").filter(function () {
+            return $(this).attr("data-preview") === linkId;
+        })[0];
+        if (!next) {
+            return;
+        }
+        next.focus();
+        if (typeof selectionStart !== "number" || typeof next.setSelectionRange !== "function") {
+            return;
+        }
+        const type = (next.type || "").toLowerCase();
+        if (type === "date" || type === "datetime-local" || type === "time" || type === "number") {
+            return;
+        }
+        try {
+            next.setSelectionRange(selectionStart, selectionEnd);
+        } catch (err) {
+            // Some input types reject selection ranges.
+        }
+    }
+
+    function updatePreviewAnswer(el) {
+        const $el = $(el);
+        const linkId = $el.attr("data-preview");
+        const before = previewEnableKey();
+        if ($el.is(":checkbox")) {
+            previewAnswers[linkId] = $el.is(":checked");
+        } else {
+            previewAnswers[linkId] = $el.val();
+        }
+        if (previewEnableKey() === before) {
+            return;
+        }
+        const start = el.selectionStart;
+        const end = el.selectionEnd;
+        renderPreview();
+        restorePreviewFocus(linkId, start, end);
+    }
+
+    function isBlankPreview(value) {
+        return value == null || value === "";
+    }
+
+    function parsePreviewNumber(value) {
+        if (isBlankPreview(value)) {
+            return null;
+        }
+        const number = Number(value);
+        return isNaN(number) ? null : number;
+    }
+
+    function toFhirDateTime(value) {
+        const text = String(value || "");
+        if (!text) {
+            return "";
+        }
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(text)) {
+            const date = new Date(text);
+            return isNaN(date.getTime()) ? text : date.toISOString();
+        }
+        return text;
+    }
+
+    function codingFromPreview(item, value) {
+        if (isBlankPreview(value)) {
+            return null;
+        }
+        const raw = String(value);
+        const options = item.answerOption || [];
+        let i;
+        for (i = 0; i < options.length; i += 1) {
+            const option = options[i];
+            const coding = option && option.valueCoding;
+            const label = optionLabel(option, "coding");
+            if (raw === label || (coding && String(coding.code) === raw)) {
+                const out = {};
+                if (coding && coding.system) {
+                    out.system = coding.system;
+                }
+                if (coding && coding.code) {
+                    out.code = coding.code;
+                } else {
+                    out.code = raw;
+                }
+                if (coding && coding.display) {
+                    out.display = coding.display;
+                }
+                return out;
+            }
+        }
+        const cached = item.answerValueSet ? valueSetCache[item.answerValueSet] : null;
+        const concepts = Array.isArray(cached) ? cached : [];
+        for (i = 0; i < concepts.length; i += 1) {
+            const concept = concepts[i];
+            if (String(concept.code) === raw || String(concept.display) === raw) {
+                const out = { code: concept.code };
+                if (concept.system) {
+                    out.system = concept.system;
+                }
+                if (concept.display) {
+                    out.display = concept.display;
+                }
+                return out;
+            }
+        }
+        return { code: raw, display: raw };
+    }
+
+    function previewAnswer(item) {
+        if (!item || item.type === "group" || item.type === "display" || item.type === "attachment") {
+            return null;
+        }
+        const value = previewValue(item);
+        if (item.type === "boolean") {
+            if (value !== true && value !== false) {
+                return null;
+            }
+            return { valueBoolean: value };
+        }
+        if (isBlankPreview(value)) {
+            return null;
+        }
+        if (item.type === "integer") {
+            const number = parsePreviewNumber(value);
+            return number == null ? null : { valueInteger: number };
+        }
+        if (item.type === "decimal") {
+            const number = parsePreviewNumber(value);
+            return number == null ? null : { valueDecimal: number };
+        }
+        if (item.type === "quantity") {
+            const number = parsePreviewNumber(value);
+            if (number == null) {
+                return null;
+            }
+            const quantity = { value: number };
+            const unit = item.initial && item.initial[0] && item.initial[0].valueQuantity
+                && item.initial[0].valueQuantity.unit;
+            if (unit) {
+                quantity.unit = unit;
+            }
+            return { valueQuantity: quantity };
+        }
+        if (item.type === "date") {
+            return { valueDate: String(value) };
+        }
+        if (item.type === "dateTime") {
+            return { valueDateTime: toFhirDateTime(value) };
+        }
+        if (item.type === "time") {
+            return { valueTime: String(value) };
+        }
+        if (item.type === "url") {
+            return { valueUri: String(value) };
+        }
+        if (item.type === "coding") {
+            const coding = codingFromPreview(item, value);
+            return coding ? { valueCoding: coding } : null;
+        }
+        if (item.type === "reference") {
+            const text = String(value);
+            if (/^[A-Za-z]+\/[A-Za-z0-9._-]+$/.test(text)) {
+                return { valueReference: { reference: text } };
+            }
+            return { valueReference: { display: text } };
+        }
+        return { valueString: String(value) };
+    }
+
+    function responseItem(item) {
+        if (!item || !isEnabled(item)) {
+            return null;
+        }
+        const node = { linkId: item.linkId || "" };
+        if (item.text) {
+            node.text = item.text;
+        }
+        if (item.type === "group") {
+            const children = (item.item || []).map(responseItem).filter(Boolean);
+            if (children.length) {
+                node.item = children;
+            }
+            return node;
+        }
+        const answer = previewAnswer(item);
+        if (answer) {
+            node.answer = [answer];
+        }
+        return node;
+    }
+
+    function questionnaireCanonical() {
+        if (questionnaire.url) {
+            return questionnaire.version
+                ? questionnaire.url + "|" + questionnaire.version
+                : questionnaire.url;
+        }
+        if (questionnaire.id) {
+            return "Questionnaire/" + questionnaire.id;
+        }
+        return "";
+    }
+
+    function buildPreviewResponse() {
+        const response = {
+            resourceType: "QuestionnaireResponse",
+            status: "in-progress",
+            authored: new Date().toISOString()
+        };
+        const canonical = questionnaireCanonical();
+        if (canonical) {
+            response.questionnaire = canonical;
+        }
+        const items = (questionnaire.item || []).map(responseItem).filter(Boolean);
+        if (items.length) {
+            response.item = items;
+        }
+        return response;
+    }
+
+    function showPreviewResponse() {
+        if (!window.CadminResourceSource) {
+            return;
+        }
+        CadminResourceSource.show(buildPreviewResponse());
+    }
+
     function bind() {
         const $root = $(CadminWorkspace.root());
         $root.off(".qdetail");
+
+        $root.on("dragstart.qdetail", "#qd-tree .q-tree-row", function (event) {
+            if ($(event.target).closest("button, a").length) {
+                event.preventDefault();
+                return;
+            }
+            dragPath = $(this).attr("data-select") || "";
+            dropHint = null;
+            const native = event.originalEvent && event.originalEvent.dataTransfer;
+            if (native) {
+                native.effectAllowed = "move";
+                native.setData("text/plain", dragPath);
+            }
+            $(this).addClass("is-dragging");
+        });
+        $root.on("dragover.qdetail", "#qd-tree", function (event) {
+            if (!dragPath) {
+                return;
+            }
+            const native = event.originalEvent;
+            const $row = $(event.target).closest(".q-tree-row");
+            let dest;
+            if ($row.length) {
+                dest = destFromRow($row[0], native ? native.clientY : event.clientY);
+            } else {
+                dest = {
+                    parentPath: "",
+                    index: (questionnaire.item || []).length,
+                    kind: "after",
+                    rowPath: String((questionnaire.item || []).length - 1)
+                };
+            }
+            if (!destAllowed(dragPath, dest)) {
+                dropHint = null;
+                paintDrop(null);
+                return;
+            }
+            event.preventDefault();
+            if (native && native.dataTransfer) {
+                native.dataTransfer.dropEffect = "move";
+            }
+            dropHint = dest;
+            paintDrop(dest);
+        });
+        $root.on("drop.qdetail", "#qd-tree", function (event) {
+            if (!dragPath) {
+                return;
+            }
+            event.preventDefault();
+            const from = dragPath;
+            const dest = dropHint;
+            clearDrag();
+            if (dest) {
+                relocateItem(from, dest);
+            }
+        });
+        $root.on("dragend.qdetail", "#qd-tree .q-tree-row", function () {
+            clearDrag();
+        });
 
         $root.on("click.qdetail", "[data-select]", function (event) {
             if ($(event.target).closest("button").length) {
@@ -1127,12 +1571,6 @@ window.CadminQuestionnaireDetail = (function () {
         });
         $root.on("click.qdetail", "[data-add-child]", function () {
             addChild($(this).attr("data-add-child"));
-        });
-        $root.on("click.qdetail", "[data-move-up]", function () {
-            moveItem($(this).attr("data-move-up"), -1);
-        });
-        $root.on("click.qdetail", "[data-move-down]", function () {
-            moveItem($(this).attr("data-move-down"), 1);
         });
         $root.on("click.qdetail", "[data-dup-item]", function () {
             duplicateItem($(this).attr("data-dup-item"));
@@ -1230,17 +1668,15 @@ window.CadminQuestionnaireDetail = (function () {
             if (!item.enableWhen.length) {
                 delete item.enableWhen;
                 delete item.enableBehavior;
+                delete item.disabledDisplay;
             }
             refreshItemUi(true);
         });
         $root.on("change.qdetail input.qdetail", "[data-preview]", function () {
-            const linkId = $(this).attr("data-preview");
-            if ($(this).is(":checkbox")) {
-                previewAnswers[linkId] = $(this).is(":checked");
-            } else {
-                previewAnswers[linkId] = $(this).val();
-            }
-            renderPreview();
+            updatePreviewAnswer(this);
+        });
+        $root.on("click.qdetail", "#qd-view-response", function () {
+            showPreviewResponse();
         });
         $root.on("click.qdetail", "#qd-save", function () {
             saveQuestionnaire(function () {

@@ -29,8 +29,11 @@ CadminApp.register("search-parameters", function (params) {
     $root.html(
         '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
             '<h1 class="h3 mb-0 page-title">Search Parameters</h1>' +
-            '<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-search-parameter-modal">' +
-                '<i class="bi bi-plus-lg me-1"></i>New search parameter</button>' +
+            CadminResourceDocument.splitButton({
+                label: "New search parameter",
+                modalTarget: "#create-search-parameter-modal",
+                resourceType: "SearchParameter"
+            }) +
         '</div>' +
         '<div id="search-parameter-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +

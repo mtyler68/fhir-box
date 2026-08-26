@@ -16,8 +16,11 @@ function renderCaregiverList(initialQuery) {
     $root.html(
         '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
             '<h1 class="h3 mb-0 page-title">Caregivers</h1>' +
-            '<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-caregiver-modal">' +
-                '<i class="bi bi-plus-lg me-1"></i>New caregiver</button>' +
+            CadminResourceDocument.splitButton({
+                label: "New caregiver",
+                modalTarget: "#create-caregiver-modal",
+                resourceType: "RelatedPerson"
+            }) +
         '</div>' +
         '<div id="caregiver-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
@@ -32,8 +35,9 @@ function renderCaregiverList(initialQuery) {
             '<div class="card-body">' +
                 '<div class="table-responsive">' +
                     '<table class="table table-hover align-middle">' +
-                        '<thead><tr><th>Name</th><th>Gender</th><th>Status</th><th>ID</th><th></th></tr></thead>' +
-                        '<tbody id="caregiver-rows"><tr><td colspan="5" class="text-muted">Loading…</td></tr></tbody>' +
+                        '<thead><tr><th>Name</th><th>Gender</th><th>DOB</th><th>City</th><th>State</th>' +
+                            "<th>Status</th><th>ID</th><th></th></tr></thead>" +
+                        '<tbody id="caregiver-rows"><tr><td colspan="8" class="text-muted">Loading…</td></tr></tbody>' +
                     '</table>' +
                 '</div>' +
                 '<div class="list-pager" id="caregiver-pager"></div>' +
@@ -76,6 +80,10 @@ function renderCaregiverList(initialQuery) {
         return [given, name.family].filter(Boolean).join(" ") || resource.id || "Unnamed";
     }
 
+    function firstAddress(resource) {
+        return (resource.address && resource.address[0]) || {};
+    }
+
     let listPage = 0;
 
     function load(query, page) {
@@ -97,14 +105,18 @@ function renderCaregiverList(initialQuery) {
                 onPage: function (nextPage) { load(query, nextPage); }
             });
             if (!entries.length) {
-                $("#caregiver-rows").html('<tr><td colspan="5" class="text-muted">No caregivers found. Create one or start HAPI FHIR.</td></tr>');
+                $("#caregiver-rows").html('<tr><td colspan="8" class="text-muted">No caregivers found. Create one or start HAPI FHIR.</td></tr>');
                 return;
             }
             const rows = entries.map(function (person) {
                 const active = person.active !== false;
+                const address = firstAddress(person);
                 return "<tr>" +
                     "<td>" + CadminApi.resourceLink("#/caregivers/" + encodeURIComponent(person.id), personName(person)) + "</td>" +
                     "<td>" + CadminApi.escapeHtml(person.gender || "—") + "</td>" +
+                    "<td>" + CadminApi.escapeHtml(person.birthDate || "—") + "</td>" +
+                    "<td>" + CadminApi.escapeHtml(address.city || "—") + "</td>" +
+                    "<td>" + CadminApi.escapeHtml(address.state || "—") + "</td>" +
                     "<td>" + (active
                         ? '<span class="badge text-bg-success">Active</span>'
                         : '<span class="badge text-bg-secondary">Inactive</span>') + "</td>" +
@@ -116,7 +128,7 @@ function renderCaregiverList(initialQuery) {
             $("#caregiver-rows").html(rows.join(""));
         }).fail(function (xhr) {
             $("#caregiver-pager").empty();
-            $("#caregiver-rows").html('<tr><td colspan="5" class="text-danger">Unable to load caregivers from /fhir.</td></tr>');
+            $("#caregiver-rows").html('<tr><td colspan="8" class="text-danger">Unable to load caregivers from /fhir.</td></tr>');
             CadminApi.showAlert("#caregiver-alert", "danger",
                 "FHIR request failed (" + xhr.status + "). Is the HAPI FHIR stack running?");
         });

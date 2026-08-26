@@ -1263,6 +1263,13 @@ window.CadminPdsPolicyDetail = (function () {
             readOnly: true,
             lineNumbers: true,
             lineWrapping: true,
+            foldGutter: true,
+            gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"],
+            extraKeys: {
+                "Ctrl-Q": function (cm) {
+                    cm.foldCode(cm.getCursor());
+                }
+            },
             viewportMargin: Infinity
         });
         yamlPreviewEditor.setSize("100%", "28rem");
@@ -1376,6 +1383,7 @@ window.CadminPdsPolicyDetail = (function () {
                 '<div class="col-lg-6">' + card("Related artifacts", "pds-artifact-rows",
                     ["Type", "Display", ""], "#pd-artifact-modal", "Add") + "</div>" +
             "</div>" +
+            CadminResourceHistory.card() +
             CadminResourceGraph.card() +
             viewModal("pd-yaml-modal", "Generated YAML",
                 '<div class="yaml-preview-host">' +
@@ -1430,6 +1438,7 @@ window.CadminPdsPolicyDetail = (function () {
         );
         CadminResourceSource.mount(function () { return library; });
         CadminResourceGraph.mount(library);
+        CadminResourceHistory.mount(library);
         renderBasics();
         renderIdentity();
         renderPurpose();

@@ -25,8 +25,12 @@ function renderPractitionerList(initialQuery) {
     $root.html(
         '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
             '<h1 class="h3 mb-0 page-title">Practitioners</h1>' +
-            '<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-practitioner-modal">' +
-                '<i class="bi bi-plus-lg me-1"></i>New practitioner</button>' +
+            CadminResourceDocument.splitButton({
+                label: "New practitioner",
+                modalTarget: "#create-practitioner-modal",
+                resourceType: "Practitioner",
+                items: [CadminNpiPractitioner.menuItem()]
+            }) +
         "</div>" +
         '<div id="practitioner-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
@@ -176,6 +180,10 @@ function renderPractitionerList(initialQuery) {
         fillSelect("#pr-role-loc", "/Location?_count=200&_sort=name", function (loc) {
             return loc.name || loc.id;
         }, "None");
+        CadminApi.fillValueSetSelect("#pr-role-code", CadminApi.valueSets.practitionerRole, {
+            fallback: CadminApi.valueSetFallbacks.practitionerRole,
+            selected: "doctor"
+        });
         showModal("create-practitioner-role-modal");
     }
 
@@ -292,7 +300,10 @@ function renderPractitionerList(initialQuery) {
             CadminApi.showToast("danger", "Select an organization.");
             return;
         }
-        const role = roleOptions.find(function (option) { return option.code === $("#pr-role-code").val(); });
+        const role = roleOptions.find(function (option) { return option.code === $("#pr-role-code").val(); })
+            || ($("#pr-role-code").val()
+                ? { code: $("#pr-role-code").val(), display: $("#pr-role-code option:selected").text() }
+                : null);
         const resource = {
             resourceType: "PractitionerRole",
             active: $("#pr-role-active").is(":checked"),

@@ -72,6 +72,17 @@ class CadminGatewayApplicationTests {
                 .exchange().expectStatus().isForbidden();
         webTestClient.get().uri("/fhir/PractitionerRole").header("Accept", "application/fhir+json")
                 .exchange().expectStatus().isForbidden();
+        webTestClient.get().uri("/fhir/HealthcareService").header("Accept", "application/fhir+json")
+                .exchange().expectStatus().isForbidden();
+    }
+
+    @Test
+    void healthcareServiceFhirRequiresAuthentication() {
+        webTestClient.get()
+                .uri("/fhir/HealthcareService")
+                .header("Accept", "application/fhir+json")
+                .exchange()
+                .expectStatus().isUnauthorized();
     }
 
     @Test
@@ -145,6 +156,44 @@ class CadminGatewayApplicationTests {
     void questionnaireFhirIsForbiddenForNonAdmin() {
         webTestClient.get()
                 .uri("/fhir/Questionnaire")
+                .header("Accept", "application/fhir+json")
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    void codeSystemFhirRequiresAuthentication() {
+        webTestClient.get()
+                .uri("/fhir/CodeSystem")
+                .header("Accept", "application/fhir+json")
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    @WithMockUser(username = "clinician", roles = {"USER"})
+    void codeSystemFhirIsForbiddenForNonAdmin() {
+        webTestClient.get()
+                .uri("/fhir/CodeSystem")
+                .header("Accept", "application/fhir+json")
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    void valueSetFhirRequiresAuthentication() {
+        webTestClient.get()
+                .uri("/fhir/ValueSet")
+                .header("Accept", "application/fhir+json")
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    @WithMockUser(username = "clinician", roles = {"USER"})
+    void valueSetFhirIsForbiddenForNonAdmin() {
+        webTestClient.get()
+                .uri("/fhir/ValueSet")
                 .header("Accept", "application/fhir+json")
                 .exchange()
                 .expectStatus().isForbidden();
@@ -234,6 +283,23 @@ class CadminGatewayApplicationTests {
     }
 
     @Test
+    void npiRequiresAuthentication() {
+        webTestClient.get()
+                .uri("/api/npi?number=1234567893")
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    @WithMockUser(username = "clinician", roles = {"USER"})
+    void npiRejectsInvalidNumber() {
+        webTestClient.get()
+                .uri("/api/npi?number=123")
+                .exchange()
+                .expectStatus().isBadRequest();
+    }
+
+    @Test
     void currentUserRequiresAuthentication() {
         webTestClient.get()
                 .uri("/api/auth/me")
@@ -303,6 +369,25 @@ class CadminGatewayApplicationTests {
                 .expectBody()
                 .jsonPath("$.authenticated").isEqualTo(true)
                 .jsonPath("$.username").isEqualTo("admin");
+    }
+
+    @Test
+    void wiremockRequiresAuthentication() {
+        webTestClient.get()
+                .uri("/wiremock/__admin/mappings")
+                .header("Accept", "application/json")
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    @WithMockUser(username = "clinician", roles = {"USER"})
+    void wiremockIsForbiddenForNonAdmin() {
+        webTestClient.get()
+                .uri("/wiremock/__admin/mappings")
+                .header("Accept", "application/json")
+                .exchange()
+                .expectStatus().isForbidden();
     }
 
     @Test

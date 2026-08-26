@@ -34,8 +34,11 @@ function renderSubscriptionList(initialQuery) {
     $root.html(
         '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
             '<h1 class="h3 mb-0 page-title">Subscriptions</h1>' +
-            '<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-sub-modal">' +
-                '<i class="bi bi-plus-lg me-1"></i>New subscription</button>' +
+            CadminResourceDocument.splitButton({
+                label: "New subscription",
+                modalTarget: "#create-sub-modal",
+                resourceType: "Subscription"
+            }) +
         "</div>" +
         '<div id="sub-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
@@ -72,8 +75,12 @@ function renderSubscriptionList(initialQuery) {
                         '<div class="mb-3"><label class="form-label">Topic</label>' +
                             '<select class="form-select" id="sub-topic" required>' +
                                 '<option value="">Loading topics…</option></select></div>' +
-                        '<div class="mb-3"><label class="form-label">Name</label>' +
+                        '<div class="mb-3"><label class="form-label" for="sub-name">Name</label>' +
                             '<input class="form-control" id="sub-name"></div>' +
+                        '<div class="mb-3"><label class="form-label" for="sub-id">ID</label>' +
+                            '<input class="form-control font-monospace" id="sub-id" name="id" autocomplete="off" maxlength="64">' +
+                            '<div class="form-text">Optional. Leave blank for a server-assigned ID. Provide an ID to create and manage a known subscription (for example <code>patient-rest-hook</code>).</div>' +
+                            '<div class="invalid-feedback" id="sub-id-feedback">A subscription with this ID already exists.</div></div>' +
                         '<div class="mb-3"><label class="form-label">Status</label>' +
                             '<select class="form-select" id="sub-status">' +
                                 '<option value="requested" selected>Requested</option>' +
@@ -135,6 +142,27 @@ function renderSubscriptionList(initialQuery) {
 
     function subscriptionName(sub) {
         return sub.name || sub.reason || sub.id || "Subscription";
+    }
+
+    function ensureNewId(id, $field) {
+        const deferred = $.Deferred();
+        const value = String(id || "").trim();
+        if (!value) {
+            return deferred.resolve("").promise();
+        }
+        CadminApi.fhir("/Subscription/" + encodeURIComponent(value), "GET", null, { silent: true }).done(function () {
+            $field.addClass("is-invalid");
+            CadminApi.showToast("danger", "A subscription with ID \"" + value + "\" already exists.");
+            deferred.reject();
+        }).fail(function (xhr) {
+            if (xhr.status === 404) {
+                deferred.resolve(value);
+                return;
+            }
+            CadminApi.showToast("danger", "Unable to check ID (" + xhr.status + ").");
+            deferred.reject();
+        });
+        return deferred.promise();
     }
 
     function readPendingTopic() {
@@ -245,15 +273,22 @@ function renderSubscriptionList(initialQuery) {
     $("#create-sub-modal").on("show.bs.modal", function () {
         const pending = $("#sub-topic").data("pending-url");
         fillTopicSelect(pending || "");
+        $("#sub-id").val("").removeClass("is-invalid");
+    });
+
+    $("#sub-id").on("input", function () {
+        $("#sub-id").removeClass("is-invalid");
     });
 
     $("#create-sub-form").on("submit", function (event) {
         event.preventDefault();
+        $("#sub-id").removeClass("is-invalid");
         const topic = $("#sub-topic").val();
         if (!topic) {
             CadminApi.showToast("danger", "Select a subscription topic.");
             return;
         }
+        const assignedId = $("#sub-id").val().trim();
         const channel = channelTypes.find(function (option) { return option.code === $("#sub-channel").val(); })
             || channelTypes[0];
         const resource = {
@@ -276,20 +311,29 @@ function renderSubscriptionList(initialQuery) {
         if (content) { resource.content = content; }
         if (contentType) { resource.contentType = contentType; }
         if (reason) { resource.reason = reason; }
-        CadminApi.fhir("/Subscription", "POST", resource).done(function (created, _status, xhr) {
-            const id = CadminApi.createdResourceId(created, xhr, "Subscription");
-            const modal = bootstrap.Modal.getInstance(document.getElementById("create-sub-modal"));
-            if (modal) {
-                modal.hide();
+        ensureNewId(assignedId, $("#sub-id")).done(function () {
+            const path = assignedId
+                ? "/Subscription/" + encodeURIComponent(assignedId)
+                : "/Subscription";
+            const method = assignedId ? "PUT" : "POST";
+            if (assignedId) {
+                resource.id = assignedId;
             }
-            CadminApi.showToast("success", "Subscription created.");
-            if (id) {
-                window.location.hash = "#/subscriptions/" + encodeURIComponent(id);
-                return;
-            }
-            load($("#sub-query").val());
-        }).fail(function (xhr) {
-            CadminApi.showToast("danger", "Create failed (" + xhr.status + ").");
+            CadminApi.fhir(path, method, resource).done(function (created, _status, xhr) {
+                const id = assignedId || CadminApi.createdResourceId(created, xhr, "Subscription");
+                const modal = bootstrap.Modal.getInstance(document.getElementById("create-sub-modal"));
+                if (modal) {
+                    modal.hide();
+                }
+                CadminApi.showToast("success", "Subscription created.");
+                if (id) {
+                    window.location.hash = "#/subscriptions/" + encodeURIComponent(id);
+                    return;
+                }
+                load($("#sub-query").val());
+            }).fail(function (xhr) {
+                CadminApi.showToast("danger", "Create failed (" + xhr.status + ").");
+            });
         });
     });
 

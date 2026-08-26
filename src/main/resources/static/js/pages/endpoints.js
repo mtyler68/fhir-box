@@ -32,8 +32,11 @@ function renderEndpointList(initialQuery) {
     $root.html(
         '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
             '<h1 class="h3 mb-0 page-title">Endpoints</h1>' +
-            '<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#create-endpoint-modal">' +
-                '<i class="bi bi-plus-lg me-1"></i>New endpoint</button>' +
+            CadminResourceDocument.splitButton({
+                label: "New endpoint",
+                modalTarget: "#create-endpoint-modal",
+                resourceType: "Endpoint"
+            }) +
         "</div>" +
         '<div id="endpoint-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +

@@ -248,8 +248,9 @@ window.CadminPractitionerDetail = (function () {
             return '<span class="text-muted">—</span>';
         }
         return items.map(function (item) {
-            return '<span class="badge text-bg-secondary me-1 mb-1">' +
-                esc(conceptLabel(item.language || item)) + "</span>";
+            return '<span class="badge text-bg-' + (item.preferred ? "primary" : "secondary") +
+                ' me-1 mb-1">' + esc(conceptLabel(item.language || item)) +
+                (item.preferred ? " · Preferred" : "") + "</span>";
         }).join("");
     }
 
@@ -396,6 +397,7 @@ window.CadminPractitionerDetail = (function () {
                                 tabButton("prd-tab-details", "Details", true) +
                                 (admin ? tabButton("prd-tab-care", "Care", false) : "") +
                                 tabButton("prd-tab-graph", "Graph", false) +
+                                tabButton("prd-tab-history", "History", false) +
                             "</ul>" +
                         "</div>" +
                         '<div class="card-body">' +
@@ -426,6 +428,7 @@ window.CadminPractitionerDetail = (function () {
                                         false)
                                     : "") +
                                 tabPane("prd-tab-graph", CadminResourceGraph.card(), false) +
+                                tabPane("prd-tab-history", CadminResourceHistory.card(), false) +
                             "</div>" +
                         "</div>" +
                     "</div>" +
@@ -464,7 +467,10 @@ window.CadminPractitionerDetail = (function () {
                 field("End", '<input type="date" class="form-control" id="prd-qual-end">'),
                 "prd-qual-form") +
             modal("prd-lang-modal", "Add language",
-                field("Language", '<select class="form-select" id="prd-lang">' + optionsHtml(languageOptions) + "</select>"),
+                field("Language", '<select class="form-select" id="prd-lang">' + optionsHtml(languageOptions) + "</select>") +
+                '<div class="form-check mb-0">' +
+                    '<input class="form-check-input" type="checkbox" id="prd-lang-preferred">' +
+                    '<label class="form-check-label" for="prd-lang-preferred">Preferred language</label></div>',
                 "prd-lang-form") +
             modal("prd-role-modal", "Add organization role",
                 field("Organization", '<select class="form-select" id="prd-role-org" required><option value="">Select…</option></select>') +
@@ -497,6 +503,7 @@ window.CadminPractitionerDetail = (function () {
         );
         CadminResourceSource.mount(function () { return practitioner; });
         CadminResourceGraph.mount(practitioner);
+        CadminResourceHistory.mount(practitioner);
         renderBasics();
         renderIdentifiers();
         renderTelecom();
@@ -594,10 +601,27 @@ window.CadminPractitionerDetail = (function () {
             return;
         }
         $("#prd-lang-rows").html(items.map(function (item, index) {
-            return "<tr><td>" + esc(conceptLabel(item.language || item)) + "</td>" +
-                '<td class="text-end"><button class="btn btn-sm btn-outline-danger" type="button" data-remove="communication" data-index="' +
-                index + '" title="Remove" aria-label="Remove"><i class="bi bi-trash"></i></button></td></tr>';
+            return "<tr><td>" + esc(conceptLabel(item.language || item)) +
+                (item.preferred ? ' <span class="badge text-bg-primary">Preferred</span>' : "") + "</td>" +
+                '<td class="text-end text-nowrap">' +
+                    '<button class="btn btn-sm ' + (item.preferred ? "btn-primary" : "btn-outline-secondary") +
+                        ' me-1" type="button" data-prefer-lang="' + index + '" title="' +
+                        (item.preferred ? "Preferred language" : "Set as preferred") +
+                        '" aria-label="' + (item.preferred ? "Preferred language" : "Set as preferred") + '">' +
+                        '<i class="bi ' + (item.preferred ? "bi-star-fill" : "bi-star") + '"></i></button>' +
+                    '<button class="btn btn-sm btn-outline-danger" type="button" data-remove="communication" data-index="' +
+                    index + '" title="Remove" aria-label="Remove"><i class="bi bi-trash"></i></button></td></tr>';
         }).join(""));
+    }
+
+    function setPreferredLanguage(index, preferred) {
+        (practitioner.communication || []).forEach(function (item, i) {
+            if (i === index && preferred) {
+                item.preferred = true;
+            } else {
+                delete item.preferred;
+            }
+        });
     }
 
     function isThisPractitioner(ref) {
@@ -790,7 +814,10 @@ window.CadminPractitionerDetail = (function () {
             return loc.name || loc.id;
         }, "None", role ? refId((role.location || [])[0]) : "");
         const code = role ? currentCode(role.code) : practitionerRoles[0].code;
-        ensureRoleOption("#prd-role-code", code, role ? conceptLabel(role.code) : "");
+        CadminApi.fillValueSetSelect("#prd-role-code", CadminApi.valueSets.practitionerRole, {
+            fallback: CadminApi.valueSetFallbacks.practitionerRole,
+            selected: code
+        });
         $("#prd-role-active").prop("checked", !role || role.active !== false);
     }
 
@@ -877,6 +904,8 @@ window.CadminPractitionerDetail = (function () {
                 return "<tr><td>" + orgHtml + "</td><td>" + locHtml + "</td><td>" + esc(conceptLabel(role.code)) + "</td><td>" +
                     statusBadge(role.active !== false) + "</td>" +
                     '<td class="text-end">' +
+                    '<a class="btn btn-sm btn-outline-primary me-1" href="#/practitioner-roles/' +
+                    encodeURIComponent(role.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a>' +
                     '<button class="btn btn-sm btn-outline-primary me-1" type="button" data-edit-role="' +
                     esc(role.id) + '" title="Edit" aria-label="Edit"><i class="bi bi-pencil"></i></button>' +
                     '<button class="btn btn-sm btn-outline-danger" type="button" data-delete-role="' +
@@ -919,6 +948,18 @@ window.CadminPractitionerDetail = (function () {
             if (typeof CadminResourceGraph.resize === "function") {
                 CadminResourceGraph.resize();
             }
+        });
+
+        $root.on("click.prdetail", "[data-prefer-lang]", function () {
+            const index = Number($(this).attr("data-prefer-lang"));
+            const item = (practitioner.communication || [])[index];
+            if (!item) {
+                return;
+            }
+            setPreferredLanguage(index, !item.preferred);
+            savePractitioner(function () {
+                alertMsg("success", item.preferred ? "Preferred language set." : "Preferred language cleared.");
+            });
         });
 
         $root.on("click.prdetail", "[data-remove]", function () {
@@ -1106,6 +1147,9 @@ window.CadminPractitionerDetail = (function () {
             });
         });
 
+        $("#prd-lang-modal").on("show.bs.modal", function () {
+            $("#prd-lang-preferred").prop("checked", false);
+        });
         $("#prd-lang-form").on("submit", function (event) {
             event.preventDefault();
             const option = languageOptions.find(function (item) { return item.code === $("#prd-lang").val(); });
@@ -1113,14 +1157,20 @@ window.CadminPractitionerDetail = (function () {
                 return;
             }
             practitioner.communication = practitioner.communication || [];
-            practitioner.communication.push({
-                coding: [{
-                    system: "urn:ietf:bcp:47",
-                    code: option.code,
-                    display: option.display
-                }],
-                text: option.display
-            });
+            const entry = {
+                language: {
+                    coding: [{
+                        system: "urn:ietf:bcp:47",
+                        code: option.code,
+                        display: option.display
+                    }],
+                    text: option.display
+                }
+            };
+            practitioner.communication.push(entry);
+            if ($("#prd-lang-preferred").prop("checked")) {
+                setPreferredLanguage(practitioner.communication.length - 1, true);
+            }
             savePractitioner(function () {
                 hideModal("prd-lang-modal");
                 alertMsg("success", "Language added.");

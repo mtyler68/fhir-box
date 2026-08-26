@@ -363,6 +363,7 @@ window.CadminConsentDetail = (function () {
             "</div>" +
             card("Provisions", "cd-provision-rows",
                 ["Effect", "Period", "Actions", "Resources", "Actors", ""], "#cd-provision-modal", "Add") +
+            CadminResourceHistory.card() +
             CadminResourceGraph.card() +
             modal("cd-basic-modal", "Edit basics",
                 field("Category", '<select class="form-select" id="cd-category"></select>') +
@@ -431,6 +432,7 @@ window.CadminConsentDetail = (function () {
         );
         CadminResourceSource.mount(function () { return consent; });
         CadminResourceGraph.mount(consent);
+        CadminResourceHistory.mount(consent);
         renderHeader();
         renderBasics();
         renderParties();
