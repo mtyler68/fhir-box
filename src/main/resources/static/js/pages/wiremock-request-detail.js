@@ -100,14 +100,16 @@ window.CadminWiremockRequestDetail = (function () {
 
     function remove() {
         const id = logged && logged.id;
-        if (!id || !window.confirm("Delete this logged request?")) {
+        if (!id) {
             return;
         }
-        CadminApi.wiremock("/__admin/requests/" + encodeURIComponent(id), "DELETE").done(function () {
-            CadminApi.showToast("success", "Request deleted.");
-            window.location.hash = "#/wiremock-requests";
-        }).fail(function (xhr) {
-            CadminApi.showToast("danger", wm().fail("Delete request", xhr));
+        CadminApi.confirm("Delete this logged request?").done(function () {
+            CadminApi.wiremock("/__admin/requests/" + encodeURIComponent(id), "DELETE").done(function () {
+                CadminApi.showToast("success", "Request deleted.");
+                window.location.hash = "#/wiremock-requests";
+            }).fail(function (xhr) {
+                CadminApi.showToast("danger", wm().fail("Delete request", xhr));
+            });
         });
     }
 

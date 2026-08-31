@@ -1684,14 +1684,13 @@ window.CadminQuestionnaireDetail = (function () {
             });
         });
         $root.on("click.qdetail", "#qd-delete", function () {
-            if (!window.confirm("Delete this questionnaire?")) {
-                return;
-            }
-            CadminApi.fhir("/Questionnaire/" + encodeURIComponent(questionnaire.id), "DELETE").done(function () {
-                alertMsg("success", "Questionnaire deleted.");
-                window.location.hash = "#/questionnaires";
-            }).fail(function (xhr) {
-                fail("Delete questionnaire", xhr);
+            CadminApi.confirm("Delete this questionnaire?").done(function () {
+                CadminApi.fhir("/Questionnaire/" + encodeURIComponent(questionnaire.id), "DELETE").done(function () {
+                    alertMsg("success", "Questionnaire deleted.");
+                    window.location.hash = "#/questionnaires";
+                }).fail(function (xhr) {
+                    fail("Delete questionnaire", xhr);
+                });
             });
         });
 

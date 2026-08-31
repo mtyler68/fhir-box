@@ -34,6 +34,9 @@ window.CadminSubscriptionDetail = (function () {
 
     let subscription = null;
     let topicResource = null;
+    let statusPollTimer = 0;
+    let statusPollToken = 0;
+    let statusPolling = false;
 
     function esc(value) {
         return CadminApi.escapeHtml(value);
@@ -58,6 +61,118 @@ window.CadminSubscriptionDetail = (function () {
             : status === "off" || status === "entered-in-error" ? "secondary"
                 : "warning";
         return '<span class="badge text-bg-' + kind + '">' + esc(statusLabel(status)) + "</span>";
+    }
+
+    function statusDisplay() {
+        let html = statusBadge(subscription.status);
+        if (statusPolling && subscription.status === "requested") {
+            html += ' <span class="text-muted small align-middle">' +
+                '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>' +
+                "Checking status…</span>";
+        }
+        return html;
+    }
+
+    function stopStatusPoll() {
+        statusPolling = false;
+        if (statusPollTimer) {
+            window.clearTimeout(statusPollTimer);
+            statusPollTimer = 0;
+        }
+        statusPollToken += 1;
+    }
+
+    function subscriptionPageVisible() {
+        return !!document.getElementById("sd-title");
+    }
+
+    function applyPolledSubscription(updated) {
+        const previousVid = subscription && subscription.meta && subscription.meta.versionId;
+        subscription = updated || subscription;
+        if (!subscriptionPageVisible()) {
+            return;
+        }
+        renderHeader();
+        renderBasics();
+        const nextVid = subscription && subscription.meta && subscription.meta.versionId;
+        if (nextVid && nextVid !== previousVid) {
+            CadminResourceSource.mount(function () { return subscription; });
+            if (window.CadminResourceHistory) {
+                CadminResourceHistory.mount(subscription);
+            }
+        }
+    }
+
+    function startStatusPoll() {
+        stopStatusPoll();
+        const id = subscription && subscription.id;
+        if (!id) {
+            return;
+        }
+        statusPolling = true;
+        const token = statusPollToken;
+        const started = Date.now();
+        const intervalMs = 2000;
+        const maxMs = 45000;
+        if (subscriptionPageVisible()) {
+            renderHeader();
+            renderBasics();
+        }
+
+        function tick() {
+            if (token !== statusPollToken || !subscription || subscription.id !== id) {
+                return;
+            }
+            CadminApi.fhir("/Subscription/" + encodeURIComponent(id), "GET", null, { silent: true })
+                .done(function (updated) {
+                    if (token !== statusPollToken) {
+                        return;
+                    }
+                    applyPolledSubscription(updated);
+                    const status = subscription.status;
+                    if (status && status !== "requested") {
+                        stopStatusPoll();
+                        if (subscriptionPageVisible()) {
+                            renderHeader();
+                            renderBasics();
+                        }
+                        if (status === "active") {
+                            CadminApi.showToast("success", "Subscription is active.");
+                        } else if (status === "error") {
+                            CadminApi.showToast("danger", "Subscription entered an error state.");
+                        } else if (status === "off") {
+                            CadminApi.showToast("info", "Subscription is off.");
+                        }
+                        return;
+                    }
+                    if (Date.now() - started >= maxMs) {
+                        stopStatusPoll();
+                        if (subscriptionPageVisible()) {
+                            renderHeader();
+                            renderBasics();
+                        }
+                        CadminApi.showToast("warning",
+                            "Still waiting for the server to update this subscription.");
+                        return;
+                    }
+                    statusPollTimer = window.setTimeout(tick, intervalMs);
+                })
+                .fail(function () {
+                    if (token !== statusPollToken) {
+                        return;
+                    }
+                    if (Date.now() - started >= maxMs) {
+                        stopStatusPoll();
+                        if (subscriptionPageVisible()) {
+                            renderHeader();
+                            renderBasics();
+                        }
+                        return;
+                    }
+                    statusPollTimer = window.setTimeout(tick, intervalMs);
+                });
+        }
+        statusPollTimer = window.setTimeout(tick, intervalMs);
     }
 
     function channelLabel(sub) {
@@ -206,6 +321,7 @@ window.CadminSubscriptionDetail = (function () {
     }
 
     function render(resource) {
+        stopStatusPoll();
         subscription = resource;
         topicResource = null;
         const $root = $(CadminWorkspace.root());
@@ -302,8 +418,10 @@ window.CadminSubscriptionDetail = (function () {
         });
         CadminApi.expandValueSet(CadminApi.valueSets.subscriptionStatus).done(function (concepts) {
             statusOptions = concepts;
-            renderHeader();
-            renderBasics();
+            if (subscriptionPageVisible()) {
+                renderHeader();
+                renderBasics();
+            }
         });
         CadminApi.expandValueSet(CadminApi.valueSets.searchComparator).done(function (concepts) {
             comparatorOptions = concepts;
@@ -313,10 +431,24 @@ window.CadminSubscriptionDetail = (function () {
         });
     }
 
+    function reveal(resource) {
+        if (resource) {
+            subscription = resource;
+        }
+        if (!subscriptionPageVisible()) {
+            return;
+        }
+        renderHeader();
+        renderBasics();
+        renderChannel();
+        renderFilters();
+        renderParameters();
+    }
+
     function renderHeader() {
         $("#sd-title").text(subscriptionName());
         const status = subscription.status;
-        let actions = statusBadge(status);
+        let actions = statusDisplay();
         if (status === "error") {
             actions += ' <span class="text-muted small align-middle">Server reported an error. Re-request to retry.</span>';
         }
@@ -359,7 +491,7 @@ window.CadminSubscriptionDetail = (function () {
         $("#sd-basics").html(
             '<dl class="row mb-0">' +
                 '<dt class="col-sm-3">Name</dt><dd class="col-sm-9">' + esc(subscription.name || "—") + "</dd>" +
-                '<dt class="col-sm-3">Status</dt><dd class="col-sm-9">' + statusBadge(subscription.status) + "</dd>" +
+                '<dt class="col-sm-3">Status</dt><dd class="col-sm-9">' + statusDisplay() + "</dd>" +
                 '<dt class="col-sm-3">Topic</dt><dd class="col-sm-9">' + topicHtml() + "</dd>" +
                 '<dt class="col-sm-3">Reason</dt><dd class="col-sm-9">' + esc(subscription.reason || "—") + "</dd>" +
                 '<dt class="col-sm-3">Managing entity</dt><dd class="col-sm-9">' + managingHtml() + "</dd>" +
@@ -508,6 +640,7 @@ window.CadminSubscriptionDetail = (function () {
         $root.off(".subdetail");
 
         $root.on("click.subdetail", "#sd-off", function () {
+            stopStatusPoll();
             subscription.status = "off";
             saveSubscription(function () {
                 CadminApi.showToast("success", "Subscription turned off.");
@@ -518,18 +651,19 @@ window.CadminSubscriptionDetail = (function () {
             subscription.status = "requested";
             saveSubscription(function () {
                 CadminApi.showToast("success", "Subscription re-requested.");
+                startStatusPoll();
             });
         });
 
         $root.on("click.subdetail", "#sd-delete", function () {
-            if (!window.confirm("Delete this subscription?")) {
-                return;
-            }
-            CadminApi.fhir("/Subscription/" + encodeURIComponent(subscription.id), "DELETE").done(function () {
-                CadminApi.showToast("success", "Subscription deleted.");
-                window.location.hash = "#/subscriptions";
-            }).fail(function (xhr) {
-                fail("Delete subscription", xhr);
+            CadminApi.confirm("Delete this subscription?").done(function () {
+                CadminApi.fhir("/Subscription/" + encodeURIComponent(subscription.id), "DELETE").done(function () {
+                    stopStatusPoll();
+                    CadminApi.showToast("success", "Subscription deleted.");
+                    window.location.hash = "#/subscriptions";
+                }).fail(function (xhr) {
+                    fail("Delete subscription", xhr);
+                });
             });
         });
 
@@ -689,5 +823,5 @@ window.CadminSubscriptionDetail = (function () {
         });
     }
 
-    return { render: render };
+    return { render: render, reveal: reveal };
 }());

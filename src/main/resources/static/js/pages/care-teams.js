@@ -42,13 +42,16 @@ function renderCareTeamList(initialQuery) {
         '</div>' +
         '<div id="care-team-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
-            '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
+            '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
                 '<h6 class="m-0">Care team search</h6>' +
+                '<div class="d-flex flex-wrap align-items-center gap-2">' +
                 '<form class="d-flex" id="care-team-search-form">' +
                     '<input class="form-control form-control-sm me-2" id="care-team-query" placeholder="Name" value="' +
                         CadminApi.escapeHtml(initialQuery) + '">' +
                     '<button class="btn btn-sm btn-primary" type="submit">Search</button>' +
                 '</form>' +
+                CadminDeletedList.controls() +
+                '</div>' +
             '</div>' +
             '<div class="card-body">' +
                 '<div class="table-responsive">' +
@@ -162,7 +165,7 @@ function renderCareTeamList(initialQuery) {
             path += "&name=" + encodeURIComponent(query);
         }
         const pageSize = CadminApi.listPageSize("care-teams");
-        CadminApi.fhir(CadminApi.pagedPath(path, listPage, pageSize)).done(function (bundle) {
+        CadminDeletedList.query({ type: "CareTeam", path: path, page: listPage, size: pageSize }).done(function (bundle) {
             const entries = bundleResources(bundle);
             CadminApi.renderPager("#care-team-pager", {
                 page: listPage,
@@ -174,7 +177,7 @@ function renderCareTeamList(initialQuery) {
                 onPage: function (nextPage) { load(query, nextPage); }
             });
             if (!entries.length) {
-                $("#care-team-rows").html('<tr><td colspan="5" class="text-muted">No care teams found. Create one or start HAPI FHIR.</td></tr>');
+                $("#care-team-rows").html(CadminDeletedList.emptyRow(5, "CareTeam", "No care teams found. Create one or start HAPI FHIR."));
                 return;
             }
             const rows = entries.map(function (team) {
@@ -245,6 +248,11 @@ function renderCareTeamList(initialQuery) {
     });
 
     $("#create-care-team-modal").on("show.bs.modal", loadCreateOptions);
+
+    CadminDeletedList.bind({
+        type: "CareTeam",
+        reload: function () { load($("#care-team-query").val(), 0); }
+    });
 
     load(initialQuery);
 }

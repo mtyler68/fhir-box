@@ -490,14 +490,13 @@ window.CadminValueSetDetail = (function () {
             });
         });
         $root.on("click.vsdetail", "#vsd-delete", function () {
-            if (!window.confirm("Delete this value set?")) {
-                return;
-            }
-            CadminApi.fhir("/ValueSet/" + encodeURIComponent(valueSet.id), "DELETE").done(function () {
-                alertMsg("success", "Value set deleted.");
-                window.location.hash = "#/value-sets";
-            }).fail(function (xhr) {
-                fail("Delete value set", xhr);
+            CadminApi.confirm("Delete this value set?").done(function () {
+                CadminApi.fhir("/ValueSet/" + encodeURIComponent(valueSet.id), "DELETE").done(function () {
+                    alertMsg("success", "Value set deleted.");
+                    window.location.hash = "#/value-sets";
+                }).fail(function (xhr) {
+                    fail("Delete value set", xhr);
+                });
             });
         });
         $root.on("click.vsdetail", "#vsd-add-include", function () {

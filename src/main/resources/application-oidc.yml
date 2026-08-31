@@ -3,6 +3,15 @@ cadmin:
     mode: oidc
     oidc:
       post-logout-redirect-uri: "{baseUrl}/login.html"
+  keycloak:
+    issuer-uri: ${CADMIN_OIDC_ISSUER:http://localhost:8180/realms/cadmin}
+    client-id: ${CADMIN_OIDC_CLIENT_ID:cadmin-gateway}
+    client-secret: ${CADMIN_OIDC_CLIENT_SECRET:cadmin-gateway-secret}
+
+server:
+  reactive:
+    session:
+      timeout: 12h
 
 spring:
   security:
@@ -39,6 +48,20 @@ spring:
               uri: ${cadmin.wiremock.uri}
               predicates:
                 - Path=/wiremock/**
+              filters:
+                - StripPrefix=1
+                - RemoveRequestHeader=Cookie
+            - id: core-admin-bridge
+              uri: ${cadmin.core-admin-bridge.uri}
+              predicates:
+                - Path=/core-admin-bridge/**
+              filters:
+                - StripPrefix=1
+                - RemoveRequestHeader=Cookie
+            - id: fhir-chief
+              uri: ${cadmin.fhir-chief.uri}
+              predicates:
+                - Path=/fhir-chief/**
               filters:
                 - StripPrefix=1
                 - RemoveRequestHeader=Cookie

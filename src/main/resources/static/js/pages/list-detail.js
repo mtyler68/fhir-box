@@ -15,7 +15,7 @@ window.CadminListDetail = (function () {
         "Flag", "Consent", "Encounter", "Observation", "Condition", "Procedure",
         "AllergyIntolerance", "MedicationRequest", "DiagnosticReport", "DocumentReference",
         "Endpoint", "Subscription", "SubscriptionTopic", "Questionnaire", "QuestionnaireResponse",
-        "List", "Group", "Appointment", "Task", "Coverage", "ServiceRequest",
+        "List", "Group", "Schedule", "Slot", "Appointment", "AppointmentResponse", "Task", "Coverage", "ServiceRequest",
         "ValueSet", "CodeSystem", "Library", "SearchParameter"
     ].map(function (type) {
         return { code: type, display: type };
@@ -550,17 +550,16 @@ window.CadminListDetail = (function () {
         });
 
         $root.on("click.listdetail", "#ld-delete", function () {
-            if (!window.confirm("Delete this list?")) {
-                return;
-            }
-            CadminApi.fhir("/List/" + encodeURIComponent(list.id), "DELETE").done(function () {
-                if (CadminTargetList.isTarget(list.id)) {
-                    CadminTargetList.clear();
-                }
-                CadminApi.showToast("success", "List deleted.");
-                window.location.hash = "#/lists";
-            }).fail(function (xhr) {
-                fail("Delete list", xhr);
+            CadminApi.confirm("Delete this list?").done(function () {
+                CadminApi.fhir("/List/" + encodeURIComponent(list.id), "DELETE").done(function () {
+                    if (CadminTargetList.isTarget(list.id)) {
+                        CadminTargetList.clear();
+                    }
+                    CadminApi.showToast("success", "List deleted.");
+                    window.location.hash = "#/lists";
+                }).fail(function (xhr) {
+                    fail("Delete list", xhr);
+                });
             });
         });
     }

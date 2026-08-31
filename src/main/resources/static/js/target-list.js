@@ -579,14 +579,13 @@ window.CadminTargetList = (function () {
         $doc.on("click.targetlist", "[data-ctl-hard]", function (event) {
             event.preventDefault();
             const index = Number($(this).attr("data-ctl-hard"));
-            if (!window.confirm("Remove this item from the target list?")) {
-                return;
-            }
-            mutate(function (list) {
-                list.entry = (list.entry || []).filter(function (_item, i) {
-                    return i !== index;
-                });
-            }, "Item removed.");
+            CadminApi.confirm("Remove this item from the target list?").done(function () {
+                mutate(function (list) {
+                    list.entry = (list.entry || []).filter(function (_item, i) {
+                        return i !== index;
+                    });
+                }, "Item removed.");
+            });
         });
         $doc.on("dragstart.targetlist", ".cadmin-target-list-entry", function (event) {
             if ($(event.target).closest("button, a").length) {

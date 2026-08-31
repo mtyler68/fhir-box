@@ -14,15 +14,32 @@ window.CadminWorkspace = (function ($) {
         "healthcare-services": { type: "HealthcareService", path: "/HealthcareService/", icon: "mdi:medical-bag",
             listLabel: "Healthcare services" },
         "pds-policies": { type: "Library", path: "/Library/", icon: "bi-journal-text", listLabel: "PDS Policies" },
+        "camel-routes": { type: "Library", path: "/Library/", icon: "hugeicons:camel", listLabel: "Camel Routes" },
         questionnaires: { type: "Questionnaire", path: "/Questionnaire/", icon: "bi-ui-checks", listLabel: "Questionnaires" },
+        "search-parameters": { type: "SearchParameter", path: "/SearchParameter/", icon: "bi-search",
+            listLabel: "Search parameters" },
         "code-systems": { type: "CodeSystem", path: "/CodeSystem/", icon: "bi-braces", listLabel: "Code systems" },
         "value-sets": { type: "ValueSet", path: "/ValueSet/", icon: "bi-tags", listLabel: "Value sets" },
         subscriptions: { type: "Subscription", path: "/Subscription/", icon: "bi-broadcast", listLabel: "Subscriptions" },
         "subscription-topics": { type: "SubscriptionTopic", path: "/SubscriptionTopic/", icon: "bi-bookmark-star", listLabel: "Subscription topics" },
         endpoints: { type: "Endpoint", path: "/Endpoint/", icon: "bi-hdd-network", listLabel: "Endpoints" },
-        consents: { type: "Consent", path: "/Consent/", icon: "bi-file-earmark-check", listLabel: "Consents" },
+        consents: { type: "Consent", path: "/Consent/", icon: "bi-shield-check", listLabel: "Consents" },
         "practitioner-roles": { type: "PractitionerRole", path: "/PractitionerRole/", icon: "bi-person-vcard",
-            listLabel: "Practitioner roles" }
+            listLabel: "Practitioner roles" },
+        "organization-affiliations": { type: "OrganizationAffiliation", path: "/OrganizationAffiliation/",
+            icon: "bi-buildings", listLabel: "Organization affiliations" },
+        schedules: { type: "Schedule", path: "/Schedule/", icon: "bi-calendar3", listLabel: "Schedules" },
+        slots: { type: "Slot", path: "/Slot/", icon: "bi-calendar2-week", listLabel: "Slots" },
+        appointments: { type: "Appointment", path: "/Appointment/", icon: "bi-calendar-check",
+            listLabel: "Appointments" },
+        "appointment-responses": { type: "AppointmentResponse", path: "/AppointmentResponse/",
+            icon: "bi-calendar2-check", listLabel: "Appointment responses" },
+        "plan-definitions": { type: "PlanDefinition", path: "/PlanDefinition/", icon: "bi-diagram-3",
+            listLabel: "Plan definitions" },
+        "activity-definitions": { type: "ActivityDefinition", path: "/ActivityDefinition/",
+            icon: "bi-lightning-charge", listLabel: "Activity definitions" },
+        "request-orchestrations": { type: "RequestOrchestration", path: "/RequestOrchestration/",
+            icon: "bi-kanban", listLabel: "Request orchestrations" }
     };
     const LIST_LABELS = {
         dashboard: "Dashboard",
@@ -34,6 +51,17 @@ window.CadminWorkspace = (function ($) {
         "search-parameters": "Search parameters",
         "code-systems": "Code systems",
         "value-sets": "Value sets",
+        "camel-routes": "Camel Routes",
+        "core-admin-bridge": "Core Admin Bridge",
+        schedules: "Schedules",
+        slots: "Slots",
+        appointments: "Appointments",
+        "appointment-responses": "Appointment responses",
+        "appointment-book": "Find and book",
+        "plan-definitions": "Plan definitions",
+        "activity-definitions": "Activity definitions",
+        "request-orchestrations": "Request orchestrations",
+        "plan-apply": "Apply plan",
         "wiremock-mappings": "WireMock mappings",
         "wiremock-requests": "WireMock requests",
         "wiremock-scenarios": "WireMock scenarios"
@@ -46,6 +74,7 @@ window.CadminWorkspace = (function ($) {
     const closedStack = [];
     let activeKey = "workspace";
     let paintedKey = "";
+    const parked = {};
     let workspaceHash = "#/dashboard";
     let workspaceLabel = "Dashboard";
     let workspaceTouched = false;
@@ -118,6 +147,18 @@ window.CadminWorkspace = (function ($) {
         return pinned.concat(rest);
     }
 
+    function appointmentSubject(resource) {
+        const participants = (resource && resource.participant) || [];
+        for (let i = 0; i < participants.length; i++) {
+            const actor = participants[i] && participants[i].actor;
+            const reference = actor && (actor.reference || "");
+            if (/^Patient\//.test(reference) || (actor && actor.display)) {
+                return (actor && actor.display) || reference.replace(/^[^/]+\//, "");
+            }
+        }
+        return "";
+    }
+
     function humanName(resource) {
         const name = resource && resource.name;
         const item = Array.isArray(name) ? name[0] : name;
@@ -134,6 +175,21 @@ window.CadminWorkspace = (function ($) {
     function titleOf(resource) {
         if (!resource) {
             return "Details";
+        }
+        if (resource.resourceType === "OrganizationAffiliation") {
+            const primary = (resource.organization && resource.organization.display) || "";
+            const other = (resource.participatingOrganization && resource.participatingOrganization.display) || "";
+            const code = resource.code;
+            const coding = (Array.isArray(code) ? code[0] : code) || {};
+            const first = (coding.coding && coding.coding[0]) || {};
+            const role = coding.text || first.display || first.code || "";
+            if (primary && other) {
+                return primary + " · " + other;
+            }
+            if (primary && role) {
+                return primary + " · " + role;
+            }
+            return primary || other || role || resource.id || "Organization affiliation";
         }
         if (resource.resourceType === "PractitionerRole") {
             const person = (resource.practitioner && resource.practitioner.display) || "";
@@ -155,6 +211,42 @@ window.CadminWorkspace = (function ($) {
                 return device + " · " + status;
             }
             return device || status || resource.id || "Device association";
+        }
+        if (resource.resourceType === "Appointment") {
+            const when = resource.start || "";
+            const subject = appointmentSubject(resource);
+            if (when && subject) {
+                return subject + " · " + when;
+            }
+            return subject || when || resource.description || resource.id || "Appointment";
+        }
+        if (resource.resourceType === "Schedule") {
+            const actors = (resource.actor || []).map(function (ref) {
+                return (ref && ref.display) || (ref && ref.reference) || "";
+            }).filter(Boolean);
+            return actors[0] || resource.comment || resource.id || "Schedule";
+        }
+        if (resource.resourceType === "Slot") {
+            return resource.start || resource.id || "Slot";
+        }
+        if (resource.resourceType === "RequestOrchestration") {
+            const plan = (resource.instantiatesCanonical || [])[0] || "";
+            return String(plan).split("/").pop() || resource.id || "Request orchestration";
+        }
+        if (resource.resourceType === "AppointmentResponse") {
+            const actor = (resource.actor && resource.actor.display)
+                || (resource.actor && resource.actor.reference)
+                || "";
+            return actor || resource.id || "Appointment response";
+        }
+        if (resource.resourceType === "Consent") {
+            const subjectRef = Array.isArray(resource.subject) ? resource.subject[0] : resource.subject;
+            const subject = (subjectRef && (subjectRef.display
+                || (subjectRef.reference || "").replace(/^[^/]+\//, ""))) || "—";
+            const category = Array.isArray(resource.category) ? resource.category[0] : resource.category;
+            const coding = (category && category.coding && category.coding[0]) || category || {};
+            const categoryLabel = (category && category.text) || coding.display || coding.code || "—";
+            return subject + " · " + categoryLabel;
         }
         const named = humanName(resource);
         if (named) {
@@ -204,6 +296,7 @@ window.CadminWorkspace = (function ($) {
         locations: true,
         "healthcare-services": true,
         "pds-policies": true,
+        "camel-routes": true,
         "search-parameters": true,
         questionnaires: true,
         "code-systems": true,
@@ -214,6 +307,17 @@ window.CadminWorkspace = (function ($) {
         endpoints: true,
         consents: true,
         "practitioner-roles": true,
+        "organization-affiliations": true,
+        "core-admin-bridge": true,
+        schedules: true,
+        slots: true,
+        appointments: true,
+        "appointment-responses": true,
+        "appointment-book": true,
+        "plan-definitions": true,
+        "activity-definitions": true,
+        "request-orchestrations": true,
+        "plan-apply": true,
         "wiremock-mappings": true,
         "wiremock-requests": true,
         "wiremock-scenarios": true
@@ -249,7 +353,7 @@ window.CadminWorkspace = (function ($) {
             icon: spec.icon,
             title: snap.title || spec.type,
             load: function () {
-                return CadminApi.fhir(spec.path + encodeURIComponent(id));
+                return CadminApi.readByIdOrUrl(spec.type, id);
             },
             render: null,
             resource: null,
@@ -1040,13 +1144,12 @@ window.CadminWorkspace = (function ($) {
         window.scrollTo(0, 0);
     }
 
-    function teardownDetail() {
-        const pane = detailPane();
-        if (!pane) {
-            return;
-        }
+    function disposeLiveWidgets() {
         if (window.CadminResourceGraph && typeof CadminResourceGraph.destroy === "function") {
             CadminResourceGraph.destroy();
+        }
+        if (window.CadminCamelRouteGraph && typeof CadminCamelRouteGraph.destroy === "function") {
+            CadminCamelRouteGraph.destroy();
         }
         if (window.CadminResourceHistory && typeof CadminResourceHistory.reset === "function") {
             CadminResourceHistory.reset();
@@ -1054,10 +1157,132 @@ window.CadminWorkspace = (function ($) {
         if (window.CadminLocationDetail && typeof CadminLocationDetail.destroyMap === "function") {
             CadminLocationDetail.destroyMap();
         }
-        CadminApi.destroySelects(pane);
-        $(pane).off();
-        $(pane).empty();
+    }
+
+    function isLoadingStub(node) {
+        if (!node) {
+            return true;
+        }
+        const kids = [];
+        const list = node.childNodes || [];
+        let i;
+        for (i = 0; i < list.length; i += 1) {
+            const child = list[i];
+            if (child.nodeType === 3 && !String(child.textContent || "").trim()) {
+                continue;
+            }
+            kids.push(child);
+        }
+        if (!kids.length) {
+            return true;
+        }
+        if (kids.length === 1 && kids[0].nodeType === 1) {
+            return /^\s*Loading…\s*$/.test(kids[0].textContent || "");
+        }
+        return false;
+    }
+
+    function dropParked(key) {
+        const frag = parked[key];
+        if (!frag) {
+            return;
+        }
+        $(frag).find(".CodeMirror").each(function () {
+            if (this.CodeMirror) {
+                this.CodeMirror.toTextArea();
+            }
+        });
+        delete parked[key];
+    }
+
+    function parkActive() {
+        if (!paintedKey) {
+            return;
+        }
+        const pane = detailPane();
+        if (!pane || isLoadingStub(pane)) {
+            paintedKey = "";
+            return;
+        }
+        const frag = document.createDocumentFragment();
+        while (pane.firstChild) {
+            frag.appendChild(pane.firstChild);
+        }
+        parked[paintedKey] = frag;
         paintedKey = "";
+    }
+
+    function restoreParked(key) {
+        const pane = detailPane();
+        const frag = parked[key];
+        if (!pane || !frag) {
+            return false;
+        }
+        if (paintedKey && paintedKey !== key) {
+            parkActive();
+        }
+        pane.appendChild(frag);
+        delete parked[key];
+        paintedKey = key;
+        return true;
+    }
+
+    function revealDetail(key) {
+        const pane = detailPane();
+        if (!pane) {
+            return;
+        }
+        $(pane).find(".CodeMirror").each(function () {
+            if (this.CodeMirror) {
+                this.CodeMirror.refresh();
+            }
+        });
+        const tab = tabs[key];
+        if (window.CadminCamelRouteDetail && typeof CadminCamelRouteDetail.reveal === "function"
+                && pane.querySelector("#crd-yaml")) {
+            CadminCamelRouteDetail.reveal(tab && tab.resource);
+        }
+        if (window.CadminSubscriptionDetail && typeof CadminSubscriptionDetail.reveal === "function"
+                && pane.querySelector("#sd-title")) {
+            CadminSubscriptionDetail.reveal(tab && tab.resource);
+        }
+        if (tab && tab.resource) {
+            if (window.CadminResourceSource && typeof CadminResourceSource.mount === "function") {
+                CadminResourceSource.mount(function () { return tab.resource; });
+            }
+            if (window.CadminResourceGraph && typeof CadminResourceGraph.mount === "function") {
+                CadminResourceGraph.mount(tab.resource);
+            }
+            if (window.CadminResourceHistory && typeof CadminResourceHistory.mount === "function") {
+                CadminResourceHistory.mount(tab.resource);
+            }
+        }
+        if (window.CadminLocationDetail && typeof CadminLocationDetail.resizeMap === "function") {
+            CadminLocationDetail.resizeMap();
+        }
+        if (typeof CadminResourceGraph !== "undefined" && typeof CadminResourceGraph.resize === "function") {
+            window.setTimeout(CadminResourceGraph.resize, 50);
+        }
+        if (window.CadminCamelRouteGraph && typeof CadminCamelRouteGraph.resize === "function") {
+            window.setTimeout(CadminCamelRouteGraph.resize, 50);
+        }
+    }
+
+    function teardownDetail(key) {
+        const target = key || paintedKey;
+        dropParked(target);
+        const pane = detailPane();
+        if (paintedKey === target && pane) {
+            disposeLiveWidgets();
+            CadminApi.destroySelects(pane);
+            $(pane).off();
+            $(pane).empty();
+            paintedKey = "";
+            return;
+        }
+        if (paintedKey === target) {
+            paintedKey = "";
+        }
     }
 
     function paint(key) {
@@ -1066,11 +1291,21 @@ window.CadminWorkspace = (function ($) {
         if (!tab || !pane || !tab.resource || typeof tab.render !== "function") {
             return;
         }
-        teardownDetail();
+        if (paintedKey && paintedKey !== key) {
+            parkActive();
+        } else if (paintedKey === key) {
+            disposeLiveWidgets();
+            CadminApi.destroySelects(pane);
+            $(pane).empty();
+            paintedKey = "";
+        }
         tab.render(tab.resource, $(pane));
         paintedKey = key;
         if (typeof CadminResourceGraph !== "undefined" && typeof CadminResourceGraph.resize === "function") {
             window.setTimeout(CadminResourceGraph.resize, 50);
+        }
+        if (window.CadminCamelRouteGraph && typeof CadminCamelRouteGraph.resize === "function") {
+            window.setTimeout(CadminCamelRouteGraph.resize, 50);
         }
     }
 
@@ -1083,6 +1318,7 @@ window.CadminWorkspace = (function ($) {
             tab.resource = resource;
             tab.title = titleOf(resource) || tab.title;
             tab.dirty = false;
+            dropParked(key);
             renderTabStrip();
             if (activeKey === key) {
                 paint(key);
@@ -1098,12 +1334,18 @@ window.CadminWorkspace = (function ($) {
         }
         activeKey = key;
         if (key !== "workspace" && typeof tabs[key].render === "function") {
-            if (tabs[key].dirty) {
+            if (parked[key] && !isLoadingStub(parked[key])) {
+                restoreParked(key);
+                revealDetail(key);
+            } else if (parked[key] && tabs[key].resource && typeof tabs[key].render === "function") {
+                dropParked(key);
+                paint(key);
+            } else if (tabs[key].dirty && paintedKey !== key) {
                 reload(key);
             } else if (paintedKey !== key) {
                 paint(key);
-            } else if (window.CadminResourceGraph && typeof CadminResourceGraph.resize === "function") {
-                window.setTimeout(CadminResourceGraph.resize, 50);
+            } else {
+                revealDetail(key);
             }
         }
         showPanes();
@@ -1174,8 +1416,8 @@ window.CadminWorkspace = (function ($) {
             rememberClosed(tab);
         }
         const wasActive = activeKey === key;
-        if (paintedKey === key) {
-            teardownDetail();
+        if (paintedKey === key || parked[key]) {
+            teardownDetail(key);
         }
         delete tabs[key];
         const pos = order.indexOf(key);
@@ -1331,7 +1573,7 @@ window.CadminWorkspace = (function ($) {
             icon: spec.icon,
             title: spec.type,
             load: function () {
-                return CadminApi.fhir(spec.path + encodeURIComponent(id));
+                return CadminApi.readByIdOrUrl(spec.type, id);
             },
             render: renderFn,
             resource: null,
@@ -1342,6 +1584,9 @@ window.CadminWorkspace = (function ($) {
             order.push(key);
         }
         applyPendingReopen(key);
+        if (paintedKey && paintedKey !== key) {
+            parkActive();
+        }
         activeKey = key;
         showPanes();
         renderTabStrip();
@@ -1353,9 +1598,17 @@ window.CadminWorkspace = (function ($) {
             if (!tabs[key]) {
                 return;
             }
+            if (resource && resource.id && resource.id !== id) {
+                close(key, { forget: true });
+                openRoute(routeName, resource.id, renderFn, onMissing);
+                return;
+            }
             tabs[key].resource = resource;
             tabs[key].title = titleOf(resource);
             renderTabStrip();
+            if (parked[key] && isLoadingStub(parked[key])) {
+                dropParked(key);
+            }
             if (activeKey === key) {
                 paint(key);
             }
@@ -1423,9 +1676,6 @@ window.CadminWorkspace = (function ($) {
         }
         applyPendingReopen(key);
         activate(key);
-        if (tabs[key].dirty) {
-            reload(key);
-        }
         return true;
     }
 

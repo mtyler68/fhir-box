@@ -301,6 +301,213 @@ window.CadminResourceHistory = (function () {
         return JSON.stringify(value, null, 2);
     }
 
+    function pathSegments(path) {
+        const parts = [];
+        String(path || "").replace(/\[(\d+)\]|([^.\[\]]+)/g, function (_match, idx, key) {
+            if (idx != null) {
+                parts.push(Number(idx));
+            } else if (key) {
+                parts.push(key);
+            }
+            return "";
+        });
+        return parts;
+    }
+
+    function valueAt(root, path) {
+        if (!path || path === "(root)") {
+            return root;
+        }
+        const parts = pathSegments(path);
+        let current = root;
+        let i;
+        for (i = 0; i < parts.length; i += 1) {
+            if (current == null) {
+                return undefined;
+            }
+            current = current[parts[i]];
+        }
+        return current;
+    }
+
+    function parentPath(path) {
+        const text = String(path || "");
+        const trimmed = text.replace(/(\.[^.\[\]]+|\[\d+\])$/, "");
+        return trimmed === text ? "" : trimmed;
+    }
+
+    function lastPathKey(path) {
+        const parts = pathSegments(path);
+        return parts.length ? String(parts[parts.length - 1]) : "";
+    }
+
+    function isBase64FieldName(name) {
+        return name === "data" || name === "base64Body";
+    }
+
+    function compactBase64(value) {
+        return String(value || "").replace(/\s+/g, "");
+    }
+
+    function looksLikeBase64(value) {
+        const compact = compactBase64(value);
+        return compact.length >= 8 && compact.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(compact);
+    }
+
+    function attachmentFromValue(value) {
+        if (value && typeof value === "object" && !Array.isArray(value) && typeof value.data === "string") {
+            return value;
+        }
+        return null;
+    }
+
+    function isBase64Change(path, value) {
+        if (attachmentFromValue(value)) {
+            return looksLikeBase64(value.data) || !!value.contentType;
+        }
+        return typeof value === "string" && !!value && isBase64FieldName(lastPathKey(path));
+    }
+
+    function decodeBase64Text(value) {
+        const compact = compactBase64(value);
+        if (!compact) {
+            return "";
+        }
+        try {
+            return decodeURIComponent(escape(atob(compact)));
+        } catch (err) {
+            try {
+                return atob(compact);
+            } catch (ignored) {
+                return "";
+            }
+        }
+    }
+
+    function isPrintableText(value) {
+        const text = String(value || "");
+        if (!text) {
+            return false;
+        }
+        let bad = 0;
+        const limit = Math.min(text.length, 400);
+        let i;
+        for (i = 0; i < limit; i += 1) {
+            const code = text.charCodeAt(i);
+            if (code === 0 || (code < 9) || (code > 13 && code < 32)) {
+                bad += 1;
+            }
+        }
+        return bad < 3;
+    }
+
+    function normalizeContentType(value) {
+        return String(value || "").split(";")[0].trim().toLowerCase();
+    }
+
+    function contentTypeFor(resource, path, value) {
+        const attachment = attachmentFromValue(value);
+        if (attachment && attachment.contentType) {
+            return String(attachment.contentType);
+        }
+        const parent = valueAt(resource, parentPath(path));
+        if (parent && typeof parent === "object" && parent.contentType) {
+            return String(parent.contentType);
+        }
+        if (resource && resource.contentType && lastPathKey(path) === "data") {
+            return String(resource.contentType);
+        }
+        return "";
+    }
+
+    function highlightMode(contentType) {
+        const type = normalizeContentType(contentType);
+        if (!type) {
+            return "";
+        }
+        if (type === "application/json" || type === "text/json" || type.indexOf("+json") >= 0) {
+            return "json";
+        }
+        if (type === "text/yaml" || type === "text/x-yaml" || type === "application/x-yaml"
+                || type.indexOf("yaml") >= 0) {
+            return "yaml";
+        }
+        if (type === "application/xml" || type === "text/xml" || type === "text/html"
+                || type === "application/xhtml+xml" || type.indexOf("+xml") >= 0) {
+            return "xml";
+        }
+        if (type === "text/javascript" || type === "application/javascript"
+                || type === "application/ecmascript") {
+            return "javascript";
+        }
+        return "";
+    }
+
+    function highlightThemeClass() {
+        return document.documentElement.getAttribute("data-bs-theme") === "dark"
+            ? "cm-s-material-darker"
+            : "cm-s-default";
+    }
+
+    function modeSpec(name) {
+        if (name === "json") {
+            return { name: "javascript", json: true };
+        }
+        return name;
+    }
+
+    function highlightDiffBlocks(root) {
+        if (typeof CodeMirror === "undefined" || typeof CodeMirror.runMode !== "function") {
+            return;
+        }
+        $(root || document).find("[data-cm-mode]").each(function () {
+            const el = this;
+            const mode = modeSpec(el.getAttribute("data-cm-mode") || "");
+            const text = el.textContent || "";
+            if (!mode || !text) {
+                return;
+            }
+            el.textContent = "";
+            try {
+                CodeMirror.runMode(text, mode, el);
+            } catch (err) {
+                el.textContent = text;
+            }
+        });
+    }
+
+    function renderPlainDiff(kind, value) {
+        return '<pre class="resource-diff-' + kind + ' mb-0">' + esc(formatDiffValue(value)) + "</pre>";
+    }
+
+    function renderBase64Diff(kind, path, value, resource) {
+        const attachment = attachmentFromValue(value);
+        const encoded = attachment ? attachment.data : value;
+        const contentType = contentTypeFor(resource, path, value);
+        const decoded = decodeBase64Text(encoded);
+        const mode = highlightMode(contentType);
+        const theme = highlightThemeClass();
+        let html = '<div class="resource-diff-side resource-diff-' + kind + '">';
+        html += '<div class="resource-diff-pane-label">Base64</div>';
+        html += '<pre class="resource-diff-base64 mb-0">' + esc(formatDiffValue(encoded)) + "</pre>";
+        html += '<div class="resource-diff-pane-label">Decoded';
+        if (contentType) {
+            html += ' · <code>' + esc(contentType) + "</code>";
+        }
+        html += "</div>";
+        if (decoded && isPrintableText(decoded)) {
+            html += '<pre class="resource-diff-decoded mb-0 ' + theme + '"' +
+                (mode ? ' data-cm-mode="' + esc(mode) + '"' : "") + ">" +
+                esc(decoded) + "</pre>";
+        } else if (decoded) {
+            html += '<div class="small text-muted">Decoded bytes are not printable text.</div>';
+        } else {
+            html += '<div class="small text-muted">Unable to decode this value as UTF-8 text.</div>';
+        }
+        html += "</div>";
+        return html;
+    }
+
     function collectDiffs(before, after, path, out) {
         if (SKIP_DIFF_PATHS[path]) {
             return;
@@ -351,15 +558,22 @@ window.CadminResourceHistory = (function () {
         return { label: "Changed", badge: "text-bg-warning" };
     }
 
-    function renderDiffItem(item) {
+    function renderDiffValue(kind, path, value, resource) {
+        if (isBase64Change(path, value)) {
+            return renderBase64Diff(kind, path, value, resource);
+        }
+        return renderPlainDiff(kind, value);
+    }
+
+    function renderDiffItem(item, selected, current) {
         const meta = diffKindMeta(item.kind);
         const path = item.path || "(root)";
         let body = "";
         if (item.kind === "removed" || item.kind === "changed") {
-            body += '<pre class="resource-diff-before mb-0">' + esc(formatDiffValue(item.before)) + "</pre>";
+            body += renderDiffValue("before", path, item.before, selected);
         }
         if (item.kind === "added" || item.kind === "changed") {
-            body += '<pre class="resource-diff-after mb-0">' + esc(formatDiffValue(item.after)) + "</pre>";
+            body += renderDiffValue("after", path, item.after, current);
         }
         return '<div class="resource-diff-item">' +
             '<div class="d-flex align-items-center gap-2 mb-2">' +
@@ -376,7 +590,7 @@ window.CadminResourceHistory = (function () {
         $("body").append(
             '<div class="modal fade" id="' + DIFF_MODAL_ID + '" tabindex="-1" aria-labelledby="' +
                 DIFF_MODAL_ID + '-title">' +
-                '<div class="modal-dialog modal-lg modal-dialog-scrollable">' +
+                '<div class="modal-dialog modal-xl modal-dialog-scrollable">' +
                     '<div class="modal-content">' +
                         '<div class="modal-header">' +
                             '<h5 class="modal-title" id="' + DIFF_MODAL_ID + '-title">Diff</h5>' +
@@ -431,9 +645,12 @@ window.CadminResourceHistory = (function () {
                     '<span class="resource-diff-swatch resource-diff-swatch-after ms-3"></span>Current' +
                 "</div>" +
                 '<div class="resource-diff-list">' +
-                    changes.map(renderDiffItem).join("") +
+                    changes.map(function (item) {
+                        return renderDiffItem(item, selected, current);
+                    }).join("") +
                 "</div>"
             );
+            highlightDiffBlocks("#" + DIFF_MODAL_ID + "-body");
         }
         bootstrap.Modal.getOrCreateInstance(document.getElementById(DIFF_MODAL_ID)).show();
     }

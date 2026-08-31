@@ -44,13 +44,16 @@ function renderSubscriptionTopicList(initialQuery) {
         "</div>" +
         '<div id="topic-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
-            '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
+            '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
                 '<h6 class="m-0">Topic search</h6>' +
+                '<div class="d-flex flex-wrap align-items-center gap-2">' +
                 '<form class="d-flex" id="topic-search-form">' +
                     '<input class="form-control form-control-sm me-2" id="topic-query" placeholder="Title or URL" value="' +
                         CadminApi.escapeHtml(initialQuery) + '">' +
                     '<button class="btn btn-sm btn-primary" type="submit">Search</button>' +
                 "</form>" +
+                CadminDeletedList.controls() +
+                "</div>" +
             "</div>" +
             '<div class="card-body">' +
                 '<div class="table-responsive">' +
@@ -216,7 +219,7 @@ function renderSubscriptionTopicList(initialQuery) {
             path += (query.indexOf("://") >= 0 ? "&url=" : "&title=") + encodeURIComponent(query);
         }
         const pageSize = CadminApi.listPageSize("subscription-topics");
-        CadminApi.fhir(CadminApi.pagedPath(path, listPage, pageSize)).done(function (bundle) {
+        CadminDeletedList.query({ type: "SubscriptionTopic", path: path, page: listPage, size: pageSize }).done(function (bundle) {
             const entries = CadminApi.bundleResources(bundle, "SubscriptionTopic");
             CadminApi.renderPager("#topic-pager", {
                 page: listPage,
@@ -228,7 +231,7 @@ function renderSubscriptionTopicList(initialQuery) {
                 onPage: function (nextPage) { load(query, nextPage); }
             });
             if (!entries.length) {
-                $("#topic-rows").html('<tr><td colspan="7" class="text-muted">No subscription topics found. Create one or start HAPI FHIR.</td></tr>');
+                $("#topic-rows").html(CadminDeletedList.emptyRow(7, "SubscriptionTopic", "No subscription topics found. Create one or start HAPI FHIR."));
                 return;
             }
             const rows = entries.map(function (topic) {
@@ -374,6 +377,11 @@ function renderSubscriptionTopicList(initialQuery) {
         inputClass: "topic-interaction",
         selected: ["create", "update", "delete"],
         onConcepts: function (concepts) { interactionOptions = concepts; }
+    });
+
+    CadminDeletedList.bind({
+        type: "SubscriptionTopic",
+        reload: function () { load($("#topic-query").val(), 0); }
     });
 
     load(initialQuery);

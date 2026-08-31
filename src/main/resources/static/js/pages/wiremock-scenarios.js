@@ -110,14 +110,13 @@ CadminApp.register("wiremock-scenarios", function () {
     });
 
     $root.on("click", "#wm-scen-reset", function () {
-        if (!window.confirm("Reset every scenario to its starting state?")) {
-            return;
-        }
-        CadminApi.wiremock("/__admin/scenarios/reset", "PUT").done(function () {
-            CadminApi.showToast("success", "Scenarios reset.");
-            load();
-        }).fail(function (xhr) {
-            CadminApi.showToast("danger", wm.fail("Reset scenarios", xhr));
+        CadminApi.confirm("Reset every scenario to its starting state?").done(function () {
+            CadminApi.wiremock("/__admin/scenarios/reset", "PUT").done(function () {
+                CadminApi.showToast("success", "Scenarios reset.");
+                load();
+            }).fail(function (xhr) {
+                CadminApi.showToast("danger", wm.fail("Reset scenarios", xhr));
+            });
         });
     });
 

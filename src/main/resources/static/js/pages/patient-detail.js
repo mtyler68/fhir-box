@@ -109,6 +109,12 @@ window.CadminPatientDetail = (function () {
             system: "http://terminology.hl7.org/CodeSystem/flag-category" },
         { code: "safety", display: "Safety", system: "http://terminology.hl7.org/CodeSystem/flag-category" }
     ];
+    const conditionClinical = CadminApi.valueSetFallbacks.conditionClinical;
+    const conditionVerStatus = CadminApi.valueSetFallbacks.conditionVerStatus;
+    const conditionCategory = CadminApi.valueSetFallbacks.conditionCategory;
+    const conditionSeverity = CadminApi.valueSetFallbacks.conditionSeverity;
+    const conditionCodes = CadminApi.valueSetFallbacks.conditionCode;
+    const CONDITION_CODE_SYSTEM = "http://snomed.info/sct";
     const FLAG_CODE_SYSTEM = "https://cadmin.io/fhir/CodeSystem/flag-code";
     let flagCodes = [
         { code: "fall-risk", display: "Fall risk", system: FLAG_CODE_SYSTEM },
@@ -120,6 +126,7 @@ window.CadminPatientDetail = (function () {
 
     let patient = null;
     let careTeams = [];
+    let editingCondition = null;
 
     function esc(value) {
         return CadminApi.escapeHtml(value);
@@ -136,6 +143,54 @@ window.CadminPatientDetail = (function () {
         }
         const coding = (item.coding && item.coding[0]) || {};
         return item.text || coding.display || coding.code || "—";
+    }
+
+    function firstCoding(cc) {
+        const item = Array.isArray(cc) ? cc[0] : cc;
+        return (item && item.coding && item.coding[0]) || {};
+    }
+
+    function dateOnly(value) {
+        return value ? String(value).slice(0, 10) : "";
+    }
+
+    function conditionOnset(condition) {
+        if (!condition) {
+            return "";
+        }
+        return dateOnly(condition.onsetDateTime || condition.onsetDate
+            || (condition.onsetPeriod && condition.onsetPeriod.start));
+    }
+
+    function conditionAbatement(condition) {
+        if (!condition) {
+            return "";
+        }
+        return dateOnly(condition.abatementDateTime || condition.abatementDate
+            || (condition.abatementPeriod && condition.abatementPeriod.end));
+    }
+
+    function clinicalStatusBadge(cc) {
+        const code = CadminApi.conceptCode(cc);
+        const kind = code === "active" || code === "recurrence" || code === "relapse" ? "warning"
+            : code === "resolved" || code === "remission" ? "success"
+            : "secondary";
+        return '<span class="badge text-bg-' + kind + '">' + esc(conceptLabel(cc)) + "</span>";
+    }
+
+    function codeableFromSelect(selector, fallbackSystem) {
+        const coding = CadminApi.selectCoding(selector, fallbackSystem);
+        if (!coding || !coding.code) {
+            return null;
+        }
+        const item = { coding: [{ code: coding.code, display: coding.display }] };
+        if (coding.system) {
+            item.coding[0].system = coding.system;
+        }
+        if (coding.display) {
+            item.text = coding.display;
+        }
+        return item;
     }
 
     function refLabel(ref) {
@@ -492,6 +547,8 @@ window.CadminPatientDetail = (function () {
                             '<div class="text-center mb-3" id="pd-flag-badge"></div>' +
                             '<ul class="list-group list-group-unbordered mb-3">' +
                                 '<li class="list-group-item">' +
+                                    "<b>Conditions</b> <span class=\"float-end\" id=\"pd-stat-conditions\">0</span></li>" +
+                                '<li class="list-group-item">' +
                                     "<b>Flags</b> <span class=\"float-end\" id=\"pd-stat-flags\">0</span></li>" +
                                 '<li class="list-group-item">' +
                                     "<b>Devices</b> <span class=\"float-end\" id=\"pd-stat-devices\">0</span></li>" +
@@ -539,10 +596,13 @@ window.CadminPatientDetail = (function () {
                         '<div class="card-body">' +
                             '<div class="tab-content">' +
                                 tabPane("pd-tab-clinical",
+                                    card("Conditions", "pd-cond-rows",
+                                        ["Condition", "Status", "Verification", "Onset", ""], "#pd-cond-modal", "Add") +
                                     card("Flags", "pd-flag-rows",
                                         ["Status", "Category", "Code", "Period", ""], "#pd-flag-modal", "Add") +
                                     card("Devices", "pd-device-rows",
-                                        ["Device", "Type", "Status", ""], "#pd-device-modal", "Add"),
+                                        ["Device", "Type", "Status", ""], "#pd-device-modal", "Add") +
+                                    (window.CadminScheduling ? CadminScheduling.relatedCard("pd-appt-rows") : ""),
                                     true) +
                                 tabPane("pd-tab-details",
                                     editCard("Basic details", "pd-basic-details", "#pd-basic-modal") +
@@ -633,6 +693,18 @@ window.CadminPatientDetail = (function () {
                     field("Manufacturer", '<input class="form-control" id="pd-dev-mfg">') +
                 "</div>",
                 "pd-device-form") +
+            modal("pd-cond-modal", "Add condition",
+                field("Condition", '<select class="form-select" id="pd-cond-code" required></select>') +
+                field("Clinical status", '<select class="form-select" id="pd-cond-clinical"></select>') +
+                field("Verification", '<select class="form-select" id="pd-cond-verification"></select>') +
+                field("Category", '<select class="form-select" id="pd-cond-category"></select>') +
+                field("Severity", '<select class="form-select" id="pd-cond-severity"></select>') +
+                '<div class="row"><div class="col-md-6 mb-3"><label class="form-label">Onset</label>' +
+                    '<input type="date" class="form-control" id="pd-cond-onset"></div>' +
+                    '<div class="col-md-6 mb-3"><label class="form-label">Abatement</label>' +
+                    '<input type="date" class="form-control" id="pd-cond-abatement"></div></div>' +
+                field("Note", '<input class="form-control" id="pd-cond-note">'),
+                "pd-cond-form") +
             modal("pd-flag-modal", "Create flag",
                 field("Status", '<select class="form-select" id="pd-flag-status"></select>') +
                 field("Category", '<select class="form-select" id="pd-flag-category"></select>') +
@@ -697,6 +769,10 @@ window.CadminPatientDetail = (function () {
         renderLanguages();
         loadDevices();
         loadFlags();
+        loadConditions();
+        if (window.CadminScheduling) {
+            CadminScheduling.loadRelated("pd-appt-rows", "patient=" + encodeURIComponent(patient.id));
+        }
         bindForms();
         if (admin) {
             loadCareTeams();
@@ -951,6 +1027,136 @@ window.CadminPatientDetail = (function () {
         );
     }
 
+    function loadConditions() {
+        CadminApi.fhir("/Condition?patient=" + encodeURIComponent(patient.id) + "&_sort=-_lastUpdated&_count=50")
+            .done(function (bundle) {
+                const entries = bundleResources(bundle, "Condition");
+                const active = entries.filter(function (item) {
+                    const status = CadminApi.conceptCode(item.clinicalStatus);
+                    return status === "active" || status === "recurrence" || status === "relapse";
+                }).length;
+                setStat("conditions", active);
+                if (!entries.length) {
+                    $("#pd-cond-rows").html(emptyRow(5, "No conditions."));
+                    return;
+                }
+                $("#pd-cond-rows").html(entries.map(function (condition) {
+                    return "<tr><td>" + esc(conceptLabel(condition.code)) + "</td>" +
+                        "<td>" + clinicalStatusBadge(condition.clinicalStatus) + "</td>" +
+                        "<td>" + esc(conceptLabel(condition.verificationStatus)) + "</td>" +
+                        "<td>" + esc(conditionOnset(condition) || "—") + "</td>" +
+                        '<td class="text-end">' +
+                            '<button class="btn btn-sm btn-outline-primary me-1" type="button" data-edit-condition="' +
+                                esc(condition.id) + '" title="Edit" aria-label="Edit"><i class="bi bi-pencil"></i></button>' +
+                            '<button class="btn btn-sm btn-outline-danger" type="button" data-delete-condition="' +
+                                esc(condition.id) + '" title="Delete" aria-label="Delete"><i class="bi bi-trash"></i></button>' +
+                        "</td></tr>";
+                }).join(""));
+            }).fail(function (xhr) {
+                setStat("conditions", 0);
+                $("#pd-cond-rows").html(emptyRow(5, "Unable to load conditions."));
+                fail("Load conditions", xhr);
+            });
+    }
+
+    function populateConditionForm() {
+        const condition = editingCondition;
+        const codeCoding = firstCoding(condition && condition.code);
+        $("#pd-cond-modal .modal-title").text(condition ? "Edit condition" : "Add condition");
+        CadminApi.bindConceptSelect("#pd-cond-code", CadminApi.valueSets.conditionCode, {
+            placeholder: "Search conditions…",
+            fallback: conditionCodes,
+            selected: {
+                code: codeCoding.code || "",
+                display: codeCoding.display || conceptLabel(condition && condition.code),
+                system: codeCoding.system || CONDITION_CODE_SYSTEM
+            }
+        });
+        CadminApi.fillValueSetSelect("#pd-cond-clinical", CadminApi.valueSets.conditionClinical, {
+            fallback: conditionClinical,
+            selected: CadminApi.conceptCode(condition && condition.clinicalStatus) || "active"
+        });
+        CadminApi.fillValueSetSelect("#pd-cond-verification", CadminApi.valueSets.conditionVerStatus, {
+            fallback: conditionVerStatus,
+            selected: CadminApi.conceptCode(condition && condition.verificationStatus) || "confirmed"
+        });
+        CadminApi.fillValueSetSelect("#pd-cond-category", CadminApi.valueSets.conditionCategory, {
+            fallback: conditionCategory,
+            prepend: [{ code: "", display: "Unspecified" }],
+            selected: CadminApi.conceptCode(condition && condition.category) || "problem-list-item"
+        });
+        CadminApi.fillValueSetSelect("#pd-cond-severity", CadminApi.valueSets.conditionSeverity, {
+            fallback: conditionSeverity,
+            prepend: [{ code: "", display: "Unspecified" }],
+            selected: CadminApi.conceptCode(condition && condition.severity) || ""
+        });
+        $("#pd-cond-onset").val(conditionOnset(condition));
+        $("#pd-cond-abatement").val(conditionAbatement(condition));
+        $("#pd-cond-note").val((condition && condition.note && condition.note[0] && condition.note[0].text) || "");
+    }
+
+    function applyConditionFields(resource) {
+        const code = codeableFromSelect("#pd-cond-code", CONDITION_CODE_SYSTEM);
+        if (!code) {
+            return null;
+        }
+        resource.subject = {
+            reference: "Patient/" + patient.id,
+            display: personName(patient)
+        };
+        resource.code = code;
+        const clinical = codeableFromSelect("#pd-cond-clinical",
+            "http://terminology.hl7.org/CodeSystem/condition-clinical");
+        if (clinical) {
+            resource.clinicalStatus = clinical;
+        } else {
+            delete resource.clinicalStatus;
+        }
+        const verification = codeableFromSelect("#pd-cond-verification",
+            "http://terminology.hl7.org/CodeSystem/condition-ver-status");
+        if (verification) {
+            resource.verificationStatus = verification;
+        } else {
+            delete resource.verificationStatus;
+        }
+        const category = codeableFromSelect("#pd-cond-category",
+            "http://terminology.hl7.org/CodeSystem/condition-category");
+        if (category) {
+            resource.category = [category];
+        } else {
+            delete resource.category;
+        }
+        const severity = codeableFromSelect("#pd-cond-severity", "http://snomed.info/sct");
+        if (severity) {
+            resource.severity = severity;
+        } else {
+            delete resource.severity;
+        }
+        const onset = $("#pd-cond-onset").val();
+        delete resource.onsetDateTime;
+        delete resource.onsetDate;
+        delete resource.onsetPeriod;
+        if (onset) {
+            resource.onsetDateTime = onset;
+        }
+        const abatement = $("#pd-cond-abatement").val();
+        delete resource.abatementDateTime;
+        delete resource.abatementDate;
+        delete resource.abatementPeriod;
+        delete resource.abatementString;
+        delete resource.abatementBoolean;
+        if (abatement) {
+            resource.abatementDateTime = abatement;
+        }
+        const note = $("#pd-cond-note").val().trim();
+        if (note) {
+            resource.note = [{ text: note }];
+        } else {
+            delete resource.note;
+        }
+        return resource;
+    }
+
     function loadFlags() {
         CadminApi.fhir("/Flag?patient=" + encodeURIComponent(patient.id) + "&_sort=-_lastUpdated&_count=50")
             .done(function (bundle) {
@@ -1101,6 +1307,24 @@ window.CadminPatientDetail = (function () {
             savePatient(function () { alertMsg("success", "Removed."); });
         });
 
+        $root.on("click.ptdetail", "[data-edit-condition]", function () {
+            const id = $(this).attr("data-edit-condition");
+            CadminApi.fhir("/Condition/" + encodeURIComponent(id)).done(function (condition) {
+                editingCondition = condition;
+                bootstrap.Modal.getOrCreateInstance(document.getElementById("pd-cond-modal")).show();
+            }).fail(function (xhr) { fail("Load condition", xhr); });
+        });
+
+        $root.on("click.ptdetail", "[data-delete-condition]", function () {
+            const id = $(this).attr("data-delete-condition");
+            CadminApi.confirm("Delete this condition?").done(function () {
+                CadminApi.fhir("/Condition/" + encodeURIComponent(id), "DELETE").done(function () {
+                    alertMsg("success", "Condition deleted.");
+                    loadConditions();
+                }).fail(function (xhr) { fail("Delete condition", xhr); });
+            });
+        });
+
         $root.on("click.ptdetail", "[data-inactivate-flag]", function () {
             const id = $(this).attr("data-inactivate-flag");
             CadminApi.fhir("/Flag/" + encodeURIComponent(id)).done(function (flag) {
@@ -1217,6 +1441,13 @@ window.CadminPatientDetail = (function () {
             $("#pd-pr-name").val(personName(patient) + " care team");
             $("#pd-pr-name-wrap").removeClass("d-none");
             $("#pd-pr-role").val("doctor");
+        });
+
+        $("#pd-cond-modal").on("show.bs.modal", function (event) {
+            if (event.relatedTarget) {
+                editingCondition = null;
+            }
+            populateConditionForm();
         });
 
         $("#pd-flag-modal").on("show.bs.modal", function () {
@@ -1522,6 +1753,31 @@ window.CadminPatientDetail = (function () {
                 hideModal("pd-practitioner-modal");
                 alertMsg("success", "Practitioner added.");
                 loadCareTeams();
+            });
+        });
+
+        $("#pd-cond-form").on("submit", function (event) {
+            event.preventDefault();
+            const resource = applyConditionFields(editingCondition
+                ? $.extend(true, {}, editingCondition)
+                : { resourceType: "Condition" });
+            if (!resource) {
+                alertMsg("danger", "Select a condition.");
+                return;
+            }
+            if (!editingCondition) {
+                resource.recordedDate = new Date().toISOString().slice(0, 10);
+            }
+            const request = editingCondition && editingCondition.id
+                ? CadminApi.fhir("/Condition/" + encodeURIComponent(editingCondition.id), "PUT", resource)
+                : CadminApi.fhir("/Condition", "POST", resource);
+            request.done(function () {
+                hideModal("pd-cond-modal");
+                alertMsg("success", editingCondition ? "Condition updated." : "Condition created.");
+                editingCondition = null;
+                loadConditions();
+            }).fail(function (xhr) {
+                fail(editingCondition ? "Update condition" : "Create condition", xhr);
             });
         });
 

@@ -16,6 +16,9 @@ hapi:
     server_id_strategy: UUID
     client_id_strategy: ANY
     allow_cascading_deletes: true
+    allow_multiple_delete: true
+    expunge_enabled: true
+    delete_expunge_enabled: true
     openapi_enabled: true
     subscription:
       resthook_enabled: true

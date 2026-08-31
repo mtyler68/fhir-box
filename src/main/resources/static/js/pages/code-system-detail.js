@@ -292,14 +292,13 @@ window.CadminCodeSystemDetail = (function () {
             });
         });
         $root.on("click.csdetail", "#csd-delete", function () {
-            if (!window.confirm("Delete this code system?")) {
-                return;
-            }
-            CadminApi.fhir("/CodeSystem/" + encodeURIComponent(codeSystem.id), "DELETE").done(function () {
-                alertMsg("success", "Code system deleted.");
-                window.location.hash = "#/code-systems";
-            }).fail(function (xhr) {
-                fail("Delete code system", xhr);
+            CadminApi.confirm("Delete this code system?").done(function () {
+                CadminApi.fhir("/CodeSystem/" + encodeURIComponent(codeSystem.id), "DELETE").done(function () {
+                    alertMsg("success", "Code system deleted.");
+                    window.location.hash = "#/code-systems";
+                }).fail(function (xhr) {
+                    fail("Delete code system", xhr);
+                });
             });
         });
         $root.on("click.csdetail", "#csd-add-concept", function () {

@@ -48,7 +48,18 @@ CadminApp.register("dashboard", function () {
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/subscriptions">Subscriptions</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/endpoints">Endpoints</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/practitioner-roles">Practitioner roles</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/organization-affiliations">Organization affiliations</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/healthcare-services">Healthcare services</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/pds-policies">PDS policies</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/camel-routes">Camel routes</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/core-admin-bridge">Core Admin Bridge</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/schedules">Schedules</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/appointments">Appointments</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/appointment-book">Find and book</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/plan-definitions">Plan definitions</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/request-orchestrations">Orchestrations</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/plan-apply">Apply plan</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/search-parameters">Search parameters</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/questionnaires">Questionnaires</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/code-systems">Code systems</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/value-sets">Value sets</a>' +
@@ -93,12 +104,21 @@ CadminApp.register("dashboard", function () {
         { type: "Location", label: "Locations", href: "#/locations", icon: "bi-geo-alt", border: "info", admin: true },
         { type: "CareTeam", label: "Care teams", href: "#/care-teams", icon: "bi-people-fill", border: "success", admin: true },
         { type: "PractitionerRole", label: "Practitioner roles", href: "#/practitioner-roles", icon: "bi-person-vcard", border: "info", admin: true },
+        { type: "OrganizationAffiliation", label: "Org affiliations", href: "#/organization-affiliations", icon: "bi-buildings", border: "warning", admin: true },
         { type: "HealthcareService", label: "Healthcare services", href: "#/healthcare-services", iconify: "mdi:medical-bag", border: "success", admin: true },
+        { type: "Schedule", label: "Schedules", href: "#/schedules", icon: "bi-calendar3", border: "primary", admin: true },
+        { type: "Slot", label: "Slots", href: "#/slots", icon: "bi-calendar2-week", border: "info", admin: true },
+        { type: "Appointment", label: "Appointments", href: "#/appointments", icon: "bi-calendar-check", border: "success", admin: true },
+        { type: "AppointmentResponse", label: "Appointment responses", href: "#/appointment-responses", icon: "bi-calendar2-check", border: "secondary", admin: true },
+        { type: "PlanDefinition", label: "Plan definitions", href: "#/plan-definitions", icon: "bi-diagram-3", border: "primary", admin: true },
+        { type: "ActivityDefinition", label: "Activity definitions", href: "#/activity-definitions", icon: "bi-lightning-charge", border: "warning", admin: true },
+        { type: "RequestOrchestration", label: "Orchestrations", href: "#/request-orchestrations", icon: "bi-kanban", border: "success", admin: true },
         { type: "Consent", label: "Consents", href: "#/consents", icon: "bi-shield-check", border: "warning", admin: true },
         { type: "Subscription", label: "Subscriptions", href: "#/subscriptions", icon: "bi-broadcast", border: "info", admin: true },
         { type: "Endpoint", label: "Endpoints", href: "#/endpoints", icon: "bi-hdd-network", border: "secondary", admin: true },
         { type: "SubscriptionTopic", label: "Topics", href: "#/subscription-topics", icon: "bi-bookmark-star", border: "primary", admin: true },
-        { type: "Library", label: "Libraries", href: "#/pds-policies", icon: "bi-journal-text", border: "success", admin: true },
+        { key: "pds-policies", type: "Library", search: "type=pds-policies", label: "PDS policies", href: "#/pds-policies", icon: "bi-journal-text", border: "success", admin: true },
+        { key: "camel-routes", type: "Library", search: "type=camel-route", label: "Camel routes", href: "#/camel-routes", iconify: "hugeicons:camel", border: "warning", admin: true },
         { type: "SearchParameter", label: "Search params", href: "#/search-parameters", icon: "bi-search", border: "warning", admin: true },
         { type: "Questionnaire", label: "Questionnaires", href: "#/questionnaires", icon: "bi-ui-checks", border: "info", admin: true },
         { type: "CodeSystem", label: "Code systems", href: "#/code-systems", icon: "bi-braces", border: "primary", admin: true },
@@ -153,16 +173,27 @@ CadminApp.register("dashboard", function () {
         return counts;
     }
 
+    function metricId(metric) {
+        return metric.key || metric.type;
+    }
+
     function renderCounts(counts, note) {
         const featured = featuredMetrics();
         const featuredTypes = {};
+        const featuredIds = {};
         $("#dash-counts").html(featured.map(function (metric) {
             featuredTypes[metric.type] = true;
-            const value = Object.prototype.hasOwnProperty.call(counts, metric.type) ? counts[metric.type] : 0;
+            const id = metricId(metric);
+            featuredIds[id] = true;
+            const value = Object.prototype.hasOwnProperty.call(counts, id)
+                ? counts[id]
+                : (Object.prototype.hasOwnProperty.call(counts, metric.type) && !metric.search
+                    ? counts[metric.type]
+                    : 0);
             return countCard(metric, value);
         }).join(""));
         const others = Object.keys(counts).filter(function (type) {
-            return !featuredTypes[type] && counts[type] > 0;
+            return !featuredTypes[type] && !featuredIds[type] && counts[type] > 0;
         }).sort();
         if (others.length) {
             $("#dash-other-rows").html(others.map(function (type) {
@@ -194,10 +225,11 @@ CadminApp.register("dashboard", function () {
             finished = true;
             const counts = Object.assign({}, cached);
             featured.forEach(function (metric) {
-                if (typeof live[metric.type] === "number") {
-                    counts[metric.type] = live[metric.type];
-                } else if (!Object.prototype.hasOwnProperty.call(counts, metric.type)) {
-                    counts[metric.type] = live[metric.type];
+                const id = metricId(metric);
+                if (typeof live[id] === "number") {
+                    counts[id] = live[id];
+                } else if (!metric.search && !Object.prototype.hasOwnProperty.call(counts, id)) {
+                    counts[id] = live[id];
                 }
             });
             renderCounts(counts);
@@ -210,15 +242,16 @@ CadminApp.register("dashboard", function () {
             .always(finish);
 
         featured.forEach(function (metric) {
-            CadminApi.fhir("/" + encodeURIComponent(metric.type) +
-                "?_summary=count&_count=0&_total=accurate", "GET", null, { silent: true })
+            const id = metricId(metric);
+            const query = (metric.search ? metric.search + "&" : "") + "_summary=count&_count=0&_total=accurate";
+            CadminApi.fhir("/" + encodeURIComponent(metric.type) + "?" + query, "GET", null, { silent: true })
                 .done(function (bundle) {
                     if (typeof bundle.total === "number") {
-                        live[metric.type] = bundle.total;
+                        live[id] = bundle.total;
                     }
                 })
                 .fail(function () {
-                    live[metric.type] = Object.prototype.hasOwnProperty.call(cached, metric.type)
+                    live[id] = !metric.search && Object.prototype.hasOwnProperty.call(cached, metric.type)
                         ? cached[metric.type]
                         : null;
                 })

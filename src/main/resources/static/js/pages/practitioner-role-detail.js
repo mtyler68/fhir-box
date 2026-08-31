@@ -867,14 +867,13 @@ window.CadminPractitionerRoleDetail = (function () {
         });
 
         $root.on("click.prrd", "#prrd-delete", function () {
-            if (!window.confirm("Delete this practitioner role assignment?")) {
-                return;
-            }
-            CadminApi.fhir("/PractitionerRole/" + encodeURIComponent(role.id), "DELETE").done(function () {
-                alertMsg("success", "Practitioner role deleted.");
-                window.location.hash = "#/practitioner-roles";
-            }).fail(function (xhr) {
-                fail("Delete practitioner role", xhr);
+            CadminApi.confirm("Delete this practitioner role assignment?").done(function () {
+                CadminApi.fhir("/PractitionerRole/" + encodeURIComponent(role.id), "DELETE").done(function () {
+                    alertMsg("success", "Practitioner role deleted.");
+                    window.location.hash = "#/practitioner-roles";
+                }).fail(function (xhr) {
+                    fail("Delete practitioner role", xhr);
+                });
             });
         });
 

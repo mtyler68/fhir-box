@@ -91,6 +91,12 @@ class GeocodeServiceTest {
                 new CadminProperties.NpiRegistry(
                         "https://npiregistry.cms.hhs.gov/api/",
                         "2.1"),
-                new CadminProperties.Wiremock("http://localhost:9090"));
+                new CadminProperties.Wiremock("http://localhost:9090"),
+                new CadminProperties.CoreAdminBridge("http://localhost:8280"),
+                new CadminProperties.FhirChief("http://localhost:8380"),
+                new CadminProperties.Keycloak(
+                        "http://localhost:8180/realms/cadmin",
+                        "cadmin-gateway",
+                        "cadmin-gateway-secret"));
     }
 }

@@ -43,13 +43,16 @@ function renderDeviceList(initialQuery) {
         "</div>" +
         '<div id="device-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
-            '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
+            '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
                 '<h6 class="m-0">Device search</h6>' +
+                '<div class="d-flex flex-wrap align-items-center gap-2">' +
                 '<form class="d-flex" id="device-search-form">' +
                     '<input class="form-control form-control-sm me-2" id="device-query" placeholder="Name" value="' +
                         CadminApi.escapeHtml(initialQuery) + '">' +
                     '<button class="btn btn-sm btn-primary" type="submit">Search</button>' +
                 "</form>" +
+                CadminDeletedList.controls() +
+                "</div>" +
             "</div>" +
             '<div class="card-body">' +
                 '<div class="table-responsive">' +
@@ -174,7 +177,7 @@ function renderDeviceList(initialQuery) {
             path += "&device-name=" + encodeURIComponent(query);
         }
         const pageSize = CadminApi.listPageSize("devices");
-        CadminApi.fhir(CadminApi.pagedPath(path, listPage, pageSize)).done(function (bundle) {
+        CadminDeletedList.query({ type: "Device", path: path, page: listPage, size: pageSize }).done(function (bundle) {
             const resources = CadminApi.bundleResources(bundle);
             const associations = {};
             resources.forEach(function (resource) {
@@ -198,7 +201,7 @@ function renderDeviceList(initialQuery) {
                 onPage: function (nextPage) { load(query, nextPage); }
             });
             if (!entries.length) {
-                $("#device-rows").html('<tr><td colspan="7" class="text-muted">No devices found. Create one or start HAPI FHIR.</td></tr>');
+                $("#device-rows").html(CadminDeletedList.emptyRow(7, "Device", "No devices found. Create one or start HAPI FHIR."));
                 return;
             }
             const rows = entries.map(function (device) {
@@ -306,6 +309,11 @@ function renderDeviceList(initialQuery) {
     });
 
     $("#create-device-modal").on("show.bs.modal", fillPatientSelect);
+
+    CadminDeletedList.bind({
+        type: "Device",
+        reload: function () { load($("#device-query").val(), 0); }
+    });
 
     load(initialQuery);
 }

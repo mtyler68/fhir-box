@@ -72,9 +72,12 @@ CadminApp.register("demo-data", function () {
         }
         if (normalized.counts.organization) {
             extras.push("Endpoint");
+            extras.push("HealthcareService");
         }
         if (normalized.counts.patient) {
+            extras.push("Condition");
             extras.push("Flag");
+            extras.push("Consent");
         }
         if (CadminDemoData.PRIMARY_TYPES.some(function (entry) {
             return normalized.counts[entry.key] > 0;

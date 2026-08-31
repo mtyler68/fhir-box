@@ -119,6 +119,43 @@ window.CadminApi = (function ($) {
         return ajax(options);
     }
 
+    function coreAdminBridge(path, method, data) {
+        const verb = (method || "GET").toUpperCase();
+        const options = {
+            url: "/core-admin-bridge" + path,
+            method: verb,
+            headers: {
+                Accept: "application/json"
+            }
+        };
+        if (data !== undefined && data !== null && verb !== "GET" && verb !== "HEAD") {
+            options.data = typeof data === "string" ? data : JSON.stringify(data);
+            options.contentType = "application/json";
+        }
+        return ajax(options);
+    }
+
+    function fhirChief(path, method, data) {
+        const verb = (method || "GET").toUpperCase();
+        const options = {
+            url: "/fhir-chief" + path,
+            method: verb,
+            converters: {
+                "text json": function (text) {
+                    return text && String(text).trim() ? JSON.parse(text) : null;
+                }
+            },
+            headers: {
+                Accept: "application/fhir+json, application/json"
+            }
+        };
+        if (data !== undefined && data !== null && verb !== "GET" && verb !== "HEAD") {
+            options.data = typeof data === "string" ? data : JSON.stringify(data);
+            options.contentType = "application/fhir+json";
+        }
+        return ajax(options);
+    }
+
     function showAlert(selector, type, message) {
         $(selector)
             .removeClass("d-none alert-success alert-danger alert-warning alert-info")
@@ -309,6 +346,60 @@ window.CadminApi = (function ($) {
         toast.show();
     }
 
+    function confirmDialog(messageOrOptions) {
+        const opts = typeof messageOrOptions === "string"
+            ? { title: messageOrOptions }
+            : (messageOrOptions || {});
+        const title = opts.title || "Are you sure?";
+        const text = opts.text || "";
+        const combined = [title, text, opts.confirmText || ""].join(" ");
+        let confirmText = opts.confirmText;
+        if (!confirmText) {
+            const match = combined.match(/\b(delete|remove|expunge|reset|clear|inactivate|replace)\b/i);
+            confirmText = match ? match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase() : "Confirm";
+        }
+        const danger = opts.danger != null
+            ? !!opts.danger
+            : /delete|remove|expunge|reset|clear|inactivate/i.test(combined);
+        const icon = opts.icon || (danger ? "warning" : "question");
+        const deferred = $.Deferred();
+
+        function decide(ok) {
+            if (ok) {
+                deferred.resolve();
+            } else {
+                deferred.reject();
+            }
+        }
+
+        if (typeof Swal === "undefined") {
+            decide(window.confirm(text ? title + "\n\n" + text : title));
+            return deferred.promise();
+        }
+        Swal.fire({
+            title: title,
+            text: text || undefined,
+            icon: icon,
+            showCancelButton: true,
+            confirmButtonText: confirmText,
+            cancelButtonText: opts.cancelText || "Cancel",
+            reverseButtons: true,
+            focusCancel: true,
+            buttonsStyling: false,
+            customClass: {
+                popup: "cadmin-swal",
+                title: "cadmin-swal-title",
+                htmlContainer: "cadmin-swal-text",
+                actions: "cadmin-swal-actions",
+                confirmButton: danger ? "btn btn-danger" : "btn btn-primary",
+                cancelButton: "btn btn-outline-secondary"
+            }
+        }).then(function (result) {
+            decide(!!result.isConfirmed);
+        });
+        return deferred.promise();
+    }
+
     function escapeHtml(value) {
         return $("<div>").text(value == null ? "" : String(value)).html();
     }
@@ -334,18 +425,119 @@ window.CadminApi = (function ($) {
         Endpoint: "#/endpoints/",
         Library: "#/pds-policies/",
         Questionnaire: "#/questionnaires/",
+        SearchParameter: "#/search-parameters/",
         CodeSystem: "#/code-systems/",
         ValueSet: "#/value-sets/",
         PractitionerRole: "#/practitioner-roles/",
-        List: "#/lists/"
+        OrganizationAffiliation: "#/organization-affiliations/",
+        List: "#/lists/",
+        Schedule: "#/schedules/",
+        Slot: "#/slots/",
+        Appointment: "#/appointments/",
+        AppointmentResponse: "#/appointment-responses/",
+        PlanDefinition: "#/plan-definitions/",
+        ActivityDefinition: "#/activity-definitions/",
+        RequestOrchestration: "#/request-orchestrations/"
     };
 
-    function detailHref(type, id) {
+    function libraryTypeCodes(resource) {
+        const codes = ((resource && resource.type && resource.type.coding) || []).map(function (coding) {
+            return coding && coding.code;
+        }).filter(Boolean);
+        if (resource && resource.type && resource.type.text) {
+            codes.push(resource.type.text);
+        }
+        return codes;
+    }
+
+    function libraryTypeOf(resource) {
+        return libraryTypeCodes(resource)[0] || "";
+    }
+
+    function isLibraryType(resource, code) {
+        return libraryTypeCodes(resource).indexOf(code) >= 0;
+    }
+
+    function detailHref(type, id, resource) {
+        if (type === "Library" && isLibraryType(resource, "camel-route")) {
+            return "#/camel-routes/" + encodeURIComponent(id);
+        }
         const prefix = DETAIL_PREFIX[type];
         if (prefix) {
             return prefix + encodeURIComponent(id);
         }
         return "#/resources/" + encodeURIComponent(type) + "/" + encodeURIComponent(id);
+    }
+
+    function listHref(type, query) {
+        const prefix = DETAIL_PREFIX[type];
+        const base = prefix ? prefix.replace(/\/$/, "") : "#/resources/" + encodeURIComponent(type);
+        const url = query && query.url;
+        if (url) {
+            return base + "?url=" + encodeURIComponent(String(url).split("|")[0]);
+        }
+        return base;
+    }
+
+    function typeForRoute(routeName) {
+        const prefix = "#/" + routeName + "/";
+        const types = Object.keys(DETAIL_PREFIX);
+        for (let i = 0; i < types.length; i += 1) {
+            if (DETAIL_PREFIX[types[i]] === prefix) {
+                return types[i];
+            }
+        }
+        return "";
+    }
+
+    function looksLikeCanonical(value) {
+        return /^(https?:|urn:)/i.test(String(value || "").trim());
+    }
+
+    function hashQuery(name) {
+        const raw = String(window.location.hash || "").replace(/^#\/?/, "");
+        const q = raw.indexOf("?");
+        if (q < 0) {
+            return name ? "" : {};
+        }
+        const params = new URLSearchParams(raw.slice(q + 1));
+        if (name) {
+            return params.get(name) || "";
+        }
+        const out = {};
+        params.forEach(function (value, key) {
+            out[key] = value;
+        });
+        return out;
+    }
+
+    function findByUrl(type, url) {
+        const bare = String(url || "").split("|")[0].trim();
+        if (!type || !bare) {
+            return $.Deferred().reject().promise();
+        }
+        return fhir("/" + encodeURIComponent(type) + "?url=" + encodeURIComponent(bare) + "&_count=5",
+            "GET", null, { silent: true }).then(function (bundle) {
+            const items = bundleResources(bundle, type);
+            if (!items.length) {
+                return $.Deferred().reject().promise();
+            }
+            return items[0];
+        });
+    }
+
+    function readByIdOrUrl(type, id, url) {
+        const canonical = String(url || (looksLikeCanonical(id) ? id : "")).split("|")[0].trim();
+        if (id && !looksLikeCanonical(id)) {
+            return fhir("/" + encodeURIComponent(type) + "/" + encodeURIComponent(id), "GET", null, { silent: true })
+                .then(null, function () {
+                    return canonical ? findByUrl(type, canonical) : $.Deferred().reject().promise();
+                });
+        }
+        if (canonical) {
+            return findByUrl(type, canonical);
+        }
+        return $.Deferred().reject().promise();
     }
 
     function decodeId(value) {
@@ -602,6 +794,7 @@ window.CadminApi = (function ($) {
         searchComparator: "http://hl7.org/fhir/ValueSet/search-comparator",
         searchModifierCode: "http://hl7.org/fhir/ValueSet/search-modifier-code",
         searchParamType: "http://hl7.org/fhir/ValueSet/search-param-type",
+        searchProcessingMode: "http://hl7.org/fhir/ValueSet/search-processingmode",
         resourceTypes: "http://hl7.org/fhir/ValueSet/resource-types",
         consentState: "http://hl7.org/fhir/ValueSet/consent-state-codes",
         consentProvisionType: "http://hl7.org/fhir/ValueSet/consent-provision-type",
@@ -619,10 +812,16 @@ window.CadminApi = (function ($) {
         listItemFlag: "http://hl7.org/fhir/ValueSet/list-item-flag",
         codesystemContent: "http://hl7.org/fhir/ValueSet/codesystem-content-mode",
         practitionerRole: "http://hl7.org/fhir/ValueSet/practitioner-role",
+        organizationRole: "http://hl7.org/fhir/ValueSet/organization-role",
         c80PracticeCodes: "http://hl7.org/fhir/ValueSet/c80-practice-codes",
         deviceAssociationStatus: "http://hl7.org/fhir/ValueSet/deviceassociation-status",
         deviceAssociationStatusReason: "http://hl7.org/fhir/ValueSet/deviceassociation-status-reason",
-        deviceAssociationOperationStatus: "http://hl7.org/fhir/ValueSet/deviceassociation-operationstatus"
+        deviceAssociationOperationStatus: "http://hl7.org/fhir/ValueSet/deviceassociation-operationstatus",
+        conditionClinical: "http://hl7.org/fhir/ValueSet/condition-clinical",
+        conditionVerStatus: "http://hl7.org/fhir/ValueSet/condition-ver-status",
+        conditionCategory: "http://hl7.org/fhir/ValueSet/condition-category",
+        conditionSeverity: "http://hl7.org/fhir/ValueSet/condition-severity",
+        conditionCode: "http://hl7.org/fhir/ValueSet/condition-code"
     };
 
     const VALUE_SET_FALLBACKS = {
@@ -639,6 +838,24 @@ window.CadminApi = (function ($) {
                 system: "http://terminology.hl7.org/CodeSystem/practitioner-role" },
             { code: "ict", display: "ICT professional",
                 system: "http://terminology.hl7.org/CodeSystem/practitioner-role" }
+        ],
+        organizationRole: [
+            { code: "provider", display: "Provider",
+                system: "http://hl7.org/fhir/organization-role" },
+            { code: "agency", display: "Agency",
+                system: "http://hl7.org/fhir/organization-role" },
+            { code: "research", display: "Research",
+                system: "http://hl7.org/fhir/organization-role" },
+            { code: "payer", display: "Payer",
+                system: "http://hl7.org/fhir/organization-role" },
+            { code: "diagnostics", display: "Diagnostics",
+                system: "http://hl7.org/fhir/organization-role" },
+            { code: "supplier", display: "Supplier",
+                system: "http://hl7.org/fhir/organization-role" },
+            { code: "HIE/HIO", display: "HIE/HIO",
+                system: "http://hl7.org/fhir/organization-role" },
+            { code: "member", display: "Member",
+                system: "http://hl7.org/fhir/organization-role" }
         ],
         c80PracticeCodes: [
             { code: "394814009", display: "General practice", system: "http://snomed.info/sct" },
@@ -685,6 +902,57 @@ window.CadminApi = (function ($) {
                 system: "http://hl7.org/fhir/deviceassociation-operationstatus" },
             { code: "unknown", display: "Unknown",
                 system: "http://hl7.org/fhir/deviceassociation-operationstatus" }
+        ],
+        conditionClinical: [
+            { code: "active", display: "Active",
+                system: "http://terminology.hl7.org/CodeSystem/condition-clinical" },
+            { code: "recurrence", display: "Recurrence",
+                system: "http://terminology.hl7.org/CodeSystem/condition-clinical" },
+            { code: "relapse", display: "Relapse",
+                system: "http://terminology.hl7.org/CodeSystem/condition-clinical" },
+            { code: "inactive", display: "Inactive",
+                system: "http://terminology.hl7.org/CodeSystem/condition-clinical" },
+            { code: "remission", display: "Remission",
+                system: "http://terminology.hl7.org/CodeSystem/condition-clinical" },
+            { code: "resolved", display: "Resolved",
+                system: "http://terminology.hl7.org/CodeSystem/condition-clinical" }
+        ],
+        conditionVerStatus: [
+            { code: "unconfirmed", display: "Unconfirmed",
+                system: "http://terminology.hl7.org/CodeSystem/condition-ver-status" },
+            { code: "provisional", display: "Provisional",
+                system: "http://terminology.hl7.org/CodeSystem/condition-ver-status" },
+            { code: "differential", display: "Differential",
+                system: "http://terminology.hl7.org/CodeSystem/condition-ver-status" },
+            { code: "confirmed", display: "Confirmed",
+                system: "http://terminology.hl7.org/CodeSystem/condition-ver-status" },
+            { code: "refuted", display: "Refuted",
+                system: "http://terminology.hl7.org/CodeSystem/condition-ver-status" },
+            { code: "entered-in-error", display: "Entered in error",
+                system: "http://terminology.hl7.org/CodeSystem/condition-ver-status" }
+        ],
+        conditionCategory: [
+            { code: "problem-list-item", display: "Problem List Item",
+                system: "http://terminology.hl7.org/CodeSystem/condition-category" },
+            { code: "encounter-diagnosis", display: "Encounter Diagnosis",
+                system: "http://terminology.hl7.org/CodeSystem/condition-category" }
+        ],
+        conditionSeverity: [
+            { code: "255604002", display: "Mild", system: "http://snomed.info/sct" },
+            { code: "6736007", display: "Moderate", system: "http://snomed.info/sct" },
+            { code: "24484000", display: "Severe", system: "http://snomed.info/sct" }
+        ],
+        conditionCode: [
+            { code: "38341003", display: "Hypertension", system: "http://snomed.info/sct" },
+            { code: "73211009", display: "Diabetes mellitus", system: "http://snomed.info/sct" },
+            { code: "44054006", display: "Type 2 diabetes mellitus", system: "http://snomed.info/sct" },
+            { code: "195967001", display: "Asthma", system: "http://snomed.info/sct" },
+            { code: "13645005", display: "Chronic obstructive lung disease", system: "http://snomed.info/sct" },
+            { code: "22298006", display: "Myocardial infarction", system: "http://snomed.info/sct" },
+            { code: "49436004", display: "Atrial fibrillation", system: "http://snomed.info/sct" },
+            { code: "35489007", display: "Depressive disorder", system: "http://snomed.info/sct" },
+            { code: "84757009", display: "Epilepsy", system: "http://snomed.info/sct" },
+            { code: "26929004", display: "Alzheimer's disease", system: "http://snomed.info/sct" }
         ]
     };
 
@@ -856,8 +1124,18 @@ window.CadminApi = (function ($) {
         Consent: { type: "Consent", noun: "consents", sort: "-_lastUpdated", queryParam: "_id" },
         Endpoint: { type: "Endpoint", noun: "endpoints", sort: "name", queryParam: "name" },
         Questionnaire: { type: "Questionnaire", noun: "questionnaires", sort: "title", queryParam: "title" },
+        SearchParameter: { type: "SearchParameter", noun: "search parameters", sort: "name", queryParam: "name" },
         CodeSystem: { type: "CodeSystem", noun: "code systems", sort: "title", queryParam: "title" },
-        ValueSet: { type: "ValueSet", noun: "value sets", sort: "title", queryParam: "title" }
+        ValueSet: { type: "ValueSet", noun: "value sets", sort: "title", queryParam: "title" },
+        PractitionerRole: { type: "PractitionerRole", noun: "practitioner roles", sort: "-_lastUpdated",
+            queryParam: "_id" },
+        Schedule: { type: "Schedule", noun: "schedules", sort: "-_lastUpdated", queryParam: "_id" },
+        Slot: { type: "Slot", noun: "slots", sort: "start", queryParam: "_id" },
+        Appointment: { type: "Appointment", noun: "appointments", sort: "-date", queryParam: "_id" },
+        PlanDefinition: { type: "PlanDefinition", noun: "plans", sort: "title", queryParam: "title" },
+        ActivityDefinition: { type: "ActivityDefinition", noun: "activities", sort: "title", queryParam: "title" },
+        RequestOrchestration: { type: "RequestOrchestration", noun: "orchestrations", sort: "-_lastUpdated",
+            queryParam: "_id" }
     };
 
     function selectElement(selector) {
@@ -936,6 +1214,19 @@ window.CadminApi = (function ($) {
         }
         if (resource.resourceType === "Organization") {
             return resource.name || resource.id || "";
+        }
+        if (resource.resourceType === "PlanDefinition" || resource.resourceType === "ActivityDefinition") {
+            return resource.title || resource.name || resource.id || "";
+        }
+        if (resource.resourceType === "Appointment") {
+            return resource.description || resource.start || resource.id || "";
+        }
+        if (resource.resourceType === "Slot") {
+            return [resource.start, resource.end].filter(Boolean).join(" – ") || resource.id || "";
+        }
+        if (resource.resourceType === "Schedule") {
+            const actor = (resource.actor && resource.actor[0]) || {};
+            return actor.display || actor.reference || resource.id || "";
         }
         if (Array.isArray(resource.name) || (resource.name && (resource.name.family || resource.name.given))) {
             return personName(resource);
@@ -1590,6 +1881,15 @@ window.CadminApi = (function ($) {
         return url ? url.replace(/\/?$/, "") + "-valueset" : "";
     }
 
+    function unsavedFlagHtml() {
+        return '<span class="badge rounded-pill text-bg-warning align-middle d-none" data-unsaved-flag>' +
+            "Unsaved changes</span>";
+    }
+
+    function setUnsavedFlag(scope, dirty) {
+        $(scope || document).find("[data-unsaved-flag]").toggleClass("d-none", !dirty);
+    }
+
     return {
         get: get,
         post: function (url, data) { return send(url, "POST", data); },
@@ -1598,12 +1898,23 @@ window.CadminApi = (function ($) {
         logout: logout,
         fhir: fhir,
         wiremock: wiremock,
+        coreAdminBridge: coreAdminBridge,
+        fhirChief: fhirChief,
         showAlert: showAlert,
         showToast: showToast,
+        confirm: confirmDialog,
         showFhirError: showFhirError,
         escapeHtml: escapeHtml,
         resourceLink: resourceLink,
         detailHref: detailHref,
+        listHref: listHref,
+        typeForRoute: typeForRoute,
+        looksLikeCanonical: looksLikeCanonical,
+        hashQuery: hashQuery,
+        findByUrl: findByUrl,
+        readByIdOrUrl: readByIdOrUrl,
+        libraryTypeOf: libraryTypeOf,
+        isLibraryType: isLibraryType,
         routeParamId: routeParamId,
         referenceId: referenceId,
         referenceType: referenceType,
@@ -1623,6 +1934,7 @@ window.CadminApi = (function ($) {
         valueSetDisplay: valueSetDisplay,
         geocode: geocode,
         npiLookup: npiLookup,
+        post: function (url, data) { return send(url, "POST", data); },
         destroySelect: destroySelect,
         destroySelects: destroySelects,
         selectValue: selectValue,
@@ -1638,6 +1950,8 @@ window.CadminApi = (function ($) {
         selectCoding: selectCoding,
         flattenCodeSystemConcepts: flattenCodeSystemConcepts,
         nestCodeSystemConcepts: nestCodeSystemConcepts,
+        unsavedFlagHtml: unsavedFlagHtml,
+        setUnsavedFlag: setUnsavedFlag,
         companionValueSetUrl: companionValueSetUrl,
         terminologyLabel: terminologyLabel,
         conceptCode: conceptCode

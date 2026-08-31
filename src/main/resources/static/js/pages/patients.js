@@ -43,13 +43,16 @@ function renderPatientList(initialQuery) {
         "</div>" +
         '<div id="patient-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
-            '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
+            '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
                 '<h6 class="m-0">Patient search</h6>' +
+                '<div class="d-flex flex-wrap align-items-center gap-2">' +
                 '<form class="d-flex" id="patient-search-form">' +
                     '<input class="form-control form-control-sm me-2" id="patient-query" placeholder="Name or identifier" value="' +
                         CadminApi.escapeHtml(initialQuery) + '">' +
                     '<button class="btn btn-sm btn-primary" type="submit">Search</button>' +
                 "</form>" +
+                CadminDeletedList.controls() +
+                "</div>" +
             "</div>" +
             '<div class="card-body">' +
                 '<div class="table-responsive">' +
@@ -207,7 +210,7 @@ function renderPatientList(initialQuery) {
             path += "&name=" + encodeURIComponent(query);
         }
         const pageSize = CadminApi.listPageSize("patients");
-        CadminApi.fhir(CadminApi.pagedPath(path, listPage, pageSize)).done(function (bundle) {
+        CadminDeletedList.query({ type: "Patient", path: path, page: listPage, size: pageSize }).done(function (bundle) {
             const entries = CadminApi.bundleResources(bundle, "Patient");
             CadminApi.renderPager("#patient-pager", {
                 page: listPage,
@@ -219,7 +222,7 @@ function renderPatientList(initialQuery) {
                 onPage: function (nextPage) { load(query, nextPage); }
             });
             if (!entries.length) {
-                $("#patient-rows").html('<tr><td colspan="6" class="text-muted">No patients found. Create one or start HAPI FHIR.</td></tr>');
+                $("#patient-rows").html(CadminDeletedList.emptyRow(6, "Patient", "No patients found. Create one or start HAPI FHIR."));
                 return;
             }
             const rows = entries.map(function (p) {
@@ -357,6 +360,11 @@ function renderPatientList(initialQuery) {
             }
             CadminApi.showToast("danger", "Create care team failed (" + xhr.status + ").");
         });
+    });
+
+    CadminDeletedList.bind({
+        type: "Patient",
+        reload: function () { load($("#patient-query").val(), 0); }
     });
 
     load(initialQuery);

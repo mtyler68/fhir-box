@@ -12,13 +12,16 @@ window.CadminDemoData = (function () {
         { key: "device", type: "Device", label: "Devices", icon: "mdi:devices" }
     ];
     const PURGE_TYPES = [
+        "Consent",
+        "Condition",
         "Flag",
         "DeviceAssociation",
         "PractitionerRole",
         "OrganizationAffiliation",
+        "CareTeam",
+        "HealthcareService",
         "Endpoint",
         "Questionnaire",
-        "CareTeam",
         "Device",
         "RelatedPerson",
         "Patient",
@@ -87,6 +90,45 @@ window.CadminDemoData = (function () {
     const ENDPOINT_KINDS = [
         { code: "hl7-fhir-rest", display: "HL7 FHIR REST", path: "/fhir" },
         { code: "hl7-fhir-msg", display: "HL7 FHIR Messaging", path: "/fhir/$process-message" }
+    ];
+    const CONDITION_KINDS = [
+        { code: "38341003", display: "Hypertension", clinical: "active", verification: "confirmed",
+            severity: { code: "6736007", display: "Moderate" } },
+        { code: "44054006", display: "Type 2 diabetes mellitus", clinical: "active", verification: "confirmed",
+            severity: { code: "6736007", display: "Moderate" } },
+        { code: "195967001", display: "Asthma", clinical: "active", verification: "confirmed",
+            severity: { code: "255604002", display: "Mild" } },
+        { code: "13645005", display: "Chronic obstructive lung disease", clinical: "active", verification: "confirmed",
+            severity: { code: "24484000", display: "Severe" } },
+        { code: "22298006", display: "Myocardial infarction", clinical: "resolved", verification: "confirmed",
+            severity: { code: "24484000", display: "Severe" } },
+        { code: "49436004", display: "Atrial fibrillation", clinical: "active", verification: "confirmed",
+            severity: { code: "6736007", display: "Moderate" } },
+        { code: "35489007", display: "Depressive disorder", clinical: "remission", verification: "confirmed",
+            severity: { code: "255604002", display: "Mild" } },
+        { code: "84757009", display: "Epilepsy", clinical: "inactive", verification: "confirmed",
+            severity: { code: "6736007", display: "Moderate" } },
+        { code: "73211009", display: "Diabetes mellitus", clinical: "active", verification: "provisional" },
+        { code: "26929004", display: "Alzheimer's disease", clinical: "active", verification: "confirmed",
+            severity: { code: "24484000", display: "Severe" } }
+    ];
+    const SERVICE_KINDS = [
+        { name: "Primary Care", specialty: { code: "394814009", display: "General practice" } },
+        { name: "Cardiology", specialty: { code: "394579002", display: "Cardiology" } },
+        { name: "Pediatrics", specialty: { code: "394537008", display: "Pediatrics" } },
+        { name: "Behavioral Health", specialty: { code: "394587001", display: "Psychiatry" } },
+        { name: "Women's Health", specialty: { code: "394585009", display: "Obstetrics and gynecology" } }
+    ];
+    const CONSENT_KINDS = [
+        { code: "npp", display: "Notice of Privacy Practices",
+            system: "http://terminology.hl7.org/CodeSystem/consentcategorycodes",
+            decision: "permit", status: "active" },
+        { code: "INFA", display: "Information access",
+            system: "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+            decision: "permit", status: "active" },
+        { code: "patient-privacy", display: "Privacy Consent",
+            system: "http://terminology.hl7.org/CodeSystem/consentscope",
+            decision: "deny", status: "active" }
     ];
     const DEVICE_KINDS = [
         { name: "Omron Platinum BP", manufacturer: "Omron", model: "BP5450", code: "336602003", display: "Blood pressure cuff" },
@@ -304,6 +346,7 @@ window.CadminDemoData = (function () {
         const orgKeys = [];
         const locKeys = [];
         const locByOrg = {};
+        const svcByOrg = {};
         const pracKeys = [];
         const patientKeys = [];
         const caregiverKeys = [];
@@ -502,6 +545,60 @@ window.CadminDemoData = (function () {
             });
         }
 
+        if (orgKeys.length) {
+            associations.push("HealthcareService offered by each organization");
+            orgKeys.forEach(function (orgKey, i) {
+                const kind = SERVICE_KINDS[i % SERVICE_KINDS.length];
+                const orgDraft = drafts.find(function (draft) { return draft.key === orgKey; });
+                const orgName = (orgDraft && orgDraft.display) || "Organization";
+                const locKey = (locByOrg[orgKey] && locByOrg[orgKey][0]) || "";
+                const siteIndex = siteKeys.findIndex(function (item) { return item.orgKey === orgKey; });
+                const epKey = siteIndex >= 0 ? "ep-loc-" + siteIndex : "ep-org-" + i;
+                const key = "svc-" + i;
+                const place = placeFor(i);
+                svcByOrg[orgKey] = svcByOrg[orgKey] || [];
+                svcByOrg[orgKey].push(key);
+                addDraft(drafts, {
+                    key: key,
+                    type: "HealthcareService",
+                    display: kind.name,
+                    detail: orgName,
+                    implied: true,
+                    resource: withDemoMeta({
+                        resourceType: "HealthcareService",
+                        active: true,
+                        name: kind.name,
+                        comment: kind.name + " services at " + orgName,
+                        type: [coding(
+                            "http://snomed.info/sct",
+                            kind.specialty.code,
+                            kind.specialty.display
+                        )],
+                        specialty: [coding(
+                            "http://snomed.info/sct",
+                            kind.specialty.code,
+                            kind.specialty.display
+                        )],
+                        telecom: [{ system: "phone", value: phone(random, place.area), use: "work" }]
+                    }),
+                    bind: function (resource, created) {
+                        const organization = referenceOf(created, orgKey);
+                        if (organization) {
+                            resource.providedBy = organization;
+                        }
+                        const location = locKey ? referenceOf(created, locKey) : null;
+                        if (location) {
+                            resource.location = [location];
+                        }
+                        const endpoint = referenceOf(created, epKey);
+                        if (endpoint) {
+                            resource.endpoint = [endpoint];
+                        }
+                    }
+                });
+            });
+        }
+
         for (let i = 0; i < counts.practitioner; i += 1) {
             const person = buildPerson(random, usedNames);
             const orgKey = orgKeys.length ? orgKeys[i % orgKeys.length] : "";
@@ -550,6 +647,8 @@ window.CadminDemoData = (function () {
                         const practitioner = referenceOf(created, key);
                         const organization = referenceOf(created, orgKey);
                         const location = locKey ? referenceOf(created, locKey) : null;
+                        const svcKey = (svcByOrg[orgKey] && svcByOrg[orgKey][0]) || "";
+                        const service = svcKey ? referenceOf(created, svcKey) : null;
                         if (practitioner) {
                             resource.practitioner = practitioner;
                         }
@@ -559,13 +658,17 @@ window.CadminDemoData = (function () {
                         if (location) {
                             resource.location = [location];
                         }
+                        if (service) {
+                            resource.healthcareService = [service];
+                        }
                     }
                 });
             }
         }
         if (counts.practitioner && orgKeys.length) {
             associations.push("PractitionerRole links each practitioner to an organization" +
-                (locKeys.length ? " and location" : ""));
+                (locKeys.length ? " and location" : "") +
+                (Object.keys(svcByOrg).length ? " and healthcare service" : ""));
         }
 
         const usedSsns = {};
@@ -599,6 +702,68 @@ window.CadminDemoData = (function () {
         }
 
         if (patientKeys.length) {
+            associations.push("Condition problems bound to patients");
+            const clinicalSystem = "http://terminology.hl7.org/CodeSystem/condition-clinical";
+            const verSystem = "http://terminology.hl7.org/CodeSystem/condition-ver-status";
+            let conditionIndex = 0;
+            patientKeys.forEach(function (patientKey, patientIndex) {
+                const extras = patientIndex % 2 === 0 ? 2 : 1;
+                for (let n = 0; n < extras; n += 1) {
+                    const kind = CONDITION_KINDS[conditionIndex % CONDITION_KINDS.length];
+                    const key = "cond-" + conditionIndex;
+                    conditionIndex += 1;
+                    const onset = birthDate(random, 2016, 2024);
+                    const recorded = birthDate(random, 2024, 2025);
+                    const resolved = kind.clinical === "resolved" || kind.clinical === "remission"
+                        || kind.clinical === "inactive";
+                    const authorKey = pracKeys.length ? pracKeys[patientIndex % pracKeys.length] : "";
+                    const resource = withDemoMeta({
+                        resourceType: "Condition",
+                        clinicalStatus: coding(clinicalSystem, kind.clinical,
+                            kind.clinical.charAt(0).toUpperCase() + kind.clinical.slice(1)),
+                        verificationStatus: coding(verSystem, kind.verification,
+                            kind.verification.charAt(0).toUpperCase() + kind.verification.slice(1)),
+                        category: [coding(
+                            "http://terminology.hl7.org/CodeSystem/condition-category",
+                            "problem-list-item",
+                            "Problem List Item"
+                        )],
+                        code: coding("http://snomed.info/sct", kind.code, kind.display),
+                        onsetDateTime: onset,
+                        recordedDate: recorded
+                    });
+                    if (kind.severity) {
+                        resource.severity = coding(
+                            "http://snomed.info/sct",
+                            kind.severity.code,
+                            kind.severity.display
+                        );
+                    }
+                    if (resolved) {
+                        resource.abatementDateTime = birthDate(random, 2024, 2025);
+                    }
+                    addDraft(drafts, {
+                        key: key,
+                        type: "Condition",
+                        display: kind.display,
+                        detail: kind.clinical,
+                        implied: true,
+                        resource: resource,
+                        bind: function (bound, created) {
+                            const subject = referenceOf(created, patientKey);
+                            if (subject) {
+                                bound.subject = subject;
+                            }
+                            if (authorKey) {
+                                const recorder = referenceOf(created, authorKey);
+                                if (recorder) {
+                                    bound.recorder = recorder;
+                                }
+                            }
+                        }
+                    });
+                }
+            });
             associations.push("Flag warnings bound to patients");
             const flagSpecs = [
                 {
@@ -654,6 +819,37 @@ window.CadminDemoData = (function () {
                             if (author) {
                                 resource.author = author;
                             }
+                        }
+                    }
+                });
+            });
+            associations.push("Consent records bound to patients");
+            patientKeys.forEach(function (patientKey, patientIndex) {
+                const kind = CONSENT_KINDS[patientIndex % CONSENT_KINDS.length];
+                const orgKey = orgKeys.length ? orgKeys[patientIndex % orgKeys.length] : "";
+                const patientDraft = drafts.find(function (draft) { return draft.key === patientKey; });
+                addDraft(drafts, {
+                    key: "consent-" + patientIndex,
+                    type: "Consent",
+                    display: kind.display,
+                    detail: ((patientDraft && patientDraft.display) || "Patient") + " · " + kind.decision,
+                    implied: true,
+                    resource: withDemoMeta({
+                        resourceType: "Consent",
+                        status: kind.status,
+                        category: [coding(kind.system, kind.code, kind.display)],
+                        decision: kind.decision,
+                        date: birthDate(random, 2024, 2025)
+                    }),
+                    bind: function (resource, created) {
+                        const subject = referenceOf(created, patientKey);
+                        if (subject) {
+                            resource.subject = subject;
+                            resource.grantor = [subject];
+                        }
+                        const organization = orgKey ? referenceOf(created, orgKey) : null;
+                        if (organization) {
+                            resource.grantee = [organization];
                         }
                     }
                 });
@@ -756,6 +952,11 @@ window.CadminDemoData = (function () {
                                     role.display
                                 )
                             });
+                        }
+                        const svcKey = orgKey && svcByOrg[orgKey] && svcByOrg[orgKey][0];
+                        const service = svcKey ? referenceOf(created, svcKey) : null;
+                        if (service) {
+                            participants.push({ member: service });
                         }
                         if (participants.length) {
                             resource.participant = participants;

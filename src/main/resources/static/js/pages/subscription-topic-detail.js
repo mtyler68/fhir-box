@@ -681,14 +681,13 @@ window.CadminSubscriptionTopicDetail = (function () {
         });
 
         $("#td-delete").on("click", function () {
-            if (!window.confirm("Delete this subscription topic?")) {
-                return;
-            }
-            CadminApi.fhir("/SubscriptionTopic/" + encodeURIComponent(topic.id), "DELETE").done(function () {
-                CadminApi.showToast("success", "Subscription topic deleted.");
-                window.location.hash = "#/subscription-topics";
-            }).fail(function (xhr) {
-                fail("Delete topic", xhr);
+            CadminApi.confirm("Delete this subscription topic?").done(function () {
+                CadminApi.fhir("/SubscriptionTopic/" + encodeURIComponent(topic.id), "DELETE").done(function () {
+                    CadminApi.showToast("success", "Subscription topic deleted.");
+                    window.location.hash = "#/subscription-topics";
+                }).fail(function (xhr) {
+                    fail("Delete topic", xhr);
+                });
             });
         });
 

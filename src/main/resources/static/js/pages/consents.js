@@ -44,8 +44,9 @@ function renderConsentList() {
         "</div>" +
         '<div id="consent-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
-            '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
+            '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
                 '<h6 class="m-0">Consent search</h6>' +
+                '<div class="d-flex flex-wrap align-items-center gap-2">' +
                 '<form class="d-flex flex-wrap gap-2" id="consent-search-form">' +
                     '<select class="form-select form-select-sm" id="consent-status-filter" style="max-width:10rem">' +
                         '<option value="">Any status</option></select>' +
@@ -55,6 +56,8 @@ function renderConsentList() {
                         '<option value="">Any patient</option></select>' +
                     '<button class="btn btn-sm btn-primary" type="submit">Search</button>' +
                 "</form>" +
+                CadminDeletedList.controls() +
+                "</div>" +
             "</div>" +
             '<div class="card-body">' +
                 '<div class="table-responsive">' +
@@ -198,7 +201,7 @@ function renderConsentList() {
             path += "&patient=" + encodeURIComponent(patient);
         }
         const pageSize = CadminApi.listPageSize("consents");
-        CadminApi.fhir(CadminApi.pagedPath(path, listPage, pageSize)).done(function (bundle) {
+        CadminDeletedList.query({ type: "Consent", path: path, page: listPage, size: pageSize }).done(function (bundle) {
             const entries = CadminApi.bundleResources(bundle, "Consent");
             CadminApi.renderPager("#consent-pager", {
                 page: listPage,
@@ -210,7 +213,7 @@ function renderConsentList() {
                 onPage: function (nextPage) { load(nextPage); }
             });
             if (!entries.length) {
-                $("#consent-rows").html('<tr><td colspan="8" class="text-muted">No consents found. Create one or start HAPI FHIR.</td></tr>');
+                $("#consent-rows").html(CadminDeletedList.emptyRow(8, "Consent", "No consents found. Create one or start HAPI FHIR."));
                 return;
             }
             const rows = entries.map(function (consent) {
@@ -331,6 +334,11 @@ function renderConsentList() {
         onConcepts: function (concepts) { decisionOptions = concepts; }
     });
     CadminApi.bindPatientSelect("#consent-patient-filter", { placeholder: "Any patient" });
+
+    CadminDeletedList.bind({
+        type: "Consent",
+        reload: function () { load(0); }
+    });
 
     load(0);
 }

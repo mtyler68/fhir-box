@@ -38,6 +38,7 @@ window.CadminPdsPolicyDetail = (function () {
     let library = null;
     let otherPolicies = [];
     let targetEditor = null;
+    let savedPolicy = "";
     let yamlPreviewEditor = null;
     let springElModeDefined = false;
 
@@ -355,7 +356,10 @@ window.CadminPdsPolicyDetail = (function () {
             }
         }
         cm.on("cursorActivity", refreshMarks);
-        cm.on("changes", refreshMarks);
+        cm.on("changes", function () {
+            refreshMarks();
+            syncUnsavedFlag();
+        });
         refreshMarks();
     }
 
@@ -1225,6 +1229,24 @@ window.CadminPdsPolicyDetail = (function () {
         });
     }
 
+    function policySnapshot() {
+        try {
+            return JSON.stringify(collectPolicyForm());
+        } catch (err) {
+            return "";
+        }
+    }
+
+    function syncUnsavedFlag() {
+        const root = window.CadminWorkspace ? CadminWorkspace.root() : document;
+        CadminApi.setUnsavedFlag(root, policySnapshot() !== savedPolicy);
+    }
+
+    function markPolicyClean() {
+        savedPolicy = policySnapshot();
+        syncUnsavedFlag();
+    }
+
     function collectPolicyForm() {
         return {
             id: ($("#pd-policy-id").val() || "").trim(),
@@ -1291,13 +1313,20 @@ window.CadminPdsPolicyDetail = (function () {
     }
 
     function render(resource) {
+        if (CadminApi.isLibraryType(resource, "camel-route")) {
+            window.location.hash = "#/camel-routes/" + encodeURIComponent(resource.id);
+            return;
+        }
         library = resource;
         const $root = $(CadminWorkspace.root());
         $root.html(
             '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
                 "<div>" +
                     '<a class="small text-decoration-none" href="#/pds-policies"><i class="bi bi-arrow-left me-1"></i>PDS Policies</a>' +
-                    '<h1 class="h3 mb-0 page-title">' + esc(library.title || library.name || "PDS policy") + "</h1>" +
+                    '<div class="d-flex align-items-center flex-wrap gap-2">' +
+                        '<h1 class="h3 mb-0 page-title">' + esc(library.title || library.name || "PDS policy") + "</h1>" +
+                        CadminApi.unsavedFlagHtml() +
+                    "</div>" +
                 "</div>" +
                 CadminResourceSource.button() +
             "</div>" +
@@ -1502,6 +1531,7 @@ window.CadminPdsPolicyDetail = (function () {
         renderOnTargetRows(policy.onTarget);
         renderRules(policy.rules);
         targetEditor = attachSpelEditor(document.getElementById("pd-policy-target"), "6.5rem");
+        markPolicyClean();
     }
 
     function loadImportChoices() {
@@ -1688,6 +1718,7 @@ window.CadminPdsPolicyDetail = (function () {
     function bindForms() {
         const $root = $(CadminWorkspace.root());
         $root.off(".pdsdetail");
+        $root.on("input.pdsdetail change.pdsdetail", "#pd-policy-form :input", syncUnsavedFlag);
 
         $root.on("click.pdsdetail", "[data-remove]", function () {
             const fieldName = $(this).attr("data-remove");
@@ -1857,6 +1888,7 @@ window.CadminPdsPolicyDetail = (function () {
         $root.on("click.pdsdetail", "#pd-policy-import-add", function () {
             $("#pd-imports-empty").remove();
             $("#pd-policy-imports").append(importRowHtml(""));
+            syncUnsavedFlag();
         });
 
         $root.on("click.pdsdetail", "[data-import-remove]", function () {
@@ -1864,6 +1896,7 @@ window.CadminPdsPolicyDetail = (function () {
             if (!$("#pd-policy-imports .pd-import-row").length) {
                 renderImportRows([]);
             }
+            syncUnsavedFlag();
         });
 
         $root.on("click.pdsdetail", "#pd-policy-ontarget-add", function () {
@@ -1871,6 +1904,7 @@ window.CadminPdsPolicyDetail = (function () {
             const $row = $(onTargetRowHtml(""));
             $("#pd-policy-ontarget").append($row);
             attachOnTargetEditor($row);
+            syncUnsavedFlag();
         });
 
         $root.on("click.pdsdetail", "[data-ontarget-remove]", function () {
@@ -1883,6 +1917,7 @@ window.CadminPdsPolicyDetail = (function () {
             if (!$("#pd-policy-ontarget .pd-ontarget-row").length) {
                 renderOnTargetRows([]);
             }
+            syncUnsavedFlag();
         });
 
         $root.on("click.pdsdetail", "#pd-policy-rule-add", function () {
@@ -1890,6 +1925,7 @@ window.CadminPdsPolicyDetail = (function () {
             const $card = $(ruleCardHtml(Object.assign(emptyRule(), { id: nextRuleId() })));
             $("#pd-policy-rules").append($card);
             attachRuleEditors($card);
+            syncUnsavedFlag();
         });
 
         $root.on("click.pdsdetail", "[data-rule-remove]", function () {
@@ -1901,6 +1937,7 @@ window.CadminPdsPolicyDetail = (function () {
             if (!$("#pd-policy-rules .pd-rule-card").length) {
                 renderRules([]);
             }
+            syncUnsavedFlag();
         });
 
         $root.on("click.pdsdetail", "[data-rule-list-add]", function () {
@@ -1910,6 +1947,7 @@ window.CadminPdsPolicyDetail = (function () {
             const $row = $(spelListRowHtml(""));
             $list.append($row);
             attachOnTargetEditor($row);
+            syncUnsavedFlag();
         });
 
         $root.on("click.pdsdetail", "[data-spel-remove]", function () {
@@ -1920,6 +1958,7 @@ window.CadminPdsPolicyDetail = (function () {
             if ($list.length && !$list.find(".pd-spel-row").length) {
                 $list.html('<div class="text-muted small pd-spel-empty">None.</div>');
             }
+            syncUnsavedFlag();
         });
 
         $("#pd-policy-form").on("submit", function (event) {

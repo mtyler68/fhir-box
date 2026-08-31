@@ -44,9 +44,11 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/theme/material-darker.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/hint/show-hint.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/dialog/dialog.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/fold/foldgutter.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vis-network@9.1.13/styles/vis-network.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11.23.0/dist/sweetalert2.min.css">
     <link href="/css/cadmin.css" rel="stylesheet">
 </head>
 <body class="layout-fixed fixed-header fixed-footer sidebar-expand-lg sidebar-mini bg-body-tertiary">
@@ -196,6 +198,35 @@
                     <li class="nav-item admin-only" data-route="practitioner-roles">
                         <a class="nav-link" href="#/practitioner-roles"><i class="nav-icon bi bi-person-vcard"></i><p>Practitioner roles</p></a>
                     </li>
+                    <li class="nav-item admin-only" data-route="organization-affiliations">
+                        <a class="nav-link" href="#/organization-affiliations"><i class="nav-icon bi bi-buildings"></i><p>Organization affiliations</p></a>
+                    </li>
+                    <li class="nav-header admin-only">Scheduling</li>
+                    <li class="nav-item admin-only" data-route="schedules">
+                        <a class="nav-link" href="#/schedules"><i class="nav-icon bi bi-calendar3"></i><p>Schedules</p></a>
+                    </li>
+                    <li class="nav-item admin-only" data-route="slots">
+                        <a class="nav-link" href="#/slots"><i class="nav-icon bi bi-calendar2-week"></i><p>Slots</p></a>
+                    </li>
+                    <li class="nav-item admin-only" data-route="appointments">
+                        <a class="nav-link" href="#/appointments"><i class="nav-icon bi bi-calendar-check"></i><p>Appointments</p></a>
+                    </li>
+                    <li class="nav-item admin-only" data-route="appointment-responses">
+                        <a class="nav-link" href="#/appointment-responses"><i class="nav-icon bi bi-calendar2-check"></i><p>Appointment responses</p></a>
+                    </li>
+                    <li class="nav-header admin-only">Workflow</li>
+                    <li class="nav-item admin-only" data-route="plan-definitions">
+                        <a class="nav-link" href="#/plan-definitions"><i class="nav-icon bi bi-diagram-3"></i><p>Plan definitions</p></a>
+                    </li>
+                    <li class="nav-item admin-only" data-route="activity-definitions">
+                        <a class="nav-link" href="#/activity-definitions"><i class="nav-icon bi bi-lightning-charge"></i><p>Activity definitions</p></a>
+                    </li>
+                    <li class="nav-item admin-only" data-route="request-orchestrations">
+                        <a class="nav-link" href="#/request-orchestrations"><i class="nav-icon bi bi-kanban"></i><p>Request orchestrations</p></a>
+                    </li>
+                    <li class="nav-item admin-only" data-route="plan-apply">
+                        <a class="nav-link" href="#/plan-apply"><i class="nav-icon bi bi-play-circle"></i><p>Apply plan</p></a>
+                    </li>
                     <li class="nav-header">Administration</li>
                     <li class="nav-item" data-route="users">
                         <a class="nav-link" href="#/users"><i class="nav-icon bi bi-person-badge"></i><p>Users</p></a>
@@ -206,6 +237,9 @@
                     <li class="nav-header admin-only">Libraries</li>
                     <li class="nav-item admin-only" data-route="pds-policies">
                         <a class="nav-link" href="#/pds-policies"><i class="nav-icon bi bi-journal-text"></i><p>PDS Policies</p></a>
+                    </li>
+                    <li class="nav-item admin-only" data-route="camel-routes">
+                        <a class="nav-link" href="#/camel-routes"><iconify-icon class="nav-icon" icon="hugeicons:camel" aria-hidden="true"></iconify-icon><p>Camel Routes</p></a>
                     </li>
                     <li class="nav-item admin-only" data-route="search-parameters">
                         <a class="nav-link" href="#/search-parameters"><i class="nav-icon bi bi-search"></i><p>Search Parameters</p></a>
@@ -232,6 +266,9 @@
                     </li>
                     <li class="nav-item admin-only" data-route="endpoints">
                         <a class="nav-link" href="#/endpoints"><i class="nav-icon bi bi-hdd-network"></i><p>Endpoints</p></a>
+                    </li>
+                    <li class="nav-item admin-only" data-route="core-admin-bridge">
+                        <a class="nav-link" href="#/core-admin-bridge"><iconify-icon class="nav-icon" icon="mdi:bridge" aria-hidden="true"></iconify-icon><p>Core Admin Bridge</p></a>
                     </li>
                     <li class="nav-header admin-only">WireMock</li>
                     <li class="nav-item admin-only" data-route="wiremock-mappings">
@@ -272,23 +309,32 @@
 <div class="toast-container position-fixed p-3" id="cadmin-toasts" aria-live="polite" aria-atomic="false"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.23.0/dist/sweetalert2.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/admin-lte@4.3.1/dist/js/adminlte.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.5.1/dist/js/tom-select.complete.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/display/placeholder.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/edit/matchbrackets.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/edit/closebrackets.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/comment/comment.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/dialog/dialog.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/search/searchcursor.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/search/search.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/search/jump-to-line.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/search/match-highlighter.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/fold/foldcode.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/fold/foldgutter.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/fold/brace-fold.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/fold/indent-fold.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/mode/xml/xml.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/mode/yaml/yaml.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/mode/javascript/javascript.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/runmode/runmode.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/hint/show-hint.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.13/standalone/umd/vis-network.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.1/dist/js-yaml.min.js"></script>
 <script src="/js/api.js"></script>
 <script src="/js/resource-source.js"></script>
 <script src="/js/target-list.js"></script>
@@ -298,7 +344,9 @@
 <script src="/js/npi-organization.js"></script>
 <script src="/js/transaction-bundle.js"></script>
 <script src="/js/resource-graph.js"></script>
+<script src="/js/camel-route-graph.js"></script>
 <script src="/js/resource-history.js"></script>
+<script src="/js/deleted-list.js"></script>
 <script src="/js/spel-completion-policy.js"></script>
 <script src="/js/app.js"></script>
 <script src="/js/workspace.js"></script>
@@ -323,12 +371,36 @@
 <script src="/js/pages/care-teams.js"></script>
 <script src="/js/pages/practitioner-role-detail.js"></script>
 <script src="/js/pages/practitioner-roles.js"></script>
+<script src="/js/pages/organization-affiliation-detail.js"></script>
+<script src="/js/pages/organization-affiliations.js"></script>
 <script src="/js/pages/location-detail.js"></script>
 <script src="/js/pages/locations.js"></script>
 <script src="/js/pages/healthcare-service-detail.js"></script>
 <script src="/js/pages/healthcare-services.js"></script>
+<script src="/js/scheduling.js"></script>
+<script src="/js/fhir-chief.js"></script>
+<script src="/js/workflow.js"></script>
+<script src="/js/pages/schedule-detail.js"></script>
+<script src="/js/pages/schedules.js"></script>
+<script src="/js/pages/slot-detail.js"></script>
+<script src="/js/pages/slots.js"></script>
+<script src="/js/pages/appointment-detail.js"></script>
+<script src="/js/pages/appointment-book.js"></script>
+<script src="/js/pages/appointments.js"></script>
+<script src="/js/pages/appointment-response-detail.js"></script>
+<script src="/js/pages/appointment-responses.js"></script>
+<script src="/js/pages/plan-definition-detail.js"></script>
+<script src="/js/pages/plan-definitions.js"></script>
+<script src="/js/pages/activity-definition-detail.js"></script>
+<script src="/js/pages/activity-definitions.js"></script>
+<script src="/js/pages/request-orchestration-detail.js"></script>
+<script src="/js/pages/request-orchestrations.js"></script>
+<script src="/js/pages/plan-apply.js"></script>
 <script src="/js/pages/pds-policy-detail.js"></script>
 <script src="/js/pages/pds-policies.js"></script>
+<script src="/js/pages/camel-route-detail.js"></script>
+<script src="/js/pages/camel-routes.js"></script>
+<script src="/js/pages/search-parameter-detail.js"></script>
 <script src="/js/pages/search-parameters.js"></script>
 <script src="/js/pages/questionnaire-detail.js"></script>
 <script src="/js/pages/questionnaires.js"></script>
@@ -350,6 +422,9 @@
 <script src="/js/pages/demo-data.js"></script>
 <script src="/js/pages/users.js"></script>
 <script src="/js/pages/settings.js"></script>
+<script src="/js/core-admin-bridge.js"></script>
+<script src="/js/pages/core-admin-bridge-detail.js"></script>
+<script src="/js/pages/core-admin-bridge.js"></script>
 <script src="/js/wiremock.js"></script>
 <script src="/js/pages/wiremock-mapping-detail.js"></script>
 <script src="/js/pages/wiremock-mappings.js"></script>

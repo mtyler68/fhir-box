@@ -543,11 +543,18 @@ window.CadminOrganizationDetail = (function () {
             }
             $("#org-affil-rows").html(rows.map(function (affil) {
                 const other = refId(affil.organization) === org.id ? affil.participatingOrganization : affil.organization;
+                const otherId = refId(other);
+                const otherHtml = otherId
+                    ? '<a href="#/organizations/' + encodeURIComponent(otherId) + '">' + esc(refLabel(other)) + "</a>"
+                    : esc(refLabel(other));
                 return "<tr>" +
-                    "<td>" + esc(refLabel(other)) + "</td>" +
+                    "<td>" + otherHtml + "</td>" +
                     "<td>" + esc(conceptLabel(affil.code)) + "</td>" +
                     "<td>" + statusBadge(affil.active !== false) + "</td>" +
-                    '<td class="text-end"><button class="btn btn-sm btn-outline-danger" type="button" data-delete="/OrganizationAffiliation/' +
+                    '<td class="text-end">' +
+                    '<a class="btn btn-sm btn-outline-primary me-1" href="#/organization-affiliations/' +
+                        encodeURIComponent(affil.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a>' +
+                    '<button class="btn btn-sm btn-outline-danger" type="button" data-delete="/OrganizationAffiliation/' +
                         encodeURIComponent(affil.id) + '" data-reload="affiliations" title="Remove" aria-label="Remove"><i class="bi bi-trash"></i></button></td>' +
                     "</tr>";
             }).join(""));

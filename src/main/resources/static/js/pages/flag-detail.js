@@ -386,21 +386,17 @@ window.CadminFlagDetail = (function () {
         });
 
         $root.on("click.flagdetail", "#fd-inactivate", function () {
-            if (!window.confirm("Inactivate this flag?")) {
-                return;
-            }
-            inactivate();
+            CadminApi.confirm("Inactivate this flag?").done(inactivate);
         });
 
         $root.on("click.flagdetail", "#fd-delete", function () {
-            if (!window.confirm("Delete this flag?")) {
-                return;
-            }
-            CadminApi.fhir("/Flag/" + encodeURIComponent(flag.id), "DELETE").done(function () {
-                CadminApi.showToast("success", "Flag deleted.");
-                window.location.hash = "#/flags";
-            }).fail(function (xhr) {
-                fail("Delete flag", xhr);
+            CadminApi.confirm("Delete this flag?").done(function () {
+                CadminApi.fhir("/Flag/" + encodeURIComponent(flag.id), "DELETE").done(function () {
+                    CadminApi.showToast("success", "Flag deleted.");
+                    window.location.hash = "#/flags";
+                }).fail(function (xhr) {
+                    fail("Delete flag", xhr);
+                });
             });
         });
     }

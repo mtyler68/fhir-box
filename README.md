@@ -23,7 +23,7 @@ Security is switchable:
 
 Open http://localhost:8080 and sign in with `admin` / `admin` (or `clinician` / `clinician`).
 
-The SPA is served from the gateway. Calls to `/fhir/**` are proxied to HAPI FHIR at `http://localhost:8081`, and `/wiremock/**` is proxied to WireMock at `http://localhost:9090` (start those stacks separately).
+The SPA is served from the gateway. Calls to `/fhir/**` are proxied to HAPI FHIR at `http://localhost:8081`, `/wiremock/**` is proxied to WireMock at `http://localhost:9090`, `/core-admin-bridge/**` is proxied to Core Admin Bridge at `http://localhost:8280`, and `/fhir-chief/**` is proxied to FHIR Chief at `http://localhost:8380` (start those stacks separately).
 
 ## Live reload (DevTools)
 
@@ -130,6 +130,46 @@ Override the WireMock origin:
 export CADMIN_WIREMOCK_URI=http://localhost:9090
 ```
 
+## Core Admin Bridge
+
+Core Admin Bridge is a Spring Boot Camel engine with the Camel actuator and developer console. The Integrations sidebar page reads those endpoints through the gateway.
+
+| Service | URL / port |
+| --- | --- |
+| Core Admin Bridge | http://localhost:8280 |
+| Actuator (direct) | http://localhost:8280/actuator |
+| Camel console (via gateway) | http://localhost:8080/core-admin-bridge/actuator/camel |
+
+The gateway route `/core-admin-bridge/**` forwards to `cadmin.core-admin-bridge.uri` (default `http://localhost:8280`), strips the first path segment, and removes the browser session cookie.
+
+Override the Core Admin Bridge origin:
+
+```bash
+export CADMIN_CORE_ADMIN_BRIDGE_URI=http://localhost:8280
+```
+
+## FHIR Chief
+
+FHIR Chief is a sibling service (`../fhir-chief`) that owns slot generation, `$find` / `$hold` / `$book` / `$cancel` / `$reschedule` / `$propose`, hold expiry, waitlist promotion, and PlanDefinition `$apply` / `$advance` / `$cancel`. HAPI remains the store. Booking and plan runs from FHIR Box go through Chief, not raw `POST /Appointment` or HAPI `$apply`.
+
+| Service | URL / port |
+| --- | --- |
+| FHIR Chief | http://localhost:8380 |
+| Status (via gateway) | http://localhost:8080/fhir-chief/status |
+
+```bash
+cd ../fhir-chief
+./mvnw spring-boot:run
+```
+
+The gateway route `/fhir-chief/**` forwards to `cadmin.fhir-chief.uri` (default `http://localhost:8380`), strips the first path segment, and removes the browser session cookie.
+
+Override the FHIR Chief origin:
+
+```bash
+export CADMIN_FHIR_CHIEF_URI=http://localhost:8380
+```
+
 ## Configuration
 
 | Property | Default | Purpose |
@@ -138,7 +178,9 @@ export CADMIN_WIREMOCK_URI=http://localhost:9090
 | `cadmin.security.users` | admin, clinician | Local form-login accounts |
 | `cadmin.fhir.uri` | `http://localhost:8081` | Downstream HAPI FHIR origin |
 | `cadmin.wiremock.uri` | `http://localhost:9090` | Downstream WireMock origin |
-| `spring.cloud.gateway.server.webflux.routes` | `/fhir/**`, `/wiremock/**` | Additional proxy routes |
+| `cadmin.core-admin-bridge.uri` | `http://localhost:8280` | Downstream Core Admin Bridge origin |
+| `cadmin.fhir-chief.uri` | `http://localhost:8380` | Downstream FHIR Chief origin |
+| `spring.cloud.gateway.server.webflux.routes` | `/fhir/**`, `/wiremock/**`, `/core-admin-bridge/**`, `/fhir-chief/**` | Additional proxy routes |
 
 Local users are defined in `src/main/resources/application.yml`. Passwords are treated as plaintext unless they already use a Spring `{id}` prefix such as `{bcrypt}...`.
 

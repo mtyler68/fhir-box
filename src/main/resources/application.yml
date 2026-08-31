@@ -23,6 +23,20 @@ spring:
               filters:
                 - StripPrefix=1
                 - RemoveRequestHeader=Cookie
+            - id: core-admin-bridge
+              uri: ${cadmin.core-admin-bridge.uri}
+              predicates:
+                - Path=/core-admin-bridge/**
+              filters:
+                - StripPrefix=1
+                - RemoveRequestHeader=Cookie
+            - id: fhir-chief
+              uri: ${cadmin.fhir-chief.uri}
+              predicates:
+                - Path=/fhir-chief/**
+              filters:
+                - StripPrefix=1
+                - RemoveRequestHeader=Cookie
 
 server:
   port: ${CADMIN_PORT:8080}
@@ -50,6 +64,10 @@ cadmin:
     version: "2.1"
   wiremock:
     uri: ${CADMIN_WIREMOCK_URI:http://localhost:9090}
+  core-admin-bridge:
+    uri: ${CADMIN_CORE_ADMIN_BRIDGE_URI:http://localhost:8280}
+  fhir-chief:
+    uri: ${CADMIN_FHIR_CHIEF_URI:http://localhost:8380}
 
 management:
   endpoints:

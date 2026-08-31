@@ -101,6 +101,13 @@ window.CadminPractitionerDetail = (function () {
             : '<span class="badge text-bg-secondary">Inactive</span>';
     }
 
+    function codeStatusBadge(status) {
+        const kind = status === "active" ? "success"
+            : status === "suspended" ? "warning"
+                : "secondary";
+        return '<span class="badge text-bg-' + kind + '">' + esc(status || "—") + "</span>";
+    }
+
     function emptyRow(cols, text) {
         return '<tr><td colspan="' + cols + '" class="text-muted">' + text + "</td></tr>";
     }
@@ -423,8 +430,11 @@ window.CadminPractitionerDetail = (function () {
                                     ? tabPane("prd-tab-care",
                                         card("Organization roles", "prd-role-rows",
                                             ["Organization", "Location", "Role", "Status", ""], "#prd-role-modal", "Add") +
+                                        card("Locations", "prd-loc-rows",
+                                            ["Name", "Status", "Address", "Organization", ""], "#prd-loc-modal", "Add") +
                                         card("Care teams", "prd-team-rows",
-                                            ["Patient", "Care team", "Role", ""], "#prd-team-modal", "Add"),
+                                            ["Patient", "Care team", "Role", ""], "#prd-team-modal", "Add") +
+                                        (window.CadminScheduling ? CadminScheduling.relatedCard("prd-appt-rows") : ""),
                                         false)
                                     : "") +
                                 tabPane("prd-tab-graph", CadminResourceGraph.card(), false) +
@@ -479,6 +489,10 @@ window.CadminPractitionerDetail = (function () {
                 '<div class="form-check mb-0"><input class="form-check-input" type="checkbox" id="prd-role-active" checked>' +
                     '<label class="form-check-label" for="prd-role-active">Active</label></div>',
                 "prd-role-form") +
+            modal("prd-loc-modal", "Add location",
+                field("Organization role", '<select class="form-select" id="prd-loc-role" required><option value="">Select…</option></select>') +
+                field("Location", '<select class="form-select" id="prd-loc-select" required></select>'),
+                "prd-loc-form") +
             modal("prd-team-modal", "Add to care team",
                 '<div class="mb-3">' +
                     '<label class="form-label">Membership</label>' +
@@ -512,10 +526,14 @@ window.CadminPractitionerDetail = (function () {
         renderLanguages();
         bindForms();
         if (isAdmin()) {
+            if (window.CadminScheduling) {
+                CadminScheduling.loadRelated("prd-appt-rows", "practitioner=" + encodeURIComponent(practitioner.id));
+            }
             loadRoles();
             loadCareTeams();
             $("#prd-role-modal").on("show.bs.modal", populateRoleForm);
             $("#prd-role-modal").on("hidden.bs.modal", resetRoleEditor);
+            $("#prd-loc-modal").on("show.bs.modal", populateLocForm);
             $("#prd-team-modal").on("show.bs.modal", function () {
                 $("#prd-ct-mode-existing").prop("checked", true);
                 toggleCareTeamMode();
@@ -821,6 +839,123 @@ window.CadminPractitionerDetail = (function () {
         $("#prd-role-active").prop("checked", !role || role.active !== false);
     }
 
+    function roleOptionLabel(role) {
+        const orgName = refLabel(role.organization);
+        const roleName = conceptLabel(role.code);
+        return [orgName !== "—" ? orgName : (role.id || "Role"), roleName !== "—" ? roleName : ""]
+            .filter(Boolean).join(" · ");
+    }
+
+    function listedRoles() {
+        return Object.keys(rolesById).map(function (id) {
+            return rolesById[id];
+        });
+    }
+
+    function populateLocForm(event) {
+        const roles = listedRoles();
+        if (!roles.length) {
+            if (event && typeof event.preventDefault === "function") {
+                event.preventDefault();
+            }
+            alertMsg("warning", "Add an organization role before attaching a location.");
+            return;
+        }
+        const $role = $("#prd-loc-role");
+        $role.html('<option value="">Select…</option>');
+        roles.forEach(function (role) {
+            $role.append('<option value="' + esc(role.id) + '">' + esc(roleOptionLabel(role)) + "</option>");
+        });
+        if (roles.length === 1) {
+            $role.val(roles[0].id);
+        }
+        CadminApi.bindFhirSelect("#prd-loc-select", "Location", { placeholder: "Search locations…" });
+    }
+
+    function renderLocationRows(roles, orgs, locs) {
+        const byLoc = {};
+        (roles || []).forEach(function (role) {
+            (role.location || []).forEach(function (ref) {
+                const locId = refId(ref);
+                if (!locId) {
+                    return;
+                }
+                if (!byLoc[locId]) {
+                    byLoc[locId] = { id: locId, ref: ref, roles: [], loc: locs[locId] };
+                }
+                byLoc[locId].roles.push(role);
+            });
+        });
+        const rows = Object.keys(byLoc).map(function (id) {
+            return byLoc[id];
+        });
+        rows.sort(function (left, right) {
+            const leftName = (left.loc && left.loc.name) || refLabel(left.ref) || left.id;
+            const rightName = (right.loc && right.loc.name) || refLabel(right.ref) || right.id;
+            return leftName.localeCompare(rightName);
+        });
+        if (!rows.length) {
+            $("#prd-loc-rows").html(emptyRow(5, "No locations."));
+            return;
+        }
+        $("#prd-loc-rows").html(rows.map(function (item) {
+            const loc = item.loc;
+            const name = (loc && loc.name) || refLabel(item.ref) || item.id;
+            const nameHtml = '<a href="#/locations/' + encodeURIComponent(item.id) + '">' + esc(name) + "</a>";
+            const orgSeen = {};
+            const orgHtml = item.roles.map(function (role) {
+                const orgId = refId(role.organization) || "";
+                if (orgSeen[orgId]) {
+                    return "";
+                }
+                orgSeen[orgId] = true;
+                const orgName = (orgs[orgId] && orgs[orgId].name) || refLabel(role.organization);
+                return orgId
+                    ? '<a href="#/organizations/' + encodeURIComponent(orgId) + '">' + esc(orgName) + "</a>"
+                    : esc(orgName || "—");
+            }).filter(Boolean).join(", ") || "—";
+            return "<tr><td>" + nameHtml + "</td><td>" + codeStatusBadge(loc && loc.status) + "</td><td>" +
+                esc(formatAddress(loc && loc.address)) + "</td><td>" + orgHtml + "</td>" +
+                '<td class="text-end"><button class="btn btn-sm btn-outline-danger" type="button" data-remove-loc="' +
+                esc(item.id) + '" title="Remove" aria-label="Remove"><i class="bi bi-trash"></i></button></td></tr>';
+        }).join(""));
+    }
+
+    function rolesWithLocation(locId) {
+        return listedRoles().filter(function (role) {
+            return (role.location || []).some(function (ref) {
+                return refId(ref) === locId;
+            });
+        });
+    }
+
+    function dropLocation(role, locId) {
+        const copy = $.extend(true, {}, role);
+        copy.location = (copy.location || []).filter(function (ref) {
+            return refId(ref) !== locId;
+        });
+        if (!copy.location.length) {
+            delete copy.location;
+        }
+        return copy;
+    }
+
+    function unlinkLocation(locId, roles, index) {
+        if (index >= roles.length) {
+            alertMsg("success", "Location removed.");
+            loadRoles();
+            return;
+        }
+        const role = roles[index];
+        CadminApi.fhir("/PractitionerRole/" + encodeURIComponent(role.id), "PUT", dropLocation(role, locId))
+            .done(function () {
+                unlinkLocation(locId, roles, index + 1);
+            }).fail(function (xhr) {
+                fail("Remove location", xhr);
+                loadRoles();
+            });
+    }
+
     function openRoleEditor(role) {
         editingRole = role;
         showModal("prd-role-modal");
@@ -841,12 +976,22 @@ window.CadminPractitionerDetail = (function () {
             delete resource.organization;
         }
         if (locationId) {
+            const extras = (resource.location || []).slice(1).filter(function (ref) {
+                return refId(ref) && refId(ref) !== locationId;
+            });
             resource.location = [{
                 reference: "Location/" + locationId,
                 display: $("#prd-role-loc option:selected").text()
-            }];
+            }].concat(extras);
         } else {
-            delete resource.location;
+            const extras = (resource.location || []).slice(1).filter(function (ref) {
+                return !!refId(ref);
+            });
+            if (extras.length) {
+                resource.location = extras;
+            } else {
+                delete resource.location;
+            }
         }
         const coding = roleCoding(roleOption);
         if (coding) {
@@ -885,6 +1030,7 @@ window.CadminPractitionerDetail = (function () {
             } else {
                 $("#prd-about-org").text("—");
             }
+            renderLocationRows(roles, orgs, locs);
             if (!roles.length) {
                 $("#prd-role-rows").html(emptyRow(5, "No organization roles."));
                 return;
@@ -915,6 +1061,7 @@ window.CadminPractitionerDetail = (function () {
             setStat("roles", 0);
             $("#prd-about-org").text("—");
             $("#prd-role-rows").html(emptyRow(5, "Unable to load roles."));
+            $("#prd-loc-rows").html(emptyRow(5, "Unable to load locations."));
             fail("Load roles", xhr);
         });
     }
@@ -993,6 +1140,15 @@ window.CadminPractitionerDetail = (function () {
             }).fail(function (xhr) {
                 fail("Remove role", xhr);
             });
+        });
+
+        $root.on("click.prdetail", "[data-remove-loc]", function () {
+            const locId = $(this).attr("data-remove-loc");
+            const roles = rolesWithLocation(locId);
+            if (!roles.length) {
+                return;
+            }
+            unlinkLocation(locId, roles, 0);
         });
 
         $root.on("click.prdetail", "[data-remove-team]", function () {
@@ -1213,6 +1369,39 @@ window.CadminPractitionerDetail = (function () {
             }).fail(function (xhr) {
                 fail("Add role", xhr);
             });
+        });
+
+        $("#prd-loc-form").on("submit", function (event) {
+            event.preventDefault();
+            const roleId = $("#prd-loc-role").val();
+            const locId = CadminApi.selectValue("#prd-loc-select");
+            if (!roleId || !locId) {
+                alertMsg("danger", "Select a role and a location.");
+                return;
+            }
+            const role = rolesById[roleId];
+            if (!role) {
+                alertMsg("danger", "Select an organization role.");
+                return;
+            }
+            if ((role.location || []).some(function (ref) { return refId(ref) === locId; })) {
+                alertMsg("warning", "That location is already on this role.");
+                return;
+            }
+            const resource = $.extend(true, {}, role);
+            resource.location = (resource.location || []).slice();
+            resource.location.push({
+                reference: "Location/" + locId,
+                display: CadminApi.selectLabel("#prd-loc-select")
+            });
+            CadminApi.fhir("/PractitionerRole/" + encodeURIComponent(role.id), "PUT", resource)
+                .done(function () {
+                    hideModal("prd-loc-modal");
+                    alertMsg("success", "Location added.");
+                    loadRoles();
+                }).fail(function (xhr) {
+                    fail("Add location", xhr);
+                });
         });
 
         $("#prd-team-form").on("submit", function (event) {

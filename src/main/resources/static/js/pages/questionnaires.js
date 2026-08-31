@@ -31,13 +31,16 @@ function renderQuestionnaireList(initialQuery) {
         "</div>" +
         '<div id="questionnaire-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
-            '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
+            '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
                 '<h6 class="m-0">Questionnaire search</h6>' +
+                '<div class="d-flex flex-wrap align-items-center gap-2">' +
                 '<form class="d-flex" id="questionnaire-search-form">' +
                     '<input class="form-control form-control-sm me-2" id="questionnaire-query" placeholder="Title" value="' +
                         CadminApi.escapeHtml(initialQuery) + '">' +
                     '<button class="btn btn-sm btn-primary" type="submit">Search</button>' +
                 "</form>" +
+                CadminDeletedList.controls() +
+                "</div>" +
             "</div>" +
             '<div class="card-body">' +
                 '<div class="table-responsive">' +
@@ -149,10 +152,11 @@ function renderQuestionnaireList(initialQuery) {
         listPage = typeof page === "number" ? page : 0;
         let path = "/Questionnaire?_sort=-_lastUpdated";
         if (query) {
-            path += "&title=" + encodeURIComponent(query);
+            path += (/^[a-z][a-z0-9+.-]*:/i.test(query) ? "&url=" : "&title=")
+                + encodeURIComponent(query);
         }
         const pageSize = CadminApi.listPageSize("questionnaires");
-        CadminApi.fhir(CadminApi.pagedPath(path, listPage, pageSize)).done(function (bundle) {
+        CadminDeletedList.query({ type: "Questionnaire", path: path, page: listPage, size: pageSize }).done(function (bundle) {
             const entries = CadminApi.bundleResources(bundle, "Questionnaire");
             CadminApi.renderPager("#questionnaire-pager", {
                 page: listPage,
@@ -164,7 +168,7 @@ function renderQuestionnaireList(initialQuery) {
                 onPage: function (nextPage) { load(query, nextPage); }
             });
             if (!entries.length) {
-                $("#questionnaire-rows").html('<tr><td colspan="7" class="text-muted">No questionnaires found. Create one or start HAPI FHIR.</td></tr>');
+                $("#questionnaire-rows").html(CadminDeletedList.emptyRow(7, "Questionnaire", "No questionnaires found. Create one or start HAPI FHIR."));
                 return;
             }
             $("#questionnaire-rows").html(entries.map(function (qn) {
@@ -290,6 +294,11 @@ function renderQuestionnaireList(initialQuery) {
         }).fail(function (xhr) {
             CadminApi.showToast("danger", "Duplicate failed (" + xhr.status + ").");
         });
+    });
+
+    CadminDeletedList.bind({
+        type: "Questionnaire",
+        reload: function () { load($("#questionnaire-query").val(), 0); }
     });
 
     load(initialQuery);

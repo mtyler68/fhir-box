@@ -145,14 +145,16 @@ function renderWiremockMappingList() {
 
     $root.on("click.wmmaps", "[data-wm-delete]", function () {
         const id = $(this).attr("data-wm-delete");
-        if (!id || !window.confirm("Delete this stub mapping?")) {
+        if (!id) {
             return;
         }
-        CadminApi.wiremock("/__admin/mappings/" + encodeURIComponent(id), "DELETE").done(function () {
-            CadminApi.showToast("success", "Mapping deleted.");
-            load();
-        }).fail(function (xhr) {
-            CadminApi.showToast("danger", wm.fail("Delete mapping", xhr));
+        CadminApi.confirm("Delete this stub mapping?").done(function () {
+            CadminApi.wiremock("/__admin/mappings/" + encodeURIComponent(id), "DELETE").done(function () {
+                CadminApi.showToast("success", "Mapping deleted.");
+                load();
+            }).fail(function (xhr) {
+                CadminApi.showToast("danger", wm.fail("Delete mapping", xhr));
+            });
         });
     });
 
@@ -165,26 +167,27 @@ function renderWiremockMappingList() {
     });
 
     $root.on("click.wmmaps", "#wm-map-reset", function () {
-        if (!window.confirm("Reset stub mappings to the files mounted in the WireMock container?")) {
-            return;
-        }
-        CadminApi.wiremock("/__admin/mappings/reset", "POST").done(function () {
-            CadminApi.showToast("success", "Mappings reset from files.");
-            load();
-        }).fail(function (xhr) {
-            CadminApi.showToast("danger", wm.fail("Reset mappings", xhr));
+        CadminApi.confirm({
+            title: "Reset stub mappings?",
+            text: "This restores mappings from the files mounted in the WireMock container."
+        }).done(function () {
+            CadminApi.wiremock("/__admin/mappings/reset", "POST").done(function () {
+                CadminApi.showToast("success", "Mappings reset from files.");
+                load();
+            }).fail(function (xhr) {
+                CadminApi.showToast("danger", wm.fail("Reset mappings", xhr));
+            });
         });
     });
 
     $root.on("click.wmmaps", "#wm-map-delete-all", function () {
-        if (!window.confirm("Delete every stub mapping from this WireMock server?")) {
-            return;
-        }
-        CadminApi.wiremock("/__admin/mappings", "DELETE").done(function () {
-            CadminApi.showToast("success", "All mappings deleted.");
-            load();
-        }).fail(function (xhr) {
-            CadminApi.showToast("danger", wm.fail("Delete mappings", xhr));
+        CadminApi.confirm("Delete every stub mapping from this WireMock server?").done(function () {
+            CadminApi.wiremock("/__admin/mappings", "DELETE").done(function () {
+                CadminApi.showToast("success", "All mappings deleted.");
+                load();
+            }).fail(function (xhr) {
+                CadminApi.showToast("danger", wm.fail("Delete mappings", xhr));
+            });
         });
     });
 

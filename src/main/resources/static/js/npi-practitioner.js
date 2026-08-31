@@ -6,6 +6,7 @@ window.CadminNpiPractitioner = (function ($) {
     let step = 1;
     let lookup = null;
     let creating = false;
+    let createdOidcId = "";
 
     function esc(value) {
         return CadminApi.escapeHtml(value);
@@ -71,11 +72,7 @@ window.CadminNpiPractitioner = (function ($) {
                             '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>' +
                         "</div>" +
                         '<div class="modal-body">' +
-                            '<ol class="npi-wizard-steps mb-3" id="' + MODAL_ID + '-steps">' +
-                                '<li class="npi-wizard-step" data-npi-step="1">Enter NPI</li>' +
-                                '<li class="npi-wizard-step" data-npi-step="2">Review</li>' +
-                                '<li class="npi-wizard-step" data-npi-step="3">Summary</li>' +
-                            "</ol>" +
+                            '<ol class="npi-wizard-steps mb-3" id="' + MODAL_ID + '-steps"></ol>' +
                             '<div id="' + MODAL_ID + '-alert" class="alert alert-danger d-none"></div>' +
                             '<div data-npi-pane="1">' +
                                 '<p class="text-muted">Look up an individual provider in the CMS NPI Registry.</p>' +
@@ -85,7 +82,8 @@ window.CadminNpiPractitioner = (function ($) {
                                     'placeholder="10-digit NPI">' +
                             "</div>" +
                             '<div data-npi-pane="2" class="d-none" id="' + MODAL_ID + '-review"></div>' +
-                            '<div data-npi-pane="3" class="d-none" id="' + MODAL_ID + '-summary"></div>' +
+                            '<div data-npi-pane="oidc" class="d-none" id="' + MODAL_ID + '-oidc"></div>' +
+                            '<div data-npi-pane="summary" class="d-none" id="' + MODAL_ID + '-summary"></div>' +
                         "</div>" +
                         '<div class="modal-footer">' +
                             '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>' +
@@ -122,6 +120,17 @@ window.CadminNpiPractitioner = (function ($) {
         $("#" + MODAL_ID).on("click", "#" + MODAL_ID + "-view-fhir", function () {
             showGeneratedFhir();
         });
+        $("#" + MODAL_ID).on("change", "input[name=npi-oidc-choice]", syncOidcChoice);
+        $("#" + MODAL_ID).on("change", "#npi-oidc-use-email", function () {
+            syncUsernameFromEmail(true);
+        });
+        $("#" + MODAL_ID).on("input", "#npi-oidc-email", function () {
+            syncUsernameFromEmail(false);
+            clearFieldError("npi-oidc-email");
+        });
+        $("#" + MODAL_ID).on("input", "#npi-oidc-first, #npi-oidc-last, #npi-oidc-username, #npi-oidc-mobile", function () {
+            clearFieldError(this.id);
+        });
     }
 
     function showAlert(message) {
@@ -138,27 +147,63 @@ window.CadminNpiPractitioner = (function ($) {
         $("#" + MODAL_ID + "-next").toggleClass("disabled", !!busy);
     }
 
+    function isOidcMode() {
+        return ((window.CadminApp && CadminApp.config()) || {}).mode === "oidc";
+    }
+
+    function canCreateOidcUser() {
+        return isOidcMode() && isAdmin();
+    }
+
+    function lastStep() {
+        return isOidcMode() ? 4 : 3;
+    }
+
+    function paneFor(value) {
+        if (value === 1) {
+            return "1";
+        }
+        if (value === 2) {
+            return "2";
+        }
+        if (isOidcMode() && value === 3) {
+            return "oidc";
+        }
+        return "summary";
+    }
+
+    function renderSteps() {
+        const labels = isOidcMode()
+            ? ["Enter NPI", "Review", "OIDC user", "Summary"]
+            : ["Enter NPI", "Review", "Summary"];
+        $("#" + MODAL_ID + "-steps").html(labels.map(function (label, index) {
+            return '<li class="npi-wizard-step" data-npi-step="' + (index + 1) + '">' + esc(label) + "</li>";
+        }).join(""));
+    }
+
     function showStep(next) {
         step = next;
         hideAlert();
         $("#" + MODAL_ID + " [data-npi-pane]").addClass("d-none");
-        $("#" + MODAL_ID + " [data-npi-pane=\"" + step + "\"]").removeClass("d-none");
+        $("#" + MODAL_ID + " [data-npi-pane=\"" + paneFor(step) + "\"]").removeClass("d-none");
         $("#" + MODAL_ID + "-steps .npi-wizard-step").each(function () {
             const value = Number($(this).attr("data-npi-step"));
             $(this).toggleClass("active", value === step);
             $(this).toggleClass("done", value < step);
         });
         $("#" + MODAL_ID + "-back").toggleClass("d-none", step === 1);
-        $("#" + MODAL_ID + "-next").toggleClass("d-none", step === 3);
-        $("#" + MODAL_ID + "-create").toggleClass("d-none", step !== 3);
+        $("#" + MODAL_ID + "-next").toggleClass("d-none", step === lastStep());
+        $("#" + MODAL_ID + "-create").toggleClass("d-none", step !== lastStep());
     }
 
     function reset() {
         lookup = null;
         creating = false;
+        createdOidcId = "";
         setBusy(false);
         $("#" + MODAL_ID + "-number").val("");
-        $("#" + MODAL_ID + "-review, #" + MODAL_ID + "-summary").empty();
+        $("#" + MODAL_ID + "-review, #" + MODAL_ID + "-oidc, #" + MODAL_ID + "-summary").empty();
+        renderSteps();
         showStep(1);
     }
 
@@ -193,6 +238,303 @@ window.CadminNpiPractitioner = (function ($) {
             return "Female";
         }
         return "Unknown";
+    }
+
+    function oidcIssuer() {
+        return ((window.CadminApp && CadminApp.config() || {}).oidcIssuer || "").replace(/\/+$/, "");
+    }
+
+    function oidcIdentifier(oidcId) {
+        return {
+            use: "official",
+            system: oidcIssuer(),
+            value: oidcId,
+            type: { text: "OIDC subject" }
+        };
+    }
+
+    function slugPart(value) {
+        return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+    }
+
+    function suggestedUsername(first, last) {
+        const given = slugPart(first);
+        const family = slugPart(last);
+        if (given && family) {
+            return given + "." + family;
+        }
+        return given || family;
+    }
+
+    function suggestedMobile() {
+        const result = lookup || {};
+        const phones = [(result.mailing && result.mailing.telephone)]
+            .concat((result.practiceLocations || []).map(function (location) {
+                return location && location.telephone;
+            }))
+            .filter(Boolean);
+        return phones[0] || "";
+    }
+
+    function fieldError(id, message) {
+        $("#" + id).toggleClass("is-invalid", !!message);
+        $("#" + id + "-feedback").text(message || "");
+    }
+
+    function clearFieldError(id) {
+        fieldError(id, "");
+    }
+
+    function clearOidcErrors() {
+        ["npi-oidc-first", "npi-oidc-last", "npi-oidc-email", "npi-oidc-mobile", "npi-oidc-username", "npi-oidc-link"]
+            .forEach(clearFieldError);
+    }
+
+    function oidcChoice() {
+        return $("input[name=npi-oidc-choice]:checked").val() || "skip";
+    }
+
+    function syncOidcChoice() {
+        const choice = oidcChoice();
+        $("#npi-oidc-create-fields").toggleClass("d-none", choice !== "create");
+        $("#npi-oidc-link-fields").toggleClass("d-none", choice !== "link");
+    }
+
+    function syncUsernameFromEmail(force) {
+        const useEmail = $("#npi-oidc-use-email").is(":checked");
+        $("#npi-oidc-username").prop("readonly", useEmail);
+        if (useEmail && (force || !$("#npi-oidc-username").data("manual"))) {
+            $("#npi-oidc-username").val($("#npi-oidc-email").val().trim());
+        }
+    }
+
+    function readOidcForm() {
+        return {
+            firstName: $("#npi-oidc-first").val().trim(),
+            lastName: $("#npi-oidc-last").val().trim(),
+            email: $("#npi-oidc-email").val().trim(),
+            mobile: $("#npi-oidc-mobile").val().trim(),
+            username: $("#npi-oidc-username").val().trim(),
+            useEmail: $("#npi-oidc-use-email").is(":checked")
+        };
+    }
+
+    function linkedOidcId() {
+        const linked = selectedLinkUser();
+        return linked && linked.oidcId ? linked.oidcId : "";
+    }
+
+    function currentOidcId() {
+        return createdOidcId || linkedOidcId();
+    }
+
+    function selectedLinkUser() {
+        const $option = $("#npi-oidc-link option:selected");
+        const oidcId = $option.val();
+        if (!oidcId) {
+            return null;
+        }
+        return {
+            oidcId: oidcId,
+            username: $option.attr("data-username") || $option.text(),
+            displayName: $option.attr("data-display") || $option.text()
+        };
+    }
+
+    function renderOidcStep() {
+        if ($("#npi-oidc-first").length) {
+            syncOidcChoice();
+            return;
+        }
+        const result = lookup || {};
+        const first = titleCase(result.firstName);
+        const last = titleCase(result.lastName);
+        const defaultChoice = canCreateOidcUser() ? "create" : "skip";
+        const createRadio = canCreateOidcUser()
+            ? '<div class="form-check">' +
+                '<input class="form-check-input" type="radio" name="npi-oidc-choice" id="npi-oidc-choice-create" value="create"' +
+                    (defaultChoice === "create" ? " checked" : "") + ">" +
+                '<label class="form-check-label" for="npi-oidc-choice-create">Create a new OIDC user</label>' +
+            "</div>"
+            : "";
+        $("#" + MODAL_ID + "-oidc").html(
+            '<p class="text-muted">Create a Keycloak user for this practitioner or link an existing realm account. ' +
+                "The user's subject id is stored on the practitioner as an identifier.</p>" +
+            '<div class="mb-3">' +
+                createRadio +
+                '<div class="form-check">' +
+                    '<input class="form-check-input" type="radio" name="npi-oidc-choice" id="npi-oidc-choice-link" value="link">' +
+                    '<label class="form-check-label" for="npi-oidc-choice-link">Link an existing OIDC user</label>' +
+                "</div>" +
+                '<div class="form-check">' +
+                    '<input class="form-check-input" type="radio" name="npi-oidc-choice" id="npi-oidc-choice-skip" value="skip"' +
+                        (defaultChoice === "skip" ? " checked" : "") + ">" +
+                    '<label class="form-check-label" for="npi-oidc-choice-skip">Do not create or link a user</label>' +
+                "</div>" +
+            "</div>" +
+            '<div id="npi-oidc-create-fields"' + (defaultChoice === "create" ? "" : ' class="d-none"') + ">" +
+                '<div class="row">' +
+                    '<div class="col-md-6 mb-3"><label class="form-label" for="npi-oidc-first">First name</label>' +
+                        '<input class="form-control" id="npi-oidc-first" required value="' + esc(first) + '">' +
+                        '<div class="invalid-feedback" id="npi-oidc-first-feedback"></div></div>' +
+                    '<div class="col-md-6 mb-3"><label class="form-label" for="npi-oidc-last">Last name</label>' +
+                        '<input class="form-control" id="npi-oidc-last" required value="' + esc(last) + '">' +
+                        '<div class="invalid-feedback" id="npi-oidc-last-feedback"></div></div>' +
+                "</div>" +
+                '<div class="mb-3"><label class="form-label" for="npi-oidc-email">Email</label>' +
+                    '<input class="form-control" id="npi-oidc-email" type="email" autocomplete="off">' +
+                    '<div class="invalid-feedback" id="npi-oidc-email-feedback"></div></div>' +
+                '<div class="mb-3"><label class="form-label" for="npi-oidc-mobile">Mobile number</label>' +
+                    '<input class="form-control" id="npi-oidc-mobile" inputmode="tel" autocomplete="off" value="' +
+                        esc(suggestedMobile()) + '">' +
+                    '<div class="invalid-feedback" id="npi-oidc-mobile-feedback"></div></div>' +
+                '<div class="form-check mb-2">' +
+                    '<input class="form-check-input" type="checkbox" id="npi-oidc-use-email">' +
+                    '<label class="form-check-label" for="npi-oidc-use-email">Use email for username</label>' +
+                "</div>" +
+                '<div class="mb-0"><label class="form-label" for="npi-oidc-username">Username</label>' +
+                    '<input class="form-control" id="npi-oidc-username" required autocomplete="off" value="' +
+                        esc(suggestedUsername(first, last)) + '">' +
+                    '<div class="invalid-feedback" id="npi-oidc-username-feedback"></div></div>' +
+            "</div>" +
+            '<div id="npi-oidc-link-fields" class="d-none">' +
+                '<label class="form-label" for="npi-oidc-link">Existing user</label>' +
+                '<select class="form-select" id="npi-oidc-link">' +
+                    '<option value="">Loading users…</option></select>' +
+                '<div class="invalid-feedback" id="npi-oidc-link-feedback"></div>' +
+            "</div>"
+        );
+        loadOidcUsers();
+    }
+
+    function loadOidcUsers() {
+        CadminApi.get("/api/auth/users").done(function (users) {
+            const options = ['<option value="">Select a user…</option>'].concat((users || []).map(function (user) {
+                const oidcId = user.oidcId || user.id || "";
+                if (!oidcId) {
+                    return "";
+                }
+                const label = (user.displayName || user.username || oidcId) +
+                    (user.username && user.displayName && user.displayName !== user.username
+                        ? " (" + user.username + ")"
+                        : "");
+                return '<option value="' + esc(oidcId) + '" data-username="' + esc(user.username || "") +
+                    '" data-display="' + esc(user.displayName || user.username || "") + '">' +
+                    esc(label) + "</option>";
+            }));
+            $("#npi-oidc-link").html(options.join(""));
+        }).fail(function () {
+            $("#npi-oidc-link").html('<option value="">Unable to load users</option>');
+        });
+    }
+
+    function validateOidcLocal() {
+        clearOidcErrors();
+        const choice = oidcChoice();
+        if (choice === "skip") {
+            return { ok: true, choice: choice };
+        }
+        if (choice === "link") {
+            const linked = selectedLinkUser();
+            if (!linked) {
+                fieldError("npi-oidc-link", "Select an existing OIDC user.");
+                return { ok: false, choice: choice };
+            }
+            if (!oidcIssuer()) {
+                showAlert("OIDC issuer is not configured.");
+                return { ok: false, choice: choice };
+            }
+            return { ok: true, choice: choice, user: linked };
+        }
+        if (!canCreateOidcUser()) {
+            showAlert("Creating an OIDC user requires an administrator.");
+            return { ok: false, choice: choice };
+        }
+        const form = readOidcForm();
+        let ok = true;
+        if (!form.firstName) {
+            fieldError("npi-oidc-first", "First name is required.");
+            ok = false;
+        }
+        if (!form.lastName) {
+            fieldError("npi-oidc-last", "Last name is required.");
+            ok = false;
+        }
+        if (form.useEmail && !form.email) {
+            fieldError("npi-oidc-email", "Email is required when using it as the username.");
+            ok = false;
+        }
+        if (form.email && form.email.indexOf("@") < 0) {
+            fieldError("npi-oidc-email", "Enter a valid email address.");
+            ok = false;
+        }
+        if (!form.username) {
+            fieldError("npi-oidc-username", "Username is required.");
+            ok = false;
+        }
+        if (!ok) {
+            return { ok: false, choice: choice, form: form };
+        }
+        return { ok: true, choice: choice, form: form };
+    }
+
+    function applyOidcConflicts(conflicts) {
+        if (!conflicts) {
+            return;
+        }
+        if (conflicts.username) {
+            fieldError("npi-oidc-username", "Username is already used in this realm.");
+        }
+        if (conflicts.email) {
+            fieldError("npi-oidc-email", "Email is already used in this realm.");
+        }
+        if (conflicts.mobile) {
+            fieldError("npi-oidc-mobile", "Mobile number is already used in this realm.");
+        }
+    }
+
+    function checkOidcAvailable(form) {
+        const params = new URLSearchParams();
+        if (form.username) {
+            params.set("username", form.username);
+        }
+        if (form.email) {
+            params.set("email", form.email);
+        }
+        if (form.mobile) {
+            params.set("mobile", form.mobile);
+        }
+        return CadminApi.get("/api/auth/users/available?" + params.toString()).then(function (available) {
+            const conflicts = {
+                username: available && available.username === false,
+                email: available && available.email === false,
+                mobile: available && available.mobile === false
+            };
+            if (conflicts.username || conflicts.email || conflicts.mobile) {
+                applyOidcConflicts(conflicts);
+                return $.Deferred().reject({ conflicts: conflicts }).promise();
+            }
+            return form;
+        });
+    }
+
+    function oidcSummaryText() {
+        if (!isOidcMode()) {
+            return "";
+        }
+        const choice = oidcChoice();
+        if (choice === "create") {
+            const form = readOidcForm();
+            return "Create OIDC user " + (form.username || "—") +
+                (form.email ? " · " + form.email : "");
+        }
+        if (choice === "link") {
+            const linked = selectedLinkUser();
+            return linked
+                ? "Link existing OIDC user " + (linked.displayName || linked.username)
+                : "Link existing OIDC user";
+        }
+        return "Do not create or link an OIDC user";
     }
 
     function renderReview() {
@@ -253,15 +595,18 @@ window.CadminNpiPractitioner = (function ($) {
     }
 
     function renderSummary() {
-        const resources = plannedResources();
+        const resources = plannedResources(currentOidcId());
         const rows = resources.map(function (item) {
             return "<tr><td>" + esc(item.resource.resourceType) + "</td><td>" + esc(item.title) + "</td></tr>";
         }).join("");
+        const oidcRow = isOidcMode()
+            ? "<tr><td>OIDC user</td><td>" + esc(oidcSummaryText()) + "</td></tr>"
+            : "";
         $("#" + MODAL_ID + "-summary").html(
             '<p class="text-muted">These FHIR resources will be created.</p>' +
             '<div class="table-responsive"><table class="table table-sm align-middle mb-0">' +
                 "<thead><tr><th>Type</th><th>Summary</th></tr></thead>" +
-                "<tbody>" + rows + "</tbody></table></div>" +
+                "<tbody>" + oidcRow + rows + "</tbody></table></div>" +
             '<button class="btn btn-outline-primary mt-3" type="button" id="' + MODAL_ID + '-view-fhir">' +
                 '<i class="bi bi-code-slash me-1"></i>View FHIR</button>'
         );
@@ -309,7 +654,7 @@ window.CadminNpiPractitioner = (function ($) {
         }
     }
 
-    function practitionerResource(result) {
+    function practitionerResource(result, oidcId) {
         const given = [result.firstName, result.middleName].filter(Boolean).map(titleCase);
         const name = { use: "official", family: titleCase(result.lastName) || result.displayName || "Unknown" };
         if (given.length) {
@@ -332,7 +677,17 @@ window.CadminNpiPractitioner = (function ($) {
             name: [name],
             gender: result.gender || "unknown"
         };
+        if (oidcId && oidcIssuer()) {
+            resource.identifier.push(oidcIdentifier(oidcId));
+        }
         const telecom = [];
+        if (isOidcMode() && oidcChoice() === "create") {
+            const form = readOidcForm();
+            pushTelecom(telecom, "email", form.email);
+            if (form.mobile) {
+                telecom.push({ system: "phone", value: form.mobile, use: "mobile" });
+            }
+        }
         pushTelecom(telecom, "phone", result.mailing && result.mailing.telephone);
         pushTelecom(telecom, "fax", result.mailing && result.mailing.fax);
         (result.practiceLocations || []).forEach(function (location) {
@@ -404,8 +759,8 @@ window.CadminNpiPractitioner = (function ($) {
         return name.text || [((name.given || []).join(" ")), name.family].filter(Boolean).join(" ") || "Practitioner";
     }
 
-    function plannedResources() {
-        const practitioner = practitionerResource(lookup);
+    function plannedResources(oidcId) {
+        const practitioner = practitionerResource(lookup, oidcId);
         const items = [{
             title: practitionerName(practitioner) + " · NPI " + lookup.npi,
             resource: practitioner,
@@ -455,8 +810,8 @@ window.CadminNpiPractitioner = (function ($) {
         return items;
     }
 
-    function createPayload() {
-        const items = plannedResources();
+    function createPayload(oidcId) {
+        const items = plannedResources(oidcId);
         if (!items.length) {
             return null;
         }
@@ -477,7 +832,7 @@ window.CadminNpiPractitioner = (function ($) {
     }
 
     function showGeneratedFhir() {
-        const payload = createPayload();
+        const payload = createPayload(currentOidcId());
         if (!payload || !window.CadminResourceSource) {
             return;
         }
@@ -491,19 +846,57 @@ window.CadminNpiPractitioner = (function ($) {
             return;
         }
         if (step === 2) {
+            if (isOidcMode()) {
+                renderOidcStep();
+                showStep(3);
+                return;
+            }
             renderSummary();
             showStep(3);
+            return;
+        }
+        if (step === 3 && isOidcMode()) {
+            advanceFromOidc();
         }
     }
 
     function goBack() {
-        if (step === 3) {
+        if (step === lastStep()) {
+            showStep(isOidcMode() ? 3 : 2);
+            return;
+        }
+        if (step === 3 && isOidcMode()) {
             showStep(2);
             return;
         }
         if (step === 2) {
             showStep(1);
         }
+    }
+
+    function advanceFromOidc() {
+        const local = validateOidcLocal();
+        if (!local.ok) {
+            return;
+        }
+        if (local.choice !== "create") {
+            renderSummary();
+            showStep(4);
+            return;
+        }
+        setBusy(true);
+        checkOidcAvailable(local.form).done(function () {
+            renderSummary();
+            showStep(4);
+        }).fail(function (error) {
+            if (error && error.conflicts) {
+                showAlert("Username, email, and mobile number must be unique in the OIDC realm.");
+                return;
+            }
+            showAlert(xhrMessage(error, "Unable to verify that the user is unique in the realm."));
+        }).always(function () {
+            setBusy(false);
+        });
     }
 
     function lookupIndividual() {
@@ -515,6 +908,8 @@ window.CadminNpiPractitioner = (function ($) {
         setBusy(true);
         CadminApi.npiLookup(npi).done(function (result) {
             lookup = result;
+            createdOidcId = "";
+            $("#" + MODAL_ID + "-oidc").empty();
             renderReview();
             showStep(2);
         }).fail(function (xhr) {
@@ -579,21 +974,18 @@ window.CadminNpiPractitioner = (function ($) {
             finish(xhr.responseJSON, xhr);
             return;
         }
-        showAlert(xhrMessage(xhr, "Create failed (" + xhr.status + ")."));
+        showAlert(xhrMessage(xhr, "Create failed (" + xhr.status + ").") +
+            (createdOidcId ? " The OIDC user was created and can be linked later." : ""));
     }
 
-    function runCreate() {
-        if (!lookup || creating) {
-            return;
-        }
-        const payload = createPayload();
+    function postPractitioner(oidcId) {
+        const payload = createPayload(oidcId);
         if (!payload) {
+            creating = false;
+            setBusy(false);
             showAlert("Nothing to create.");
             return;
         }
-        creating = true;
-        setBusy(true);
-        hideAlert();
         if (payload.resourceType === "Bundle") {
             CadminApi.fhir("", "POST", payload).done(finish).fail(failCreate);
             return;
@@ -601,6 +993,78 @@ window.CadminNpiPractitioner = (function ($) {
         CadminApi.fhir("/Practitioner", "POST", payload)
             .done(finish)
             .fail(failCreate);
+    }
+
+    function createOidcUser() {
+        const form = readOidcForm();
+        return CadminApi.post("/api/auth/users", {
+            firstName: form.firstName,
+            lastName: form.lastName,
+            email: form.email,
+            mobile: form.mobile,
+            username: form.username
+        }).then(function (user) {
+            createdOidcId = (user && (user.oidcId || user.id)) || "";
+            if (!createdOidcId) {
+                return $.Deferred().reject({
+                    status: 502,
+                    responseJSON: { message: "OIDC user was created but no subject id was returned." }
+                }).promise();
+            }
+            return createdOidcId;
+        });
+    }
+
+    function resolveOidcId() {
+        if (!isOidcMode()) {
+            return $.Deferred().resolve("").promise();
+        }
+        const choice = oidcChoice();
+        if (choice === "link") {
+            return $.Deferred().resolve(linkedOidcId()).promise();
+        }
+        if (choice !== "create") {
+            return $.Deferred().resolve("").promise();
+        }
+        const local = validateOidcLocal();
+        if (!local.ok) {
+            showStep(3);
+            return $.Deferred().reject({ status: 400 }).promise();
+        }
+        if (createdOidcId) {
+            return $.Deferred().resolve(createdOidcId).promise();
+        }
+        return createOidcUser();
+    }
+
+    function runCreate() {
+        if (!lookup || creating) {
+            return;
+        }
+        creating = true;
+        setBusy(true);
+        hideAlert();
+        resolveOidcId().done(function (oidcId) {
+            postPractitioner(oidcId);
+        }).fail(function (xhr) {
+            creating = false;
+            setBusy(false);
+            if (xhr && xhr.status === 409) {
+                applyOidcConflicts(xhr.responseJSON && xhr.responseJSON.conflicts);
+                showAlert(xhrMessage(xhr, "That user is not unique in the OIDC realm."));
+                showStep(3);
+                return;
+            }
+            if (xhr && xhr.status === 400 && $("#npi-oidc-first").length) {
+                showStep(3);
+                return;
+            }
+            if (xhr && xhr.status === 400 && oidcChoice() === "create" && createdOidcId) {
+                showAlert("OIDC user was created, but the practitioner could not be created.");
+                return;
+            }
+            showAlert(xhrMessage(xhr, "Create failed" + (xhr && xhr.status ? " (" + xhr.status + ")" : "") + "."));
+        });
     }
 
     function bindOnce() {

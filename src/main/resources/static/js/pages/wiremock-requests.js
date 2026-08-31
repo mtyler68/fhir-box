@@ -138,14 +138,13 @@ function renderWiremockRequestList() {
     });
 
     $root.on("click.wmreq", "#wm-req-clear", function () {
-        if (!window.confirm("Clear the entire WireMock request journal?")) {
-            return;
-        }
-        CadminApi.wiremock("/__admin/requests", "DELETE").done(function () {
-            CadminApi.showToast("success", "Request journal cleared.");
-            load();
-        }).fail(function (xhr) {
-            CadminApi.showToast("danger", wm.fail("Clear journal", xhr));
+        CadminApi.confirm("Clear the entire WireMock request journal?").done(function () {
+            CadminApi.wiremock("/__admin/requests", "DELETE").done(function () {
+                CadminApi.showToast("success", "Request journal cleared.");
+                load();
+            }).fail(function (xhr) {
+                CadminApi.showToast("danger", wm.fail("Clear journal", xhr));
+            });
         });
     });
 

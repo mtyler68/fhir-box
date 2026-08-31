@@ -466,15 +466,17 @@ window.CadminEndpointDetail = (function () {
         });
 
         $root.on("click.epdetail", "#ed-delete", function () {
-            if (!window.confirm("Delete this endpoint? It will be unlinked from organizations, locations, and healthcare services first.")) {
-                return;
-            }
-            unlinkUsers(function () {
-                CadminApi.fhir("/Endpoint/" + encodeURIComponent(endpoint.id), "DELETE").done(function () {
-                    alertMsg("success", "Endpoint deleted.");
-                    window.location.hash = "#/endpoints";
-                }).fail(function (xhr) {
-                    fail("Delete endpoint", xhr);
+            CadminApi.confirm({
+                title: "Delete this endpoint?",
+                text: "It will be unlinked from organizations, locations, and healthcare services first."
+            }).done(function () {
+                unlinkUsers(function () {
+                    CadminApi.fhir("/Endpoint/" + encodeURIComponent(endpoint.id), "DELETE").done(function () {
+                        alertMsg("success", "Endpoint deleted.");
+                        window.location.hash = "#/endpoints";
+                    }).fail(function (xhr) {
+                        fail("Delete endpoint", xhr);
+                    });
                 });
             });
         });

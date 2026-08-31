@@ -421,13 +421,36 @@ window.CadminNpiOrganization = (function ($) {
         return resource;
     }
 
+    function locationAddressName(location) {
+        if (!location) {
+            return "";
+        }
+        const line = [location.line1, location.line2].filter(Boolean).map(titleCase).join(" ");
+        const cityState = [
+            location.city ? titleCase(location.city) : "",
+            location.state ? String(location.state).toUpperCase() : ""
+        ].filter(Boolean).join(", ");
+        const locality = [cityState, location.postalCode].filter(Boolean).join(" ");
+        return [line, locality].filter(Boolean).join(", ")
+            || titleCase(location.label)
+            || "";
+    }
+
+    function locationName(location, organization) {
+        const orgName = (organization && organization.resource && organization.resource.name)
+            || organizationName(lookup);
+        const address = locationAddressName(location);
+        if (orgName && address) {
+            return orgName + " · " + address;
+        }
+        return orgName || address || "Practice location";
+    }
+
     function locationResource(location, organization) {
         const resource = {
             resourceType: "Location",
             status: "active",
-            name: titleCase(location.label)
-                || [location.line1, location.city].filter(Boolean).map(titleCase).join(", ")
-                || "Practice location",
+            name: locationName(location, organization),
             mode: "instance",
             physicalType: {
                 coding: [{

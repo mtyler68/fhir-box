@@ -30,13 +30,16 @@ function renderValueSetList(initialQuery) {
         "</div>" +
         '<div id="valueset-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
-            '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
+            '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
                 '<h6 class="m-0">Value set search</h6>' +
+                '<div class="d-flex flex-wrap align-items-center gap-2">' +
                 '<form class="d-flex" id="valueset-search-form">' +
                     '<input class="form-control form-control-sm me-2" id="valueset-query" placeholder="Title, name, or URL" value="' +
                         CadminApi.escapeHtml(initialQuery) + '">' +
                     '<button class="btn btn-sm btn-primary" type="submit">Search</button>' +
                 "</form>" +
+                CadminDeletedList.controls() +
+                "</div>" +
             "</div>" +
             '<div class="card-body">' +
                 '<div class="table-responsive">' +
@@ -130,7 +133,7 @@ function renderValueSetList(initialQuery) {
             }
         }
         const pageSize = CadminApi.listPageSize("value-sets");
-        CadminApi.fhir(CadminApi.pagedPath(path, listPage, pageSize)).done(function (bundle) {
+        CadminDeletedList.query({ type: "ValueSet", path: path, page: listPage, size: pageSize }).done(function (bundle) {
             const entries = CadminApi.bundleResources(bundle, "ValueSet");
             CadminApi.renderPager("#valueset-pager", {
                 page: listPage,
@@ -142,7 +145,7 @@ function renderValueSetList(initialQuery) {
                 onPage: function (nextPage) { load(query, nextPage); }
             });
             if (!entries.length) {
-                $("#valueset-rows").html('<tr><td colspan="7" class="text-muted">No value sets found. Create one or start HAPI FHIR.</td></tr>');
+                $("#valueset-rows").html(CadminDeletedList.emptyRow(7, "ValueSet", "No value sets found. Create one or start HAPI FHIR."));
                 return;
             }
             $("#valueset-rows").html(entries.map(function (vs) {
@@ -229,6 +232,11 @@ function renderValueSetList(initialQuery) {
     CadminApi.fillValueSetSelect("#vs-status", CadminApi.valueSets.publicationStatus, {
         fallback: statusOptions,
         selected: "draft"
+    });
+
+    CadminDeletedList.bind({
+        type: "ValueSet",
+        reload: function () { load($("#valueset-query").val(), 0); }
     });
 
     load(initialQuery);

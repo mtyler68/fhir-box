@@ -6,6 +6,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.reactive.function.BodyInserters;
@@ -30,6 +31,7 @@ class CadminGatewayApplicationTests {
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$.mode").isEqualTo("local")
+                .jsonPath("$.oidcIssuer").isEqualTo("")
                 .jsonPath("$.fhirBaseUrl").isEqualTo("/fhir");
     }
 
@@ -382,10 +384,114 @@ class CadminGatewayApplicationTests {
 
     @Test
     @WithMockUser(username = "clinician", roles = {"USER"})
+    void createOidcUserIsForbiddenForNonAdmin() {
+        webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
+                .post()
+                .uri("/api/auth/users")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"firstName\":\"Jane\",\"lastName\":\"Doe\",\"username\":\"jane.doe\"}")
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = {"ADMIN", "USER"})
+    void createOidcUserIsNotFoundWhenOidcIsDisabled() {
+        webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
+                .post()
+                .uri("/api/auth/users")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"firstName\":\"Jane\",\"lastName\":\"Doe\",\"username\":\"jane.doe\"}")
+                .exchange()
+                .expectStatus().isNotFound();
+    }
+
+    @Test
+    @WithMockUser(username = "clinician", roles = {"USER"})
+    void patientExpungeIsForbiddenForNonAdmin() {
+        webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
+                .post()
+                .uri("/fhir/Patient/$expunge")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"resourceType\":\"Parameters\"}")
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    @WithMockUser(username = "clinician", roles = {"USER"})
     void wiremockIsForbiddenForNonAdmin() {
         webTestClient.get()
                 .uri("/wiremock/__admin/mappings")
                 .header("Accept", "application/json")
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    void coreAdminBridgeRequiresAuthentication() {
+        webTestClient.get()
+                .uri("/core-admin-bridge/actuator/camel")
+                .header("Accept", "application/json")
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    @WithMockUser(username = "clinician", roles = {"USER"})
+    void coreAdminBridgeIsForbiddenForNonAdmin() {
+        webTestClient.get()
+                .uri("/core-admin-bridge/actuator/camel")
+                .header("Accept", "application/json")
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    void fhirChiefRequiresAuthentication() {
+        webTestClient.get()
+                .uri("/fhir-chief/status")
+                .header("Accept", "application/json")
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    @WithMockUser(username = "clinician", roles = {"USER"})
+    void fhirChiefIsForbiddenForNonAdmin() {
+        webTestClient.get()
+                .uri("/fhir-chief/status")
+                .header("Accept", "application/json")
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    @WithMockUser(username = "clinician", roles = {"USER"})
+    void scheduleIsForbiddenForNonAdmin() {
+        webTestClient.get()
+                .uri("/fhir/Schedule")
+                .header("Accept", "application/fhir+json")
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    @WithMockUser(username = "clinician", roles = {"USER"})
+    void planDefinitionIsForbiddenForNonAdmin() {
+        webTestClient.get()
+                .uri("/fhir/PlanDefinition")
+                .header("Accept", "application/fhir+json")
+                .exchange()
+                .expectStatus().isForbidden();
+        webTestClient.get()
+                .uri("/fhir/ActivityDefinition")
+                .header("Accept", "application/fhir+json")
+                .exchange()
+                .expectStatus().isForbidden();
+        webTestClient.get()
+                .uri("/fhir/RequestOrchestration")
+                .header("Accept", "application/fhir+json")
                 .exchange()
                 .expectStatus().isForbidden();
     }

@@ -36,12 +36,15 @@ function renderFhirListIndex() {
         '<div class="card shadow mb-4">' +
             '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
                 '<h6 class="m-0">List search</h6>' +
+                '<div class="d-flex flex-wrap align-items-center gap-2">' +
                 '<form class="d-flex flex-wrap gap-2" id="list-search-form">' +
                     '<select class="form-select form-select-sm" id="list-status-filter" style="max-width:10rem">' +
                         '<option value="">Any status</option></select>' +
                     '<input class="form-control form-control-sm" id="list-query" placeholder="Title">' +
                     '<button class="btn btn-sm btn-primary" type="submit">Search</button>' +
                 "</form>" +
+                CadminDeletedList.controls() +
+                "</div>" +
             "</div>" +
             '<div class="card-body">' +
                 '<div class="table-responsive">' +
@@ -126,7 +129,7 @@ function renderFhirListIndex() {
             path += "&title=" + encodeURIComponent(query);
         }
         const pageSize = CadminApi.listPageSize("lists");
-        CadminApi.fhir(CadminApi.pagedPath(path, listPage, pageSize)).done(function (bundle) {
+        CadminDeletedList.query({ type: "List", path: path, page: listPage, size: pageSize }).done(function (bundle) {
             const entries = CadminApi.bundleResources(bundle, "List");
             CadminApi.renderPager("#list-pager", {
                 page: listPage,
@@ -138,8 +141,7 @@ function renderFhirListIndex() {
                 onPage: function (nextPage) { load(nextPage); }
             });
             if (!entries.length) {
-                $("#list-rows").html(
-                    '<tr><td colspan="8" class="text-muted">No lists found. Create one or start HAPI FHIR.</td></tr>');
+                $("#list-rows").html(CadminDeletedList.emptyRow(8, "List", "No lists found. Create one or start HAPI FHIR."));
                 return;
             }
             $("#list-rows").html(entries.map(function (item) {
@@ -239,6 +241,11 @@ function renderFhirListIndex() {
     CadminApi.fillValueSetSelect("#lst-mode", CadminApi.valueSets.listMode, {
         fallback: modeOptions,
         selected: "working"
+    });
+
+    CadminDeletedList.bind({
+        type: "List",
+        reload: function () { load(0); }
     });
 
     load(0);

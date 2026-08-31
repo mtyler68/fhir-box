@@ -187,6 +187,12 @@ window.CadminLocationDetail = (function () {
         }
     }
 
+    function resizeMap() {
+        if (map) {
+            map.invalidateSize();
+        }
+    }
+
     function renderMap() {
         destroyMap();
         const coords = positionCoords(loc && loc.position);
@@ -388,6 +394,7 @@ window.CadminLocationDetail = (function () {
                     ["Name", "Organization", "Type", ""], "#ld-service-modal", "Add",
                     '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#ld-svc-attach-modal">Attach</button>') + "</div>" +
             "</div>" +
+            (window.CadminScheduling ? CadminScheduling.relatedCard("loc-appt-rows") : "") +
             CadminResourceHistory.card() +
             CadminResourceGraph.card() +
             modal("ld-basic-modal", "Edit basic details",
@@ -474,6 +481,9 @@ window.CadminLocationDetail = (function () {
         loadEndpoints();
         loadRoles();
         loadServices();
+        if (window.CadminScheduling) {
+            CadminScheduling.loadRelated("loc-appt-rows", "actor=Location/" + encodeURIComponent(loc.id));
+        }
         bindForms();
 
         $("#ld-rel-modal").on("show.bs.modal", function () {
@@ -1194,5 +1204,5 @@ window.CadminLocationDetail = (function () {
         });
     }
 
-    return { render: render, destroyMap: destroyMap };
+    return { render: render, destroyMap: destroyMap, resizeMap: resizeMap };
 }());

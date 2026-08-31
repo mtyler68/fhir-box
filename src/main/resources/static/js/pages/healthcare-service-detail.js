@@ -219,6 +219,7 @@ window.CadminHealthcareServiceDetail = (function () {
                 '<div class="col-lg-6">' + card("Practitioner roles", "hsd-role-rows",
                     ["Practitioner", "Organization", "Role", ""], "", "") + "</div>" +
             "</div>" +
+            (window.CadminScheduling ? CadminScheduling.relatedCard("hsd-appt-rows") : "") +
             CadminResourceHistory.card() +
             CadminResourceGraph.card() +
             modal("hsd-basic-modal", "Edit basic details",
@@ -269,6 +270,10 @@ window.CadminHealthcareServiceDetail = (function () {
         loadEndpoints();
         renderContacts();
         loadRoles();
+        if (window.CadminScheduling) {
+            CadminScheduling.loadRelated("hsd-appt-rows",
+                "actor=HealthcareService/" + encodeURIComponent(service.id));
+        }
         bindForms();
     }
 
@@ -458,14 +463,13 @@ window.CadminHealthcareServiceDetail = (function () {
         $root.off(".hsdetail");
 
         $root.on("click.hsdetail", "#hsd-delete", function () {
-            if (!window.confirm("Delete this healthcare service?")) {
-                return;
-            }
-            CadminApi.fhir("/HealthcareService/" + encodeURIComponent(service.id), "DELETE").done(function () {
-                alertMsg("success", "Healthcare service deleted.");
-                window.location.hash = "#/healthcare-services";
-            }).fail(function (xhr) {
-                fail("Delete healthcare service", xhr);
+            CadminApi.confirm("Delete this healthcare service?").done(function () {
+                CadminApi.fhir("/HealthcareService/" + encodeURIComponent(service.id), "DELETE").done(function () {
+                    alertMsg("success", "Healthcare service deleted.");
+                    window.location.hash = "#/healthcare-services";
+                }).fail(function (xhr) {
+                    fail("Delete healthcare service", xhr);
+                });
             });
         });
 

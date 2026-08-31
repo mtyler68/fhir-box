@@ -39,6 +39,7 @@ window.CadminWiremockMappingDetail = (function () {
     let lastEdited = "form";
     let syncing = false;
     let editingPatternIndex = -1;
+    let savedJson = "";
 
     function esc(value) {
         return CadminApi.escapeHtml(value);
@@ -74,6 +75,15 @@ window.CadminWiremockMappingDetail = (function () {
         } else {
             $("#wmd-json").val(text);
         }
+    }
+
+    function syncUnsavedFlag() {
+        CadminApi.setUnsavedFlag("#app-content", editorText() !== savedJson);
+    }
+
+    function markEditorClean() {
+        savedJson = editorText();
+        syncUnsavedFlag();
     }
 
     function pretty(value) {
@@ -477,6 +487,7 @@ window.CadminWiremockMappingDetail = (function () {
                 fillForm(mapping);
                 setEditorText(pretty(mapping));
                 renderSummary();
+                markEditorClean();
                 CadminApi.showToast("success", "Mapping saved.");
             })
             .fail(function (xhr) {
@@ -489,14 +500,16 @@ window.CadminWiremockMappingDetail = (function () {
 
     function remove() {
         const id = mapping && mapping.id;
-        if (!id || !window.confirm("Delete this stub mapping?")) {
+        if (!id) {
             return;
         }
-        CadminApi.wiremock("/__admin/mappings/" + encodeURIComponent(id), "DELETE").done(function () {
-            CadminApi.showToast("success", "Mapping deleted.");
-            window.location.hash = "#/wiremock-mappings";
-        }).fail(function (xhr) {
-            CadminApi.showToast("danger", wm().fail("Delete mapping", xhr));
+        CadminApi.confirm("Delete this stub mapping?").done(function () {
+            CadminApi.wiremock("/__admin/mappings/" + encodeURIComponent(id), "DELETE").done(function () {
+                CadminApi.showToast("success", "Mapping deleted.");
+                window.location.hash = "#/wiremock-mappings";
+            }).fail(function (xhr) {
+                CadminApi.showToast("danger", wm().fail("Delete mapping", xhr));
+            });
         });
     }
 
@@ -512,6 +525,7 @@ window.CadminWiremockMappingDetail = (function () {
                 syncBodyPlaceholder();
             }
             refreshJsonFromForm();
+            syncUnsavedFlag();
         });
         $root.on("click.wmdetail", "#wmd-save", save);
         $root.on("click.wmdetail", "#wmd-delete", remove);
@@ -585,6 +599,7 @@ window.CadminWiremockMappingDetail = (function () {
                     return;
                 }
                 lastEdited = "json";
+                syncUnsavedFlag();
             });
         }
     }
@@ -601,7 +616,10 @@ window.CadminWiremockMappingDetail = (function () {
                             '<li class="breadcrumb-item active" aria-current="page" id="wmd-crumb">Mapping</li>' +
                         "</ol>" +
                     "</nav>" +
-                    '<h1 class="h3 mb-0 page-title" id="wmd-title">Stub mapping</h1>' +
+                    '<div class="d-flex align-items-center flex-wrap gap-2">' +
+                        '<h1 class="h3 mb-0 page-title" id="wmd-title">Stub mapping</h1>' +
+                        CadminApi.unsavedFlagHtml() +
+                    "</div>" +
                     '<p class="text-muted mb-0" id="wmd-subtitle"></p>' +
                 "</div>" +
                 '<div class="d-flex flex-wrap gap-2">' +
@@ -775,6 +793,7 @@ window.CadminWiremockMappingDetail = (function () {
             renderSummary();
             CadminResourceSource.mount(function () { return mapping; });
             bind();
+            markEditorClean();
             if (editor) {
                 window.setTimeout(function () {
                     editor.refresh();

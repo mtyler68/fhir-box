@@ -40,13 +40,16 @@ function renderEndpointList(initialQuery) {
         "</div>" +
         '<div id="endpoint-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
-            '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
+            '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
                 '<h6 class="m-0">Endpoint search</h6>' +
+                '<div class="d-flex flex-wrap align-items-center gap-2">' +
                 '<form class="d-flex" id="endpoint-search-form">' +
                     '<input class="form-control form-control-sm me-2" id="endpoint-query" placeholder="Name or address" value="' +
                         CadminApi.escapeHtml(initialQuery) + '">' +
                     '<button class="btn btn-sm btn-primary" type="submit">Search</button>' +
                 "</form>" +
+                CadminDeletedList.controls() +
+                "</div>" +
             "</div>" +
             '<div class="card-body">' +
                 '<div class="table-responsive">' +
@@ -132,7 +135,7 @@ function renderEndpointList(initialQuery) {
             path += (/^https?:/i.test(q) ? "&address=" : "&name=") + encodeURIComponent(q);
         }
         const pageSize = CadminApi.listPageSize("endpoints");
-        CadminApi.fhir(CadminApi.pagedPath(path, listPage, pageSize)).done(function (bundle) {
+        CadminDeletedList.query({ type: "Endpoint", path: path, page: listPage, size: pageSize }).done(function (bundle) {
             const entries = CadminApi.bundleResources(bundle, "Endpoint");
             CadminApi.renderPager("#endpoint-pager", {
                 page: listPage,
@@ -144,7 +147,7 @@ function renderEndpointList(initialQuery) {
                 onPage: function (nextPage) { load(query, nextPage); }
             });
             if (!entries.length) {
-                $("#endpoint-rows").html('<tr><td colspan="7" class="text-muted">No endpoints found. Create one or start HAPI FHIR.</td></tr>');
+                $("#endpoint-rows").html(CadminDeletedList.emptyRow(7, "Endpoint", "No endpoints found. Create one or start HAPI FHIR."));
                 return;
             }
             const rows = entries.map(function (ep) {
@@ -232,6 +235,11 @@ function renderEndpointList(initialQuery) {
     });
 
     $("#create-endpoint-modal").on("show.bs.modal", fillOrganizations);
+
+    CadminDeletedList.bind({
+        type: "Endpoint",
+        reload: function () { load($("#endpoint-query").val(), 0); }
+    });
 
     load(initialQuery);
 }

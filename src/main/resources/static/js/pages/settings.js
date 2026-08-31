@@ -29,6 +29,9 @@ CadminApp.register("settings", function () {
                         "<p>FHIR Box serves the UI and proxies browser calls so exploration stays same-origin.</p>" +
                         '<ul class="mb-0">' +
                             "<li><code>/fhir/**</code> → HAPI FHIR JPA Starter (<code>cadmin.fhir.uri</code>)</li>" +
+                            "<li><code>/wiremock/**</code> → WireMock (<code>cadmin.wiremock.uri</code>)</li>" +
+                            "<li><code>/core-admin-bridge/**</code> → Core Admin Bridge (<code>cadmin.core-admin-bridge.uri</code>)</li>" +
+                            "<li><code>/fhir-chief/**</code> → FHIR Chief (<code>cadmin.fhir-chief.uri</code>)</li>" +
                             "<li><code>/api/**</code> → gateway JSON endpoints</li>" +
                         "</ul>" +
                     "</div>" +

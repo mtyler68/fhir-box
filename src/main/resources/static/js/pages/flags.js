@@ -50,8 +50,9 @@ function renderFlagList() {
         "</div>" +
         '<div id="flag-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
-            '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
+            '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
                 '<h6 class="m-0">Flag search</h6>' +
+                '<div class="d-flex flex-wrap align-items-center gap-2">' +
                 '<form class="d-flex flex-wrap gap-2" id="flag-search-form">' +
                     '<select class="form-select form-select-sm" id="flag-status-filter" style="max-width:10rem">' +
                         '<option value="">Any status</option></select>' +
@@ -61,6 +62,8 @@ function renderFlagList() {
                         '<option value="">Any patient</option></select>' +
                     '<button class="btn btn-sm btn-primary" type="submit">Search</button>' +
                 "</form>" +
+                CadminDeletedList.controls() +
+                "</div>" +
             "</div>" +
             '<div class="card-body">' +
                 '<div class="table-responsive">' +
@@ -211,7 +214,7 @@ function renderFlagList() {
             path += "&patient=" + encodeURIComponent(patient);
         }
         const pageSize = CadminApi.listPageSize("flags");
-        CadminApi.fhir(CadminApi.pagedPath(path, listPage, pageSize)).done(function (bundle) {
+        CadminDeletedList.query({ type: "Flag", path: path, page: listPage, size: pageSize }).done(function (bundle) {
             const entries = CadminApi.bundleResources(bundle, "Flag");
             CadminApi.renderPager("#flag-pager", {
                 page: listPage,
@@ -223,7 +226,7 @@ function renderFlagList() {
                 onPage: function (nextPage) { load(nextPage); }
             });
             if (!entries.length) {
-                $("#flag-rows").html('<tr><td colspan="8" class="text-muted">No flags found. Create one or start HAPI FHIR.</td></tr>');
+                $("#flag-rows").html(CadminDeletedList.emptyRow(8, "Flag", "No flags found. Create one or start HAPI FHIR."));
                 return;
             }
             const rows = entries.map(function (flag) {
@@ -368,6 +371,11 @@ function renderFlagList() {
         CadminApi.fillSelectOptions("#f-category", categoryOptions, { selected: "safety" });
     });
     CadminApi.bindPatientSelect("#flag-patient-filter", { placeholder: "Any patient" });
+
+    CadminDeletedList.bind({
+        type: "Flag",
+        reload: function () { load(0); }
+    });
 
     load(0);
 }

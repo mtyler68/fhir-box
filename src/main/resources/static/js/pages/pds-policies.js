@@ -33,13 +33,16 @@ function renderPdsPolicyList(initialQuery) {
         '</div>' +
         '<div id="pds-policy-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
-            '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
+            '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
                 '<h6 class="m-0">Policy search</h6>' +
+                '<div class="d-flex flex-wrap align-items-center gap-2">' +
                 '<form class="d-flex" id="pds-policy-search-form">' +
                     '<input class="form-control form-control-sm me-2" id="pds-policy-query" placeholder="Title" value="' +
                         CadminApi.escapeHtml(initialQuery) + '">' +
                     '<button class="btn btn-sm btn-primary" type="submit">Search</button>' +
                 '</form>' +
+                CadminDeletedList.controls() +
+                '</div>' +
             '</div>' +
             '<div class="card-body">' +
                 '<div class="table-responsive">' +
@@ -330,7 +333,21 @@ function renderPdsPolicyList(initialQuery) {
             path += "&title=" + encodeURIComponent(query);
         }
         const pageSize = CadminApi.listPageSize("pds-policies");
-        CadminApi.fhir(CadminApi.pagedPath(path, listPage, pageSize)).done(function (bundle) {
+        CadminDeletedList.query({
+            type: "Library",
+            path: path,
+            page: listPage,
+            size: pageSize,
+            filter: function (library) {
+                const codes = ((library.type && library.type.coding) || []).map(function (coding) {
+                    return coding.code;
+                });
+                if (library.type && library.type.text) {
+                    codes.push(library.type.text);
+                }
+                return !library.type || codes.indexOf("pds-policies") >= 0;
+            }
+        }).done(function (bundle) {
             const entries = CadminApi.bundleResources(bundle, "Library");
             CadminApi.renderPager("#pds-policy-pager", {
                 page: listPage,
@@ -342,7 +359,7 @@ function renderPdsPolicyList(initialQuery) {
                 onPage: function (nextPage) { load(query, nextPage); }
             });
             if (!entries.length) {
-                $("#pds-policy-rows").html('<tr><td colspan="7" class="text-muted">No PDS policies found. Create one or start HAPI FHIR.</td></tr>');
+                $("#pds-policy-rows").html(CadminDeletedList.emptyRow(7, "PDS policy", "No PDS policies found. Create one or start HAPI FHIR."));
                 return;
             }
             const rows = entries.map(function (library) {
@@ -476,6 +493,11 @@ function renderPdsPolicyList(initialQuery) {
                 CadminApi.showToast("danger", "Duplicate failed (" + xhr.status + ").");
             });
         });
+    });
+
+    CadminDeletedList.bind({
+        type: "Library",
+        reload: function () { load($("#pds-policy-query").val(), 0); }
     });
 
     load(initialQuery);

@@ -37,13 +37,16 @@ function renderOrganizationList(initialQuery) {
         '</div>' +
         '<div id="organization-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
-            '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
+            '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
                 '<h6 class="m-0">Organization search</h6>' +
+                '<div class="d-flex flex-wrap align-items-center gap-2">' +
                 '<form class="d-flex" id="organization-search-form">' +
                     '<input class="form-control form-control-sm me-2" id="organization-query" placeholder="Name" value="' +
                         CadminApi.escapeHtml(initialQuery) + '">' +
                     '<button class="btn btn-sm btn-primary" type="submit">Search</button>' +
                 '</form>' +
+                CadminDeletedList.controls() +
+                '</div>' +
             '</div>' +
             '<div class="card-body">' +
                 '<div class="table-responsive">' +
@@ -123,7 +126,7 @@ function renderOrganizationList(initialQuery) {
             path += "&name=" + encodeURIComponent(query);
         }
         const pageSize = CadminApi.listPageSize("organizations");
-        CadminApi.fhir(CadminApi.pagedPath(path, listPage, pageSize)).done(function (bundle) {
+        CadminDeletedList.query({ type: "Organization", path: path, page: listPage, size: pageSize }).done(function (bundle) {
             const entries = organizationEntries(bundle);
             CadminApi.renderPager("#organization-pager", {
                 page: listPage,
@@ -135,7 +138,7 @@ function renderOrganizationList(initialQuery) {
                 onPage: function (nextPage) { load(query, nextPage); }
             });
             if (!entries.length) {
-                $("#organization-rows").html('<tr><td colspan="6" class="text-muted">No organizations found. Create one or start HAPI FHIR.</td></tr>');
+                $("#organization-rows").html(CadminDeletedList.emptyRow(6, "Organization", "No organizations found. Create one or start HAPI FHIR."));
                 return;
             }
             const rows = entries.map(function (org) {
@@ -205,6 +208,11 @@ function renderOrganizationList(initialQuery) {
     });
 
     $("#create-organization-modal").on("show.bs.modal", loadPartOfOptions);
+
+    CadminDeletedList.bind({
+        type: "Organization",
+        reload: function () { load($("#organization-query").val(), 0); }
+    });
 
     load(initialQuery);
 }

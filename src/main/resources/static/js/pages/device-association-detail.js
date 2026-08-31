@@ -514,14 +514,13 @@ window.CadminDeviceAssociationDetail = (function () {
         });
 
         $root.on("click.dadetail", "#da-delete", function () {
-            if (!window.confirm("Delete this device association?")) {
-                return;
-            }
-            CadminApi.fhir("/DeviceAssociation/" + encodeURIComponent(association.id), "DELETE").done(function () {
-                alertMsg("success", "Device association deleted.");
-                window.location.hash = "#/device-associations";
-            }).fail(function (xhr) {
-                fail("Delete device association", xhr);
+            CadminApi.confirm("Delete this device association?").done(function () {
+                CadminApi.fhir("/DeviceAssociation/" + encodeURIComponent(association.id), "DELETE").done(function () {
+                    alertMsg("success", "Device association deleted.");
+                    window.location.hash = "#/device-associations";
+                }).fail(function (xhr) {
+                    fail("Delete device association", xhr);
+                });
             });
         });
 

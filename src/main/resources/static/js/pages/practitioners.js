@@ -34,13 +34,16 @@ function renderPractitionerList(initialQuery) {
         "</div>" +
         '<div id="practitioner-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
-            '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
+            '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
                 '<h6 class="m-0">Practitioner search</h6>' +
+                '<div class="d-flex flex-wrap align-items-center gap-2">' +
                 '<form class="d-flex" id="practitioner-search-form">' +
                     '<input class="form-control form-control-sm me-2" id="practitioner-query" placeholder="Name" value="' +
                         CadminApi.escapeHtml(initialQuery) + '">' +
                     '<button class="btn btn-sm btn-primary" type="submit">Search</button>' +
                 "</form>" +
+                CadminDeletedList.controls() +
+                "</div>" +
             "</div>" +
             '<div class="card-body">' +
                 '<div class="table-responsive">' +
@@ -212,7 +215,7 @@ function renderPractitionerList(initialQuery) {
             path += "&name=" + encodeURIComponent(query);
         }
         const pageSize = CadminApi.listPageSize("practitioners");
-        CadminApi.fhir(CadminApi.pagedPath(path, listPage, pageSize)).done(function (bundle) {
+        CadminDeletedList.query({ type: "Practitioner", path: path, page: listPage, size: pageSize }).done(function (bundle) {
             const entries = CadminApi.bundleResources(bundle, "Practitioner");
             CadminApi.renderPager("#practitioner-pager", {
                 page: listPage,
@@ -224,7 +227,7 @@ function renderPractitionerList(initialQuery) {
                 onPage: function (nextPage) { load(query, nextPage); }
             });
             if (!entries.length) {
-                $("#practitioner-rows").html('<tr><td colspan="5" class="text-muted">No practitioners found. Create one or start HAPI FHIR.</td></tr>');
+                $("#practitioner-rows").html(CadminDeletedList.emptyRow(5, "Practitioner", "No practitioners found. Create one or start HAPI FHIR."));
                 return;
             }
             const rows = entries.map(function (practitioner) {
@@ -343,6 +346,11 @@ function renderPractitionerList(initialQuery) {
             }
             CadminApi.showToast("danger", "Create practitioner role failed (" + xhr.status + ").");
         });
+    });
+
+    CadminDeletedList.bind({
+        type: "Practitioner",
+        reload: function () { load($("#practitioner-query").val(), 0); }
     });
 
     load(initialQuery);

@@ -42,8 +42,9 @@ function renderSubscriptionList(initialQuery) {
         "</div>" +
         '<div id="sub-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
-            '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
+            '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
                 '<h6 class="m-0">Subscription search</h6>' +
+                '<div class="d-flex flex-wrap align-items-center gap-2">' +
                 '<form class="d-flex" id="sub-search-form">' +
                     '<select class="form-select form-select-sm me-2" id="sub-status-filter" style="max-width:10rem">' +
                         '<option value="">Any status</option>' +
@@ -55,6 +56,8 @@ function renderSubscriptionList(initialQuery) {
                         CadminApi.escapeHtml(initialQuery) + '">' +
                     '<button class="btn btn-sm btn-primary" type="submit">Search</button>' +
                 "</form>" +
+                CadminDeletedList.controls() +
+                "</div>" +
             "</div>" +
             '<div class="card-body">' +
                 '<div class="table-responsive">' +
@@ -229,7 +232,7 @@ function renderSubscriptionList(initialQuery) {
                 encodeURIComponent(query);
         }
         const pageSize = CadminApi.listPageSize("subscriptions");
-        CadminApi.fhir(CadminApi.pagedPath(path, listPage, pageSize)).done(function (bundle) {
+        CadminDeletedList.query({ type: "Subscription", path: path, page: listPage, size: pageSize }).done(function (bundle) {
             const entries = CadminApi.bundleResources(bundle, "Subscription");
             CadminApi.renderPager("#sub-pager", {
                 size: pageSize,
@@ -241,7 +244,7 @@ function renderSubscriptionList(initialQuery) {
                 onPage: function (nextPage) { load(query, nextPage); }
             });
             if (!entries.length) {
-                $("#sub-rows").html('<tr><td colspan="7" class="text-muted">No subscriptions found. Create one or start HAPI FHIR.</td></tr>');
+                $("#sub-rows").html(CadminDeletedList.emptyRow(7, "Subscription", "No subscriptions found. Create one or start HAPI FHIR."));
                 return;
             }
             const rows = entries.map(function (sub) {
@@ -368,6 +371,11 @@ function renderSubscriptionList(initialQuery) {
         }
         bootstrap.Modal.getOrCreateInstance(document.getElementById("create-sub-modal")).show();
     }
+
+    CadminDeletedList.bind({
+        type: "Subscription",
+        reload: function () { load($("#sub-query").val(), 0); }
+    });
 
     load(initialQuery);
 }

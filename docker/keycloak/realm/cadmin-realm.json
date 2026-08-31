@@ -3,6 +3,11 @@
   "realm": "cadmin",
   "displayName": "Cadmin",
   "enabled": true,
+  "accessTokenLifespan": 3600,
+  "ssoSessionIdleTimeout": 43200,
+  "ssoSessionMaxLifespan": 43200,
+  "clientSessionIdleTimeout": 43200,
+  "clientSessionMaxLifespan": 43200,
   "sslRequired": "none",
   "registrationAllowed": false,
   "loginWithEmailAllowed": true,
@@ -44,13 +49,30 @@
       "standardFlowEnabled": true,
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": true,
-      "serviceAccountsEnabled": false,
+      "serviceAccountsEnabled": true,
       "frontchannelLogout": true,
       "protocol": "openid-connect",
       "fullScopeAllowed": true,
+      "protocolMappers": [
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ],
       "attributes": {
         "post.logout.redirect.uris": "http://localhost:8080/*",
-        "pkce.code.challenge.method": "S256"
+        "pkce.code.challenge.method": "S256",
+        "access.token.lifespan": "3600"
       },
       "defaultClientScopes": [
         "web-origins",
@@ -105,6 +127,19 @@
       "realmRoles": [
         "user"
       ]
+    },
+    {
+      "username": "service-account-cadmin-gateway",
+      "enabled": true,
+      "serviceAccountClientId": "cadmin-gateway",
+      "clientRoles": {
+        "realm-management": [
+          "view-users",
+          "query-users",
+          "manage-users",
+          "view-realm"
+        ]
+      }
     }
   ]
 }

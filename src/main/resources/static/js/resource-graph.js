@@ -16,10 +16,20 @@ window.CadminResourceGraph = (function () {
         Endpoint: "#/endpoints/",
         Library: "#/pds-policies/",
         Questionnaire: "#/questionnaires/",
+        SearchParameter: "#/search-parameters/",
         CodeSystem: "#/code-systems/",
         ValueSet: "#/value-sets/",
         PractitionerRole: "#/practitioner-roles/",
-        List: "#/lists/"
+        OrganizationAffiliation: "#/organization-affiliations/",
+        List: "#/lists/",
+        Schedule: "#/schedules/",
+        Slot: "#/slots/",
+        Appointment: "#/appointments/",
+        AppointmentResponse: "#/appointment-responses/",
+        PlanDefinition: "#/plan-definitions/",
+        ActivityDefinition: "#/activity-definitions/",
+        RequestOrchestration: "#/request-orchestrations/",
+        Task: "#/request-orchestrations/"
     };
     const TYPE_COLORS = {
         Patient: "#36b9cc",
@@ -31,23 +41,34 @@ window.CadminResourceGraph = (function () {
         CareTeam: "#858796",
         Device: "#5a5c69",
         Flag: "#d63384",
+        Condition: "#e83e8c",
         DeviceAssociation: "#6f42c1",
         Consent: "#fd7e14",
         Subscription: "#20c997",
         SubscriptionTopic: "#0d6efd",
         Library: "#6610f2",
         Questionnaire: "#198754",
+        SearchParameter: "#0d6efd",
         CodeSystem: "#6f42c1",
         ValueSet: "#20c997",
         PractitionerRole: "#4e73df",
         OrganizationAffiliation: "#f6c23e",
         Endpoint: "#36b9cc",
-        List: "#0d6efd"
+        List: "#0d6efd",
+        Schedule: "#0d6efd",
+        Slot: "#20c997",
+        Appointment: "#4e73df",
+        AppointmentResponse: "#858796",
+        PlanDefinition: "#6f42c1",
+        ActivityDefinition: "#fd7e14",
+        RequestOrchestration: "#20c997",
+        Task: "#4e73df"
     };
     const DEPTH_MIN = 1;
     const DEPTH_MAX = 4;
     const DEPTH_DEFAULT = 2;
     const NEIGHBOR_FETCH_LIMIT = 10;
+    const BUNDLE_MODAL_ID = "resource-graph-bundle-modal";
 
     let network = null;
     let nodeSet = null;
@@ -60,6 +81,7 @@ window.CadminResourceGraph = (function () {
     let graphResizeObserver = null;
     let expandToken = 0;
     let themeBound = false;
+    let hiddenTypes = {};
 
     function cssColor(name, fallback) {
         const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -147,8 +169,7 @@ window.CadminResourceGraph = (function () {
         if (!lastGraph || !nodeSet || !edgeSet) {
             return;
         }
-        nodeSet.update(visNodes(lastGraph));
-        edgeSet.update(visEdges(lastGraph));
+        replaceNetworkData(lastGraph);
         if (network) {
             network.redraw();
         }
@@ -172,6 +193,137 @@ window.CadminResourceGraph = (function () {
         if (input) {
             input.value = String(graphDepth);
         }
+    }
+
+    function typeVisible(type) {
+        return !hiddenTypes[type];
+    }
+
+    function graphTypes(graph) {
+        const types = {};
+        Object.keys((graph && graph.nodes) || {}).forEach(function (key) {
+            const type = graph.nodes[key] && graph.nodes[key].type;
+            if (type) {
+                types[type] = true;
+            }
+        });
+        return Object.keys(types).sort();
+    }
+
+    function visibleGraph(graph) {
+        if (!graph) {
+            return graph;
+        }
+        const nodes = {};
+        Object.keys(graph.nodes || {}).forEach(function (key) {
+            const node = graph.nodes[key];
+            if (node && typeVisible(node.type)) {
+                nodes[key] = node;
+            }
+        });
+        const edges = (graph.edges || []).filter(function (edge) {
+            return nodes[edge.from] && nodes[edge.to];
+        });
+        return {
+            focus: graph.focus,
+            nodes: nodes,
+            edges: edges,
+            depth: graph.depth
+        };
+    }
+
+    function displayedGraph() {
+        return visibleGraph(lastGraph);
+    }
+
+    function syncTypeFilterMenu() {
+        const list = document.getElementById("resource-graph-types-list");
+        if (!list) {
+            return;
+        }
+        const types = graphTypes(lastGraph);
+        if (!types.length) {
+            list.innerHTML = '<div class="dropdown-item-text text-muted">No resource types yet.</div>';
+        } else {
+            list.innerHTML = types.map(function (type) {
+                return '<label class="dropdown-item mb-0">' +
+                    '<input class="form-check-input resource-graph-type" type="checkbox" value="' +
+                    type + '"' + (typeVisible(type) ? " checked" : "") + ">" +
+                    "<span>" + type + "</span></label>";
+            }).join("");
+        }
+        const visibleCount = types.filter(typeVisible).length;
+        const filtered = types.length > 0 && visibleCount !== types.length;
+        const icon = document.getElementById("resource-graph-types-icon");
+        if (icon) {
+            icon.className = "bi " + (filtered ? "bi-funnel-fill" : "bi-funnel");
+        }
+        const count = document.getElementById("resource-graph-types-count");
+        if (count) {
+            if (filtered) {
+                count.textContent = visibleCount + "/" + types.length;
+                count.classList.remove("d-none");
+            } else {
+                count.textContent = "";
+                count.classList.add("d-none");
+            }
+        }
+        const button = document.getElementById("resource-graph-types");
+        if (button) {
+            button.title = filtered
+                ? "Showing " + visibleCount + " of " + types.length + " resource types"
+                : "Choose which resource types appear in the graph";
+        }
+    }
+
+    function replaceNetworkData(graph) {
+        if (!nodeSet || !edgeSet || !graph) {
+            return;
+        }
+        const nodes = visNodes(graph);
+        const edges = visEdges(graph);
+        const keepNodes = {};
+        nodes.forEach(function (node) {
+            keepNodes[node.id] = true;
+        });
+        nodeSet.getIds().forEach(function (id) {
+            if (!keepNodes[id]) {
+                nodeSet.remove(id);
+            }
+        });
+        nodeSet.update(nodes);
+        const keepEdges = {};
+        edges.forEach(function (edge) {
+            keepEdges[edge.id] = true;
+        });
+        edgeSet.getIds().forEach(function (id) {
+            if (!keepEdges[id]) {
+                edgeSet.remove(id);
+            }
+        });
+        edgeSet.update(edges);
+    }
+
+    function applyTypeFilter() {
+        syncTypeFilterMenu();
+        if (!lastGraph || !nodeSet || !edgeSet) {
+            return;
+        }
+        replaceNetworkData(lastGraph);
+        declutter();
+    }
+
+    function selectAllTypes() {
+        hiddenTypes = {};
+        applyTypeFilter();
+    }
+
+    function deselectAllTypes() {
+        hiddenTypes = {};
+        graphTypes(lastGraph).forEach(function (type) {
+            hiddenTypes[type] = true;
+        });
+        applyTypeFilter();
     }
 
     function hopRole(direction, hop) {
@@ -221,12 +373,33 @@ window.CadminResourceGraph = (function () {
                             'type="number" min="' + DEPTH_MIN + '" max="' + DEPTH_MAX + '" step="1" value="' +
                             graphDepth + '" title="Graph depth" aria-label="Graph depth">' +
                     "</label>" +
+                    '<div class="dropdown ms-2 resource-graph-types">' +
+                        '<button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="resource-graph-types" ' +
+                            'data-bs-toggle="dropdown" data-bs-auto-close="outside" data-bs-display="static" ' +
+                            'aria-expanded="false" title="Choose which resource types appear in the graph">' +
+                            '<i class="bi bi-funnel" id="resource-graph-types-icon" aria-hidden="true"></i>' +
+                            '<span class="ms-1">Types</span>' +
+                            '<span class="ms-1 small text-muted d-none" id="resource-graph-types-count"></span>' +
+                        "</button>" +
+                        '<div class="dropdown-menu dropdown-menu-end resource-graph-types-menu" aria-labelledby="resource-graph-types">' +
+                            '<div class="resource-graph-types-actions px-3 py-1 d-flex flex-wrap gap-2">' +
+                                '<button class="btn btn-link btn-sm p-0" type="button" id="resource-graph-types-all">Select all</button>' +
+                                '<button class="btn btn-link btn-sm p-0" type="button" id="resource-graph-types-none">Deselect all</button>' +
+                            "</div>" +
+                            '<div class="dropdown-divider"></div>' +
+                            '<div id="resource-graph-types-list"></div>' +
+                        "</div>" +
+                    "</div>" +
                     '<span class="small text-muted d-none d-lg-inline ms-2">Scroll to zoom · drag to pan</span>' +
+                    '<button class="btn btn-sm btn-outline-secondary ms-2" type="button" id="resource-graph-refresh" title="Reload references from the server" aria-label="Refresh graph">' +
+                        '<i class="bi bi-arrow-clockwise" aria-hidden="true"></i>' +
+                        '<span class="ms-1">Refresh</span>' +
+                    "</button>" +
                     '<button class="btn btn-sm btn-outline-secondary ms-2" type="button" id="resource-graph-declutter" title="Arrange nodes so connectors do not overlap">' +
                         '<i class="bi bi-distribute-vertical" aria-hidden="true"></i>' +
                         '<span class="ms-1">Declutter</span>' +
                     "</button>" +
-                    '<button class="btn btn-sm btn-outline-secondary ms-2" type="button" id="resource-graph-bundle" title="Open a Bundle of every resource shown in the graph">' +
+                    '<button class="btn btn-sm btn-outline-secondary ms-2" type="button" id="resource-graph-bundle" title="Create a Bundle of every resource shown in the graph">' +
                         '<i class="bi bi-collection" aria-hidden="true"></i>' +
                         '<span class="ms-1">Bundle</span>' +
                     "</button>" +
@@ -339,9 +512,9 @@ window.CadminResourceGraph = (function () {
         graphResizeObserver.observe(el);
     }
 
-    function detailHref(type, id) {
+    function detailHref(type, id, resource) {
         if (typeof CadminApi.detailHref === "function") {
-            return CadminApi.detailHref(type, id);
+            return CadminApi.detailHref(type, id, resource);
         }
         const prefix = DETAIL_PREFIX[type];
         if (prefix) {
@@ -350,11 +523,44 @@ window.CadminResourceGraph = (function () {
         return "#/resources/" + encodeURIComponent(type) + "/" + encodeURIComponent(id);
     }
 
+    function openGraphNode(key) {
+        const loaded = mountedByKey && mountedByKey[key];
+        const node = lastGraph && lastGraph.nodes[key];
+        const type = (loaded && loaded.resourceType) || (node && node.type) || String(key).split("/")[0];
+        const realId = loaded && loaded.id && !loaded._display ? loaded.id : "";
+        const canonical = (loaded && (loaded.url || loaded._canonical)) || "";
+        if (!type) {
+            return;
+        }
+        if (realId) {
+            window.location.hash = detailHref(type, realId, loaded);
+            return;
+        }
+        if (canonical && typeof CadminApi.findByUrl === "function") {
+            CadminApi.findByUrl(type, canonical).done(function (resource) {
+                if (resource && resource.id) {
+                    remember(mountedByKey, resource);
+                    redrawMounted();
+                    window.location.hash = detailHref(type, resource.id, resource);
+                    return;
+                }
+                window.location.hash = CadminApi.listHref(type, { url: canonical });
+            }).fail(function () {
+                window.location.hash = CadminApi.listHref(type, { url: canonical });
+            });
+            return;
+        }
+        const id = String(key).split("/").slice(1).join("/");
+        if (id) {
+            window.location.hash = detailHref(type, id);
+        }
+    }
+
     function parseReference(value) {
         if (!value || typeof value !== "string" || value.charAt(0) === "#") {
             return null;
         }
-        const cleaned = value.split("?")[0].replace(/\/_history\/[^/]+$/, "");
+        const cleaned = value.split("|")[0].split("?")[0].replace(/\/_history\/[^/]+$/, "");
         const parts = cleaned.split("/").filter(Boolean);
         if (parts.length < 2) {
             return null;
@@ -365,6 +571,92 @@ window.CadminResourceGraph = (function () {
             return null;
         }
         return { type: type, id: id };
+    }
+
+    const CANONICAL_LEAVES = {
+        canonical: true,
+        derivedFrom: true,
+        library: true,
+        questionnaire: true,
+        resource: true,
+        topic: true,
+        valueSet: true
+    };
+
+    function pathLeaf(path) {
+        const text = String(path || "");
+        const dot = text.lastIndexOf(".");
+        return dot < 0 ? text : text.slice(dot + 1);
+    }
+
+    function isCanonicalPath(path) {
+        if (!path || path === "url") {
+            return false;
+        }
+        const leaf = pathLeaf(path);
+        return /Canonical$/i.test(leaf) || !!CANONICAL_LEAVES[leaf];
+    }
+
+    function isComposeSystemPath(path) {
+        return /(^|\.)compose\.(include|exclude)\.system$/.test(path || "");
+    }
+
+    function canonicalStubId(url) {
+        const bare = String(url || "").split("|")[0];
+        try {
+            const parsed = new URL(bare);
+            const segs = parsed.pathname.split("/").filter(Boolean);
+            if (segs.length) {
+                return decodeURIComponent(segs[segs.length - 1]);
+            }
+            return parsed.host || bare;
+        } catch (ignore) {
+            const parts = bare.split("/").filter(Boolean);
+            return parts.length ? parts[parts.length - 1] : bare.replace(/[^A-Za-z0-9._-]/g, "-");
+        }
+    }
+
+    function composeSystemTarget(value) {
+        if (!value || typeof value !== "string") {
+            return null;
+        }
+        const parsed = parseReference(value);
+        if (parsed && parsed.type === "CodeSystem") {
+            return parsed;
+        }
+        const id = (parsed && parsed.id) || canonicalStubId(value);
+        if (!id) {
+            return null;
+        }
+        return { type: "CodeSystem", id: id };
+    }
+
+    function findByCanonical(byKey, url) {
+        const bare = String(url || "").split("|")[0];
+        if (!bare || !byKey) {
+            return "";
+        }
+        const keys = Object.keys(byKey);
+        for (let i = 0; i < keys.length; i += 1) {
+            const resource = byKey[keys[i]];
+            if (resource && resource.url && String(resource.url).split("|")[0] === bare && keyOf(resource)) {
+                return keyOf(resource);
+            }
+        }
+        return "";
+    }
+
+    function resolveTargetKey(byKey, ref) {
+        if (!ref) {
+            return "";
+        }
+        if (ref.canonical) {
+            const matched = findByCanonical(byKey, ref.canonical);
+            if (matched) {
+                return matched;
+            }
+        }
+        return nodeKey(ref.type, ref.id);
     }
 
     function nodeKey(type, id) {
@@ -459,8 +751,40 @@ window.CadminResourceGraph = (function () {
             || resource.topic || resource.address || resource.id || "";
     }
 
+    function pushReference(found, seen, parsed, display, property, kind, canonical) {
+        const key = nodeKey(parsed.type, parsed.id) + "|" + property + "|" + (kind || "reference");
+        if (seen[key]) {
+            return;
+        }
+        seen[key] = true;
+        found.push({
+            type: parsed.type,
+            id: parsed.id,
+            display: display || "",
+            property: property,
+            kind: kind || "reference",
+            canonical: canonical || ""
+        });
+    }
+
     function collectReferences(value, found, seen, path) {
         path = path || "";
+        if (typeof value === "string") {
+            if (isComposeSystemPath(path)) {
+                const target = composeSystemTarget(value);
+                if (target) {
+                    pushReference(found, seen, target, value, path, "canonical", value);
+                }
+                return found;
+            }
+            if (isCanonicalPath(path)) {
+                const parsed = parseReference(value);
+                if (parsed) {
+                    pushReference(found, seen, parsed, "", path, "canonical", value);
+                }
+            }
+            return found;
+        }
         if (!value || typeof value !== "object") {
             return found;
         }
@@ -473,17 +797,7 @@ window.CadminResourceGraph = (function () {
         if (typeof value.reference === "string") {
             const parsed = parseReference(value.reference);
             if (parsed) {
-                const property = path || "reference";
-                const key = nodeKey(parsed.type, parsed.id) + "|" + property;
-                if (!seen[key]) {
-                    seen[key] = true;
-                    found.push({
-                        type: parsed.type,
-                        id: parsed.id,
-                        display: value.display || "",
-                        property: property
-                    });
-                }
+                pushReference(found, seen, parsed, value.display || "", path || "reference", "reference");
             }
             return found;
         }
@@ -504,7 +818,8 @@ window.CadminResourceGraph = (function () {
         return {
             resourceType: ref.type,
             id: ref.id,
-            _display: ref.display || ""
+            _display: ref.display || "",
+            _canonical: ref.canonical || ""
         };
     }
 
@@ -546,17 +861,18 @@ window.CadminResourceGraph = (function () {
         }
     }
 
-    function addEdge(edges, seen, from, to, property) {
+    function addEdge(edges, seen, from, to, property, kind) {
         if (!from || !to || from === to) {
             return;
         }
         const label = property || "";
-        const key = from + "->" + to + "|" + label;
+        const style = kind || "reference";
+        const key = from + "->" + to + "|" + label + "|" + style;
         if (seen[key]) {
             return;
         }
         seen[key] = true;
-        edges.push({ from: from, to: to, label: label });
+        edges.push({ from: from, to: to, label: label, kind: style });
     }
 
     function graphFrom(focusResource, byKey, depth) {
@@ -591,11 +907,11 @@ window.CadminResourceGraph = (function () {
                 const resource = key === focus ? focusResource : byKey[key];
                 if (resource) {
                     outgoingOf(resource).forEach(function (ref) {
-                        const target = nodeKey(ref.type, ref.id);
+                        const target = resolveTargetKey(byKey, ref);
                         if (!target || target === key) {
                             return;
                         }
-                        addEdge(edges, edgeSeen, key, target, ref.property);
+                        addEdge(edges, edgeSeen, key, target, ref.property, ref.kind);
                         enqueue(target, hopRole("outgoing", hop), byKey[target] || stubResource(ref));
                     });
                 }
@@ -604,10 +920,10 @@ window.CadminResourceGraph = (function () {
                         return;
                     }
                     outgoingOf(byKey[src]).forEach(function (ref) {
-                        if (nodeKey(ref.type, ref.id) !== key) {
+                        if (resolveTargetKey(byKey, ref) !== key) {
                             return;
                         }
-                        addEdge(edges, edgeSeen, src, key, ref.property);
+                        addEdge(edges, edgeSeen, src, key, ref.property, ref.kind);
                         enqueue(src, hopRole("incoming", hop), byKey[src]);
                     });
                 });
@@ -791,7 +1107,7 @@ window.CadminResourceGraph = (function () {
         if (!lastGraph || !network) {
             return placed;
         }
-        const pairs = edgePairGroups(lastGraph);
+        const pairs = edgePairGroups(displayedGraph());
         Object.keys(pairs).forEach(function (key) {
             const pair = pairs[key];
             if (!isBidirectionalPair(pair)) {
@@ -823,6 +1139,7 @@ window.CadminResourceGraph = (function () {
 
     function visEdges(graph) {
         const theme = themePalette();
+        graph = visibleGraph(graph) || { edges: [] };
         const pairs = edgePairGroups(graph);
         const pairOf = {};
         Object.keys(pairs).forEach(function (key) {
@@ -859,12 +1176,14 @@ window.CadminResourceGraph = (function () {
                     roundness: Math.min(0.2 + Math.abs(offset) * 0.2, 0.85)
                 };
             }
+            const canonical = edge.kind === "canonical";
             return {
                 id: String(index),
                 from: edge.from,
                 to: edge.to,
                 label: bidirectional ? "" : abbreviate(label, 24),
                 title: label,
+                dashes: canonical ? [8, 6] : false,
                 arrows: { to: { enabled: true, scaleFactor: 0.75 } },
                 color: { color: theme.border, highlight: theme.primary },
                 font: {
@@ -1000,7 +1319,7 @@ window.CadminResourceGraph = (function () {
             layout: { hierarchical: false },
             physics: { enabled: false }
         });
-        nodeSet.update(declutterPositions(lastGraph));
+        nodeSet.update(declutterPositions(displayedGraph()));
         edgeSet.update(visEdges(lastGraph));
         window.requestAnimationFrame(function () {
             if (network) {
@@ -1011,8 +1330,9 @@ window.CadminResourceGraph = (function () {
 
     function visNodes(graph) {
         const theme = themePalette();
-        return Object.keys(graph.nodes).map(function (key) {
-            const node = graph.nodes[key];
+        const shown = visibleGraph(graph) || { nodes: {} };
+        return Object.keys(shown.nodes).map(function (key) {
+            const node = shown.nodes[key];
             const focus = node.role === "focus";
             const color = TYPE_COLORS[node.type] || theme.primary;
             const subtitle = abbreviate(node.title, 28)
@@ -1267,10 +1587,14 @@ window.CadminResourceGraph = (function () {
                     return;
                 }
                 const vias = edgeVias(edge);
+                const dashes = edge.options && edge.options.dashes;
+                const dashAttr = dashes === true || (Array.isArray(dashes) && dashes.length)
+                    ? ' stroke-dasharray="' + (Array.isArray(dashes) ? dashes.join(" ") : "8 6") + '"'
+                    : "";
                 parts.push(
                     '<path d="' + svgPath(edge.fromPoint, vias, edge.toPoint) +
                         '" fill="none" stroke="' + xmlEscape(edgeColor) + '" stroke-width="' +
-                        Math.max(1, 1.5 * scale) + '"/>'
+                        Math.max(1, 1.5 * scale) + '"' + dashAttr + "/>"
                 );
                 parts.push(
                     '<polygon points="' + svgArrow(edge.fromPoint, vias, edge.toPoint, arrowSize) +
@@ -1286,6 +1610,9 @@ window.CadminResourceGraph = (function () {
         if (lastGraph && network && typeof network.getBoundingBox === "function") {
             Object.keys(lastGraph.nodes).forEach(function (key) {
                 const node = lastGraph.nodes[key];
+                if (!typeVisible(node.type)) {
+                    return;
+                }
                 const box = network.getBoundingBox(key);
                 if (!box) {
                     return;
@@ -1378,12 +1705,14 @@ window.CadminResourceGraph = (function () {
     function cloneForBundle(resource) {
         const copy = JSON.parse(JSON.stringify(resource));
         delete copy._display;
+        delete copy._canonical;
         return copy;
     }
 
     function collectDisplayedResources() {
         const deferred = $.Deferred();
-        const keys = Object.keys((lastGraph && lastGraph.nodes) || {});
+        const shown = displayedGraph();
+        const keys = Object.keys((shown && shown.nodes) || {});
         const collected = [];
         let pending = keys.length;
         if (!pending) {
@@ -1424,25 +1753,248 @@ window.CadminResourceGraph = (function () {
         return deferred.promise();
     }
 
-    function graphBundle(resources) {
+    function uuid() {
+        if (window.crypto && typeof crypto.randomUUID === "function") {
+            return crypto.randomUUID();
+        }
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (ch) {
+            const rand = Math.random() * 16 | 0;
+            const value = ch === "x" ? rand : (rand & 0x3 | 0x8);
+            return value.toString(16);
+        });
+    }
+
+    function relativeUrl(resource) {
+        return resource.resourceType + "/" + resource.id;
+    }
+
+    function searchMode(resource) {
+        return keyOf(resource) === focusKey ? "match" : "include";
+    }
+
+    function prepareForCreate(resource) {
+        delete resource.id;
+        if (resource.meta) {
+            delete resource.meta.versionId;
+            delete resource.meta.lastUpdated;
+            if (!Object.keys(resource.meta).length) {
+                delete resource.meta;
+            }
+        }
+        return resource;
+    }
+
+    function rewriteBundleReferences(value, urlByKey) {
+        if (!value || typeof value !== "object") {
+            return;
+        }
+        if (Array.isArray(value)) {
+            value.forEach(function (item) {
+                rewriteBundleReferences(item, urlByKey);
+            });
+            return;
+        }
+        if (typeof value.reference === "string") {
+            const parsed = parseReference(value.reference);
+            if (parsed) {
+                const mapped = urlByKey[nodeKey(parsed.type, parsed.id)];
+                if (mapped) {
+                    value.reference = mapped;
+                }
+            }
+            return;
+        }
+        Object.keys(value).forEach(function (key) {
+            if (key === "text" || key === "snapshot" || key === "differential") {
+                return;
+            }
+            rewriteBundleReferences(value[key], urlByKey);
+        });
+    }
+
+    function transactionBundle(resources, newIds, timestamp) {
+        if (newIds) {
+            const urlByKey = {};
+            resources.forEach(function (resource) {
+                urlByKey[keyOf(resource)] = "urn:uuid:" + uuid();
+            });
+            return {
+                resourceType: "Bundle",
+                type: "transaction",
+                timestamp: timestamp,
+                entry: resources.map(function (resource) {
+                    const copy = cloneForBundle(resource);
+                    rewriteBundleReferences(copy, urlByKey);
+                    prepareForCreate(copy);
+                    return {
+                        fullUrl: urlByKey[keyOf(resource)],
+                        resource: copy,
+                        request: {
+                            method: "POST",
+                            url: resource.resourceType
+                        }
+                    };
+                })
+            };
+        }
         return {
             resourceType: "Bundle",
-            type: "collection",
-            timestamp: new Date().toISOString(),
+            type: "transaction",
+            timestamp: timestamp,
             entry: resources.map(function (resource) {
+                const url = relativeUrl(resource);
                 return {
-                    fullUrl: resource.resourceType + "/" + resource.id,
-                    resource: cloneForBundle(resource)
+                    fullUrl: url,
+                    resource: cloneForBundle(resource),
+                    request: {
+                        method: "PUT",
+                        url: url
+                    }
                 };
             })
         };
     }
 
-    function openGraphBundle() {
-        if (!lastGraph || !lastGraph.nodes || !Object.keys(lastGraph.nodes).length) {
+    function graphBundle(resources, options) {
+        options = options || {};
+        const kind = options.kind || "collection";
+        const timestamp = new Date().toISOString();
+        if (kind === "export") {
+            return transactionBundle(resources, !!options.newIds, timestamp);
+        }
+        const type = kind === "searchset" ? "searchset" : "collection";
+        const bundle = {
+            resourceType: "Bundle",
+            type: type,
+            timestamp: timestamp,
+            entry: resources.map(function (resource) {
+                const entry = {
+                    fullUrl: relativeUrl(resource),
+                    resource: cloneForBundle(resource)
+                };
+                if (type === "searchset") {
+                    entry.search = { mode: searchMode(resource) };
+                }
+                return entry;
+            })
+        };
+        if (type === "searchset") {
+            bundle.total = resources.filter(function (resource) {
+                return searchMode(resource) === "match";
+            }).length;
+        }
+        return bundle;
+    }
+
+    function bundleViewerTitle(kind) {
+        if (kind === "searchset") {
+            return "Reference graph searchset";
+        }
+        if (kind === "export") {
+            return "Reference graph transaction";
+        }
+        return "Reference graph collection";
+    }
+
+    function syncBundleIdOptions() {
+        const isExport = $("input[name='resource-graph-bundle-type']:checked").val() === "export";
+        $("#" + BUNDLE_MODAL_ID + "-ids").prop("disabled", !isExport);
+    }
+
+    function resetBundleModal() {
+        $("#" + BUNDLE_MODAL_ID + "-type-collection").prop("checked", true);
+        $("#" + BUNDLE_MODAL_ID + "-ids-keep").prop("checked", true);
+        syncBundleIdOptions();
+    }
+
+    function ensureBundleModal() {
+        if (document.getElementById(BUNDLE_MODAL_ID)) {
+            return;
+        }
+        $("body").append(
+            '<div class="modal fade" id="' + BUNDLE_MODAL_ID + '" tabindex="-1" aria-labelledby="' +
+                BUNDLE_MODAL_ID + '-title">' +
+                '<div class="modal-dialog">' +
+                    '<form class="modal-content" id="' + BUNDLE_MODAL_ID + '-form">' +
+                        '<div class="modal-header">' +
+                            '<h5 class="modal-title" id="' + BUNDLE_MODAL_ID + '-title">Create bundle</h5>' +
+                            '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>' +
+                        "</div>" +
+                        '<div class="modal-body">' +
+                            "<fieldset>" +
+                                '<legend class="form-label">Bundle type</legend>' +
+                                '<div class="mb-3">' +
+                                    '<div class="form-check">' +
+                                        '<input class="form-check-input" type="radio" name="resource-graph-bundle-type" id="' +
+                                            BUNDLE_MODAL_ID + '-type-collection" value="collection" checked>' +
+                                        '<label class="form-check-label" for="' + BUNDLE_MODAL_ID +
+                                            '-type-collection">Collection</label>' +
+                                    "</div>" +
+                                    '<div class="form-text ms-4">A set of resources with no implied processing.</div>' +
+                                "</div>" +
+                                '<div class="mb-3">' +
+                                    '<div class="form-check">' +
+                                        '<input class="form-check-input" type="radio" name="resource-graph-bundle-type" id="' +
+                                            BUNDLE_MODAL_ID + '-type-searchset" value="searchset">' +
+                                        '<label class="form-check-label" for="' + BUNDLE_MODAL_ID +
+                                            '-type-searchset">Searchset</label>' +
+                                    "</div>" +
+                                    '<div class="form-text ms-4">The focus resource is a match; related graph resources are includes.</div>' +
+                                "</div>" +
+                                '<div class="mb-0">' +
+                                    '<div class="form-check">' +
+                                        '<input class="form-check-input" type="radio" name="resource-graph-bundle-type" id="' +
+                                            BUNDLE_MODAL_ID + '-type-export" value="export">' +
+                                        '<label class="form-check-label" for="' + BUNDLE_MODAL_ID +
+                                            '-type-export">Export</label>' +
+                                    "</div>" +
+                                    '<div class="form-text ms-4">Formatted as a transaction Bundle for copying these resources to a FHIR server.</div>' +
+                                "</div>" +
+                            "</fieldset>" +
+                            '<fieldset class="mt-3" id="' + BUNDLE_MODAL_ID + '-ids" disabled>' +
+                                '<legend class="form-label">Resource IDs</legend>' +
+                                '<div class="mb-3">' +
+                                    '<div class="form-check">' +
+                                        '<input class="form-check-input" type="radio" name="resource-graph-bundle-ids" id="' +
+                                            BUNDLE_MODAL_ID + '-ids-keep" value="keep" checked>' +
+                                        '<label class="form-check-label" for="' + BUNDLE_MODAL_ID +
+                                            '-ids-keep">Keep existing IDs</label>' +
+                                    "</div>" +
+                                    '<div class="form-text ms-4">PUT each resource at its current Type/id.</div>' +
+                                "</div>" +
+                                '<div class="mb-0">' +
+                                    '<div class="form-check">' +
+                                        '<input class="form-check-input" type="radio" name="resource-graph-bundle-ids" id="' +
+                                            BUNDLE_MODAL_ID + '-ids-uuid" value="uuid">' +
+                                        '<label class="form-check-label" for="' + BUNDLE_MODAL_ID +
+                                            '-ids-uuid">Assign new IDs</label>' +
+                                    "</div>" +
+                                    '<div class="form-text ms-4">POST each resource with a urn:uuid fullUrl. References between graph resources are rewritten.</div>' +
+                                "</div>" +
+                            "</fieldset>" +
+                        "</div>" +
+                        '<div class="modal-footer">' +
+                            '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>' +
+                            '<button type="submit" class="btn btn-primary">Open bundle</button>' +
+                        "</div>" +
+                    "</form>" +
+                "</div>" +
+            "</div>"
+        );
+    }
+
+    function promptGraphBundle() {
+        const shown = displayedGraph();
+        if (!shown || !shown.nodes || !Object.keys(shown.nodes).length) {
             CadminApi.showToast("warning", "The reference graph has no resources yet.");
             return;
         }
+        ensureBundleModal();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById(BUNDLE_MODAL_ID)).show();
+    }
+
+    function openGraphBundle(options) {
+        options = options || {};
         if (!window.CadminResourceSource) {
             return;
         }
@@ -1452,10 +2004,28 @@ window.CadminResourceGraph = (function () {
                 CadminApi.showToast("warning", "Unable to load the resources shown in the graph.");
                 return;
             }
-            CadminResourceSource.show(graphBundle(resources), "Reference graph bundle");
+            CadminResourceSource.show(graphBundle(resources, options), bundleViewerTitle(options.kind));
         }).always(function () {
             $btn.prop("disabled", false);
         });
+    }
+
+    function submitGraphBundleForm(event) {
+        event.preventDefault();
+        const kind = $("input[name='resource-graph-bundle-type']:checked").val() || "collection";
+        const newIds = kind === "export" &&
+            $("input[name='resource-graph-bundle-ids']:checked").val() === "uuid";
+        const options = { kind: kind, newIds: newIds };
+        const modalEl = document.getElementById(BUNDLE_MODAL_ID);
+        const modal = modalEl && bootstrap.Modal.getInstance(modalEl);
+        if (modal && $(modalEl).is(":visible")) {
+            $(modalEl).one("hidden.bs.modal.resourcegraphbundleopen", function () {
+                openGraphBundle(options);
+            });
+            modal.hide();
+            return;
+        }
+        openGraphBundle(options);
     }
 
     function exportGraphSvg() {
@@ -1475,6 +2045,7 @@ window.CadminResourceGraph = (function () {
             if (el) {
                 el.innerHTML = '<div class="text-muted p-3">Graph view is unavailable.</div>';
             }
+            syncTypeFilterMenu();
             return;
         }
         bindTheme();
@@ -1588,12 +2159,7 @@ window.CadminResourceGraph = (function () {
             if (key === focusKey) {
                 return;
             }
-            const parts = String(key).split("/");
-            const type = parts[0];
-            const id = parts.slice(1).join("/");
-            if (type && id) {
-                window.location.hash = detailHref(type, id);
-            }
+            openGraphNode(key);
         });
         network.on("hoverNode", function () {
             el.style.cursor = "grab";
@@ -1603,6 +2169,7 @@ window.CadminResourceGraph = (function () {
         });
         el.style.cursor = "grab";
         ensureGraphObserver();
+        syncTypeFilterMenu();
         if (isMaximized()) {
             window.requestAnimationFrame(resizeNetwork);
         }
@@ -1648,9 +2215,35 @@ window.CadminResourceGraph = (function () {
             if (byKey[key] && !byKey[key]._display) {
                 return { type: byKey[key].resourceType, id: byKey[key].id };
             }
+            if (byKey[key] && byKey[key]._canonical) {
+                return {
+                    type: byKey[key].resourceType,
+                    id: byKey[key].id,
+                    url: String(byKey[key]._canonical).split("|")[0]
+                };
+            }
             const parts = key.split("/");
             return { type: parts[0], id: parts.slice(1).join("/") };
         });
+    }
+
+    function loadByCanonical(type, url) {
+        return CadminApi.fhir("/" + encodeURIComponent(type) + "?url=" + encodeURIComponent(url) + "&_count=5",
+            "GET", null, { silent: true });
+    }
+
+    function loadNeighbor(item) {
+        if (item && item.url) {
+            return loadByCanonical(item.type, item.url).then(function (bundle) {
+                if (bundle && ((bundle.entry && bundle.entry.length) || bundle.total > 0)) {
+                    return bundle;
+                }
+                return loadNeighborhood(item.type, item.id, false);
+            }, function () {
+                return loadNeighborhood(item.type, item.id, false);
+            });
+        }
+        return loadNeighborhood(item.type, item.id, false);
     }
 
     function loadMany(items) {
@@ -1661,7 +2254,7 @@ window.CadminResourceGraph = (function () {
             return deferred.resolve(collected).promise();
         }
         items.forEach(function (item) {
-            loadNeighborhood(item.type, item.id, false).done(function (bundle) {
+            loadNeighbor(item).done(function (bundle) {
                 collected.push(bundle);
             }).always(function () {
                 pending -= 1;
@@ -1747,6 +2340,25 @@ window.CadminResourceGraph = (function () {
         startExpand();
     }
 
+    function refresh() {
+        const resource = mountedResource;
+        if (!resource || !resource.resourceType || !resource.id) {
+            return;
+        }
+        const $btn = $("#resource-graph-refresh");
+        $btn.prop("disabled", true);
+        CadminApi.fhir("/" + resource.resourceType + "/" + encodeURIComponent(resource.id), "GET", null, { silent: true })
+            .done(function (updated) {
+                mount(updated || resource);
+            })
+            .fail(function () {
+                mount(resource);
+            })
+            .always(function () {
+                $btn.prop("disabled", false);
+            });
+    }
+
     $(document).on("input.resourcegraphdepth", "#resource-graph-depth", function () {
         const n = parseInt(this.value, 10);
         if (n >= DEPTH_MIN && n <= DEPTH_MAX) {
@@ -1756,14 +2368,41 @@ window.CadminResourceGraph = (function () {
     $(document).on("change.resourcegraphdepth", "#resource-graph-depth", function () {
         applyDepth(this.value);
     });
+    $(document).on("click.resourcegraphrefresh", "#resource-graph-refresh", function (event) {
+        event.preventDefault();
+        refresh();
+    });
     $(document).on("click.resourcegraphdeclutter", "#resource-graph-declutter", function (event) {
         event.preventDefault();
         declutter();
     });
+    $(document).on("click.resourcegraphtypesall", "#resource-graph-types-all", function (event) {
+        event.preventDefault();
+        selectAllTypes();
+    });
+    $(document).on("click.resourcegraphtypesnone", "#resource-graph-types-none", function (event) {
+        event.preventDefault();
+        deselectAllTypes();
+    });
+    $(document).on("change.resourcegraphtypes", "#resource-graph-types-list input.resource-graph-type", function () {
+        const type = this.value;
+        if (!type) {
+            return;
+        }
+        if (this.checked) {
+            delete hiddenTypes[type];
+        } else {
+            hiddenTypes[type] = true;
+        }
+        applyTypeFilter();
+    });
     $(document).on("click.resourcegraphbundle", "#resource-graph-bundle", function (event) {
         event.preventDefault();
-        openGraphBundle();
+        promptGraphBundle();
     });
+    $(document).on("change.resourcegraphbundleopts", "input[name='resource-graph-bundle-type']", syncBundleIdOptions);
+    $(document).on("show.bs.modal.resourcegraphbundleopts", "#" + BUNDLE_MODAL_ID, resetBundleModal);
+    $(document).on("submit.resourcegraphbundleopts", "#" + BUNDLE_MODAL_ID + "-form", submitGraphBundleForm);
     $(document).on("click.resourcegraphexportpng", "#resource-graph-export-png, #resource-graph-export-png-item", function (event) {
         event.preventDefault();
         exportGraphPng();
