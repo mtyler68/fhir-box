@@ -27,14 +27,94 @@ window.CadminWiremockRequestDetail = (function () {
         }
     }
 
+    function headerDisplayValue(value) {
+        if (value != null && typeof value === "object") {
+            return JSON.stringify(value);
+        }
+        return String(value);
+    }
+
+    function headerRawText(value) {
+        if (value == null) {
+            return "";
+        }
+        if (typeof value === "string") {
+            return value;
+        }
+        if (Array.isArray(value)) {
+            return value.map(String).join(", ");
+        }
+        if (typeof value === "object" && Array.isArray(value.values)) {
+            return value.values.map(String).join(", ");
+        }
+        return headerDisplayValue(value);
+    }
+
     function headerEntries(headers) {
         return Object.keys(headers || {}).map(function (name) {
             const value = headers[name];
             return {
                 name: name,
-                value: value != null && typeof value === "object" ? JSON.stringify(value) : String(value)
+                value: headerDisplayValue(value),
+                bearerToken: bearerTokenFromHeader(name, value)
             };
         });
+    }
+
+    function bearerTokenFromHeader(name, value) {
+        if (String(name || "").toLowerCase() !== "authorization") {
+            return "";
+        }
+        const match = headerRawText(value).trim().match(/^Bearer\s+(\S+)/i);
+        return match ? match[1] : "";
+    }
+
+    function looksLikeJwt(token) {
+        return String(token || "").split(".").length >= 2;
+    }
+
+    function decodeJwtSegment(segment) {
+        let payload = String(segment || "").replace(/-/g, "+").replace(/_/g, "/");
+        const pad = payload.length % 4;
+        if (pad) {
+            payload += "=".repeat(4 - pad);
+        }
+        return JSON.parse(decodeURIComponent(Array.prototype.map.call(atob(payload), function (ch) {
+            return "%" + ("00" + ch.charCodeAt(0).toString(16)).slice(-2);
+        }).join("")));
+    }
+
+    function decodeBearerToken(token) {
+        const parts = String(token || "").split(".");
+        if (parts.length < 2) {
+            return null;
+        }
+        try {
+            const header = decodeJwtSegment(parts[0]);
+            const payload = decodeJwtSegment(parts[1]);
+            const decoded = { header: header, payload: payload };
+            const times = {};
+            ["exp", "iat", "nbf", "auth_time"].forEach(function (key) {
+                if (payload && typeof payload[key] === "number") {
+                    times[key] = new Date(payload[key] * 1000).toISOString();
+                }
+            });
+            if (Object.keys(times).length) {
+                decoded.times = times;
+            }
+            return decoded;
+        } catch (ex) {
+            return null;
+        }
+    }
+
+    function showDecodedBearer(token) {
+        const decoded = decodeBearerToken(token);
+        if (!decoded) {
+            CadminApi.showToast("danger", "Could not decode this Bearer token.");
+            return;
+        }
+        CadminResourceSource.show(decoded, "Decoded Bearer token");
     }
 
     function headerTable(headers, emptyText) {
@@ -46,8 +126,19 @@ window.CadminWiremockRequestDetail = (function () {
             '<table class="table table-sm table-hover align-middle mb-0">' +
                 "<thead><tr><th>Name</th><th>Value</th></tr></thead>" +
                 "<tbody>" + rows.map(function (row) {
+                    const decodeBtn = row.bearerToken && looksLikeJwt(row.bearerToken)
+                        ? '<button class="btn btn-sm btn-outline-primary flex-shrink-0 wrd-decode-bearer" ' +
+                            'type="button" title="Decode Bearer token" aria-label="Decode Bearer token" ' +
+                            'data-token="' + encodeURIComponent(row.bearerToken) + '">' +
+                            '<i class="bi bi-key me-1"></i>Decode</button>'
+                        : "";
                     return "<tr><td><code>" + esc(row.name) + "</code></td>" +
-                        "<td><code>" + esc(row.value) + "</code></td></tr>";
+                        "<td>" +
+                            '<div class="d-flex align-items-start flex-wrap gap-2">' +
+                                '<code class="text-break">' + esc(row.value) + "</code>" +
+                                decodeBtn +
+                            "</div>" +
+                        "</td></tr>";
                 }).join("") + "</tbody>" +
             "</table></div>";
     }
@@ -173,6 +264,9 @@ window.CadminWiremockRequestDetail = (function () {
         $root.on("click.wrd", "#wrd-stub", createStub);
         $root.on("click.wrd", "#wrd-json", function () {
             wm().showJson(logged, "Logged request");
+        });
+        $root.on("click.wrd", ".wrd-decode-bearer", function () {
+            showDecodedBearer(decodeURIComponent($(this).attr("data-token") || ""));
         });
     }
 

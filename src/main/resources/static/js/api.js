@@ -42,13 +42,13 @@ window.CadminApi = (function ($) {
         return request;
     }
 
-    function send(url, method, data, contentType) {
-        return ajax({
+    function send(url, method, data, contentType, extra) {
+        return ajax($.extend({
             url: url,
             method: method,
             data: typeof data === "string" ? data : JSON.stringify(data),
             contentType: contentType || "application/json"
-        });
+        }, extra || {}));
     }
 
     function login(username, password) {
@@ -135,6 +135,22 @@ window.CadminApi = (function ($) {
         return ajax(options);
     }
 
+    function icg(path, method, data) {
+        const verb = (method || "GET").toUpperCase();
+        const options = {
+            url: "/icg" + path,
+            method: verb,
+            headers: {
+                Accept: "application/json"
+            }
+        };
+        if (data !== undefined && data !== null && verb !== "GET" && verb !== "HEAD") {
+            options.data = typeof data === "string" ? data : JSON.stringify(data);
+            options.contentType = "application/json";
+        }
+        return ajax(options);
+    }
+
     function fhirChief(path, method, data) {
         const verb = (method || "GET").toUpperCase();
         const options = {
@@ -157,8 +173,12 @@ window.CadminApi = (function ($) {
     }
 
     function showAlert(selector, type, message) {
-        $(selector)
-            .removeClass("d-none alert-success alert-danger alert-warning alert-info")
+        const $el = $(selector);
+        if (!type) {
+            $el.addClass("d-none").removeClass("alert-success alert-danger alert-warning alert-info").text("");
+            return;
+        }
+        $el.removeClass("d-none alert-success alert-danger alert-warning alert-info")
             .addClass("alert alert-" + type)
             .text(message);
     }
@@ -461,6 +481,9 @@ window.CadminApi = (function ($) {
     function detailHref(type, id, resource) {
         if (type === "Library" && isLibraryType(resource, "camel-route")) {
             return "#/camel-routes/" + encodeURIComponent(id);
+        }
+        if (type === "Library" && isLibraryType(resource, "icg-route")) {
+            return "#/icg-routes/" + encodeURIComponent(id);
         }
         const prefix = DETAIL_PREFIX[type];
         if (prefix) {
@@ -1215,6 +1238,14 @@ window.CadminApi = (function ($) {
         if (resource.resourceType === "Organization") {
             return resource.name || resource.id || "";
         }
+        if (resource.resourceType === "Endpoint") {
+            const name = resource.name || "";
+            const address = resource.address || "";
+            if (name && address && name !== address) {
+                return name + " — " + address;
+            }
+            return name || address || resource.id || "";
+        }
         if (resource.resourceType === "PlanDefinition" || resource.resourceType === "ActivityDefinition") {
             return resource.title || resource.name || resource.id || "";
         }
@@ -1890,16 +1921,126 @@ window.CadminApi = (function ($) {
         $(scope || document).find("[data-unsaved-flag]").toggleClass("d-none", !dirty);
     }
 
+    const OIDC_SUBJECT_SYSTEM = "https://insulet.com/fhir/identifier/oidc/subject";
+
+    function oidcSubjectSystem() {
+        const configured = ((window.CadminApp && CadminApp.config()) || {}).oidcSubjectSystem;
+        return String(configured || OIDC_SUBJECT_SYSTEM).replace(/\/+$/, "") || OIDC_SUBJECT_SYSTEM;
+    }
+
+    function oidcIssuer() {
+        return String(((window.CadminApp && CadminApp.config()) || {}).oidcIssuer || "").replace(/\/+$/, "");
+    }
+
+    function isOidcSubjectSystem(system) {
+        const value = String(system || "").replace(/\/+$/, "");
+        if (!value) {
+            return true;
+        }
+        if (value === oidcSubjectSystem()) {
+            return true;
+        }
+        const issuer = oidcIssuer();
+        return !!issuer && value === issuer;
+    }
+
+    function oidcSubjectIdentifier(subject) {
+        return {
+            use: "official",
+            system: oidcSubjectSystem(),
+            value: subject,
+            type: { text: "OIDC subject" }
+        };
+    }
+
+    function isOidcSubjectIdentifier(identifier, subject) {
+        if (!identifier || !identifier.value) {
+            return false;
+        }
+        if (subject && identifier.value !== subject) {
+            return false;
+        }
+        return isOidcSubjectSystem(identifier.system);
+    }
+
+    function upsertOidcSubjectIdentifier(resource, subject) {
+        if (!resource || !subject) {
+            return resource;
+        }
+        resource.identifier = (resource.identifier || []).filter(function (item) {
+            return !isOidcSubjectIdentifier(item, subject);
+        });
+        resource.identifier.push(oidcSubjectIdentifier(subject));
+        return resource;
+    }
+
+    function removeOidcSubjectIdentifier(resource, subject) {
+        if (!resource) {
+            return resource;
+        }
+        resource.identifier = (resource.identifier || []).filter(function (item) {
+            return !isOidcSubjectIdentifier(item, subject);
+        });
+        if (!resource.identifier.length) {
+            delete resource.identifier;
+        }
+        return resource;
+    }
+
+    function oidcSubjectQueries(subject) {
+        const system = oidcSubjectSystem();
+        const issuer = oidcIssuer();
+        const suffix = subject ? subject : "";
+        const queries = [system + "|" + suffix];
+        if (issuer && issuer !== system) {
+            queries.push(issuer + "|" + suffix);
+        }
+        return queries;
+    }
+
+    function findByOidcSubject(resourceType, subject, options) {
+        const type = resourceType || "Practitioner";
+        const opts = options && typeof options === "object" ? options : {};
+        const count = opts.count || (subject ? 20 : 200);
+        const queries = oidcSubjectQueries(subject);
+        let chain = $.Deferred().resolve([]).promise();
+        queries.forEach(function (query) {
+            chain = chain.then(function (seen) {
+                return fhir(
+                    "/" + type + "?identifier=" + encodeURIComponent(query) + "&_count=" + count,
+                    "GET",
+                    null,
+                    { silent: opts.silent != null ? !!opts.silent : !subject }
+                ).then(function (bundle) {
+                    const next = seen.slice();
+                    bundleResources(bundle, type).forEach(function (resource) {
+                        if (resource && resource.id && !next.some(function (item) {
+                            return item.id === resource.id;
+                        })) {
+                            next.push(resource);
+                        }
+                    });
+                    return next;
+                }, function () {
+                    return seen;
+                });
+            });
+        });
+        return chain;
+    }
+
     return {
         get: get,
-        post: function (url, data) { return send(url, "POST", data); },
-        put: function (url, data) { return send(url, "PUT", data); },
+        post: function (url, data, extra) { return send(url, "POST", data, undefined, extra); },
+        put: function (url, data, extra) { return send(url, "PUT", data, undefined, extra); },
+        delete: function (url, extra) { return ajax($.extend({ url: url, method: "DELETE" }, extra || {})); },
         login: login,
         logout: logout,
         fhir: fhir,
         wiremock: wiremock,
         coreAdminBridge: coreAdminBridge,
         fhirChief: fhirChief,
+        icg: icg,
         showAlert: showAlert,
         showToast: showToast,
         confirm: confirmDialog,
@@ -1954,6 +2095,16 @@ window.CadminApi = (function ($) {
         setUnsavedFlag: setUnsavedFlag,
         companionValueSetUrl: companionValueSetUrl,
         terminologyLabel: terminologyLabel,
-        conceptCode: conceptCode
+        conceptCode: conceptCode,
+        OIDC_SUBJECT_SYSTEM: OIDC_SUBJECT_SYSTEM,
+        oidcSubjectSystem: oidcSubjectSystem,
+        oidcIssuer: oidcIssuer,
+        isOidcSubjectSystem: isOidcSubjectSystem,
+        oidcSubjectIdentifier: oidcSubjectIdentifier,
+        isOidcSubjectIdentifier: isOidcSubjectIdentifier,
+        upsertOidcSubjectIdentifier: upsertOidcSubjectIdentifier,
+        removeOidcSubjectIdentifier: removeOidcSubjectIdentifier,
+        oidcSubjectQueries: oidcSubjectQueries,
+        findByOidcSubject: findByOidcSubject
     };
 }(jQuery));

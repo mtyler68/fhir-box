@@ -610,7 +610,7 @@ window.CadminLocationDetail = (function () {
                     "<td>" + esc(conceptLabel(child.form || child.physicalType)) + "</td>" +
                     "<td>" + codeStatusBadge(child.status) + "</td>" +
                     '<td class="text-end"><button class="btn btn-sm btn-outline-secondary" type="button" data-unlink-loc="' +
-                        esc(child.id) + '">Unlink</button></td></tr>';
+                        esc(child.id) + '" title="Unlink" aria-label="Unlink"><iconify-icon icon="mdi:link-off" aria-hidden="true"></iconify-icon></button></td></tr>';
             }).join(""));
         }).fail(function (xhr) {
             $("#loc-child-rows").html(emptyRow(4, "Unable to load sub-locations."));
@@ -650,7 +650,7 @@ window.CadminLocationDetail = (function () {
                     "<td><code>" + esc(ep.address || "—") + "</code></td>" +
                     "<td>" + codeStatusBadge(ep.status) + "</td>" +
                     '<td class="text-end"><button class="btn btn-sm btn-outline-secondary" type="button" data-unlink-endpoint="' +
-                    esc(ep.id) + '" title="Unlink" aria-label="Unlink"><i class="bi bi-x-lg"></i></button></td></tr>';
+                    esc(ep.id) + '" title="Unlink" aria-label="Unlink"><iconify-icon icon="mdi:link-off" aria-hidden="true"></iconify-icon></button></td></tr>';
             }).join(""));
         }).fail(function (xhr) {
             $("#loc-endpoint-rows").html(emptyRow(5, "Unable to load endpoints."));
@@ -714,7 +714,7 @@ window.CadminLocationDetail = (function () {
                     "<td>" + orgHtml + "</td>" +
                     "<td>" + esc(conceptLabel(item.type) !== "—" ? conceptLabel(item.type) : conceptLabel(item.specialty)) + "</td>" +
                     '<td class="text-end"><button class="btn btn-sm btn-outline-secondary" type="button" data-unlink-service="' +
-                        esc(item.id) + '" title="Unlink" aria-label="Unlink"><i class="bi bi-x-lg"></i></button></td>' +
+                        esc(item.id) + '" title="Unlink" aria-label="Unlink"><iconify-icon icon="mdi:link-off" aria-hidden="true"></iconify-icon></button></td>' +
                     "</tr>";
             }).join(""));
         }).fail(function (xhr) {

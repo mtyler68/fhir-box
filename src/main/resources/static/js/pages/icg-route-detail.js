@@ -1,6 +1,6 @@
-window.CadminCamelRouteDetail = (function () {
-    const libraryType = "camel-route";
-    const routeContentType = "application/camel+yaml";
+window.CadminIcgRouteDetail = (function () {
+    const libraryType = "icg-route";
+    const routeContentType = "application/gateway+yaml";
     const statusOptions = [
         { code: "draft", display: "Draft" },
         { code: "active", display: "Active" },
@@ -9,44 +9,34 @@ window.CadminCamelRouteDetail = (function () {
     ];
     const templates = [
         {
-            id: "timer",
-            label: "Timer to log",
-            yaml: "- route:\n    id: timer_log\n    from:\n      uri: timer:tick\n      parameters:\n        period: 5000\n      steps:\n        - setBody:\n            simple: \"Hello from Camel\"\n        - log:\n            message: \"${body}\"\n"
+            id: "httpbin",
+            label: "Path proxy (httpbin)",
+            yaml: "- id: httpbin\n  uri: https://httpbin.org\n  predicates:\n    - Path=/httpbin/**\n  filters:\n    - StripPrefix=1\n"
         },
         {
-            id: "direct",
-            label: "Direct to log",
-            yaml: "- route:\n    id: direct_log\n    from:\n      uri: direct:start\n      steps:\n        - log:\n            message: \"Received ${body}\"\n        - to:\n            uri: log:done\n"
+            id: "wiremock",
+            label: "WireMock path",
+            yaml: "- id: wiremock_proxy\n  uri: http://localhost:9090\n  predicates:\n    - Path=/icg-wire/**\n  filters:\n    - StripPrefix=1\n"
         },
         {
-            id: "rest",
-            label: "REST GET",
-            yaml: "- rest:\n    path: /say\n    get:\n      - path: /hello\n        to: direct:hello\n- route:\n    id: hello_rest\n    from:\n      uri: direct:hello\n      steps:\n        - setBody:\n            constant: \"Hello Camel\"\n"
+            id: "host",
+            label: "Host + method",
+            yaml: "- id: host_api\n  uri: https://httpbin.org\n  predicates:\n    - Host=api.example.com\n    - Method=GET,POST\n    - Path=/api/**\n"
         },
         {
-            id: "choice",
-            label: "Content-based router",
-            yaml: "- route:\n    id: choice_route\n    from:\n      uri: direct:in\n      steps:\n        - choice:\n            when:\n              - simple: \"${header.type} == 'ok'\"\n                steps:\n                  - to:\n                      uri: direct:ok\n            otherwise:\n              steps:\n                - to:\n                    uri: direct:other\n"
-        },
-        {
-            id: "kafka",
-            label: "Kafka consumer",
-            yaml: "- route:\n    id: kafka_consumer\n    from:\n      uri: kafka:events\n      parameters:\n        brokers: localhost:9092\n      steps:\n        - unmarshal:\n            json: {}\n        - log:\n            message: \"Event ${body}\"\n"
+            id: "rewrite",
+            label: "Rewrite path",
+            yaml: "- id: rewrite_api\n  uri: http://localhost:9090\n  predicates:\n    - name: Path\n      args:\n        pattern: /legacy/**\n  filters:\n    - name: RewritePath\n      args:\n        regexp: /legacy/(?<segment>.*)\n        replacement: /${segment}\n"
         }
     ];
     const hintWords = [
-        "route", "from", "uri", "parameters", "steps", "to", "toD", "log", "setBody", "setHeader",
-        "setProperty", "removeHeader", "removeHeaders", "choice", "when", "otherwise", "filter",
-        "split", "aggregate", "multicast", "recipientList", "routingSlip", "dynamicRouter",
-        "marshal", "unmarshal", "convertBodyTo", "transform", "process", "bean", "script",
-        "delay", "throttle", "circuitBreaker", "saga", "transacted", "onException",
-        "try", "doTry", "doCatch", "doFinally", "intercept", "interceptFrom", "interceptSendToEndpoint",
-        "rest", "get", "post", "put", "delete", "patch", "head", "consumes", "produces",
-        "simple", "constant", "jsonpath", "xpath", "header", "exchangeProperty", "body",
-        "timer", "direct", "seda", "vm", "kafka", "jms", "http", "https", "file", "ftp",
-        "sftp", "sql", "jdbc", "mongodb", "rest", "platform-http", "vertx", "netty",
-        "id", "description", "autoStartup", "startupOrder", "streamCache", "message", "name",
-        "expression", "simple", "constant", "datasonnet", "groovy", "javascript"
+        "id", "uri", "predicates", "filters", "order", "metadata",
+        "Path", "Host", "Method", "Header", "Query", "Cookie", "After", "Before",
+        "Between", "RemoteAddr", "Weight", "ReadBody",
+        "StripPrefix", "PrefixPath", "SetPath", "RewritePath", "AddRequestHeader",
+        "AddResponseHeader", "RemoveRequestHeader", "RemoveResponseHeader",
+        "SetStatus", "Retry", "PreserveHostHeader", "RequestRateLimiter",
+        "name", "args", "pattern", "parts", "regexp", "replacement"
     ];
     let library = null;
     let editor = null;
@@ -107,7 +97,7 @@ window.CadminCamelRouteDetail = (function () {
     function isRouteYaml(item) {
         const type = ((item && item.contentType) || "").split(";")[0].trim().toLowerCase();
         return type === routeContentType || type === "text/yaml" || type === "application/x-yaml"
-            || type === "text/x-yaml";
+            || type === "text/x-yaml" || type === "application/yaml";
     }
 
     function findRouteAttachment() {
@@ -122,7 +112,7 @@ window.CadminCamelRouteDetail = (function () {
     function upsertYaml(text) {
         const attachment = {
             contentType: routeContentType,
-            title: "Camel route",
+            title: "ICG route",
             data: encodeText(text || "")
         };
         library.content = library.content || [];
@@ -174,7 +164,7 @@ window.CadminCamelRouteDetail = (function () {
             return;
         }
         hintRegistered = true;
-        CodeMirror.registerHelper("hint", "camel-yaml", function (cm) {
+        CodeMirror.registerHelper("hint", "icg-yaml", function (cm) {
             const cursor = cm.getCursor();
             const line = cm.getLine(cursor.line) || "";
             const before = line.slice(0, cursor.ch);
@@ -208,7 +198,7 @@ window.CadminCamelRouteDetail = (function () {
     }
 
     function editorValue() {
-        return editor ? editor.getValue() : ($("#crd-yaml").val() || "");
+        return editor ? editor.getValue() : ($("#ird-yaml").val() || "");
     }
 
     function syncUnsavedFlag() {
@@ -233,21 +223,21 @@ window.CadminCamelRouteDetail = (function () {
                 continue;
             }
             if (/^\t/.test(line)) {
-                return "Line " + (i + 1) + " uses a tab. Indent Camel YAML with spaces.";
+                return "Line " + (i + 1) + " uses a tab. Indent gateway YAML with spaces.";
             }
             if (/^\s+[^ \t].*:/.test(line) && (line.length - line.trimStart().length) % 2 !== 0) {
                 return "Line " + (i + 1) + " is not indented in 2-space steps.";
             }
         }
-        if (!/(^|\n)\s*-?\s*(route|from|rest)\s*:/.test(source)) {
-            return "YAML should define a Camel route, from, or rest block.";
+        if (!/(^|\n)\s*-?\s*(id|uri|predicates|routes)\s*:/.test(source)) {
+            return "YAML should define a Spring Cloud Gateway route with id, uri, and predicates.";
         }
         return "";
     }
 
     function mountEditor(text) {
         destroyEditor();
-        const textarea = document.getElementById("crd-yaml");
+        const textarea = document.getElementById("ird-yaml");
         if (!textarea) {
             return;
         }
@@ -294,7 +284,7 @@ window.CadminCamelRouteDetail = (function () {
                     }
                 }
             },
-            hintOptions: { hint: CodeMirror.hint["camel-yaml"], completeSingle: false }
+            hintOptions: { hint: CodeMirror.hint["icg-yaml"], completeSingle: false }
         });
         editor.getWrapperElement().classList.add("camel-route-editor");
         editor.setSize("100%", "36rem");
@@ -305,11 +295,6 @@ window.CadminCamelRouteDetail = (function () {
             }
             CodeMirror.commands.autocomplete(cm, null, { completeSingle: false });
         });
-        editor.on("change", function () {
-            if (window.CadminCamelRouteGraph) {
-                CadminCamelRouteGraph.scheduleRefresh();
-            }
-        });
         requestAnimationFrame(function () {
             if (editor) {
                 editor.refresh();
@@ -318,13 +303,13 @@ window.CadminCamelRouteDetail = (function () {
     }
 
     function applyMeta() {
-        library.title = $("#crd-title-input").val().trim();
-        const name = $("#crd-name").val().trim();
-        const version = $("#crd-version").val().trim();
-        const description = $("#crd-description").val().trim();
-        library.status = $("#crd-status").val() || "draft";
+        library.title = $("#ird-title-input").val().trim();
+        const name = $("#ird-name").val().trim();
+        const version = $("#ird-version").val().trim();
+        const description = $("#ird-description").val().trim();
+        library.status = $("#ird-status").val() || "draft";
         library.type = {
-            coding: [{ code: libraryType, display: "Camel Route" }],
+            coding: [{ code: libraryType, display: "ICG Route" }],
             text: libraryType
         };
         if (name) {
@@ -349,7 +334,7 @@ window.CadminCamelRouteDetail = (function () {
             applyMeta();
         } else {
             library.type = {
-                coding: [{ code: libraryType, display: "Camel Route" }],
+                coding: [{ code: libraryType, display: "ICG Route" }],
                 text: libraryType
             };
         }
@@ -365,15 +350,12 @@ window.CadminCamelRouteDetail = (function () {
             renderMeta();
             CadminResourceSource.mount(function () { return library; });
             CadminResourceGraph.mount(library);
-            if (window.CadminCamelRouteGraph) {
-                CadminCamelRouteGraph.refresh();
-            }
             markEditorClean();
             if (next) {
                 next();
             }
         }).fail(function (xhr) {
-            CadminApi.showToast("danger", "Update Camel route failed (" + xhr.status + ").");
+            CadminApi.showToast("danger", "Update ICG route failed (" + xhr.status + ").");
         });
     }
 
@@ -383,8 +365,8 @@ window.CadminCamelRouteDetail = (function () {
             window.location.hash = "#/pds-policies/" + encodeURIComponent(resource.id);
             return;
         }
-        if (CadminApi.isLibraryType(resource, "icg-route")) {
-            window.location.hash = "#/icg-routes/" + encodeURIComponent(resource.id);
+        if (CadminApi.isLibraryType(resource, "camel-route")) {
+            window.location.hash = "#/camel-routes/" + encodeURIComponent(resource.id);
             return;
         }
         library = resource;
@@ -392,17 +374,19 @@ window.CadminCamelRouteDetail = (function () {
         $root.html(
             '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
                 "<div>" +
-                    '<a class="small text-decoration-none" href="#/camel-routes">' +
-                        '<i class="bi bi-arrow-left me-1"></i>Camel Routes</a>' +
+                    '<a class="small text-decoration-none" href="#/icg-routes">' +
+                        '<i class="bi bi-arrow-left me-1"></i>ICG Routes</a>' +
                     '<div class="d-flex align-items-center flex-wrap gap-2">' +
-                        '<h1 class="h3 mb-0 page-title" id="crd-title"></h1>' +
+                        '<h1 class="h3 mb-0 page-title" id="ird-title"></h1>' +
                         CadminApi.unsavedFlagHtml() +
                     "</div>" +
                 "</div>" +
                 '<div class="d-flex flex-wrap gap-2">' +
-                    '<button class="btn btn-primary" type="button" id="crd-save">' +
+                    '<a class="btn btn-outline-secondary" href="#/icg">' +
+                        '<i class="bi bi-router me-1"></i>Live ICG</a>' +
+                    '<button class="btn btn-primary" type="button" id="ird-save">' +
                         '<i class="bi bi-check2 me-1"></i>Save</button>' +
-                    '<button class="btn btn-outline-danger" type="button" id="crd-delete">' +
+                    '<button class="btn btn-outline-danger" type="button" id="ird-delete">' +
                         '<i class="bi bi-trash me-1"></i>Delete</button>' +
                     CadminResourceSource.button() +
                 "</div>" +
@@ -410,63 +394,46 @@ window.CadminCamelRouteDetail = (function () {
             '<div class="card shadow mb-4">' +
                 '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
                     '<h6 class="m-0">Identity</h6>' +
-                    '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#crd-meta-modal">Edit</button>' +
+                    '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#ird-meta-modal">Edit</button>' +
                 "</div>" +
-                '<div class="card-body" id="crd-meta"></div>' +
+                '<div class="card-body" id="ird-meta"></div>' +
             "</div>" +
-            '<div class="row camel-route-split">' +
-                '<div class="col-xl-7 mb-4">' +
-                    '<div class="card shadow h-100" id="camel-route-yaml-card">' +
-                        '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
-                            "<div>" +
-                                '<h6 class="m-0">Camel route YAML</h6>' +
-                                '<div class="small text-muted mt-1"><code>' + esc(routeContentType) + "</code>" +
-                                    " · Ctrl-Space complete · Ctrl-F find · Ctrl-/ comment · Ctrl-Q fold</div>" +
-                            "</div>" +
-                            '<div class="d-flex flex-nowrap align-items-center gap-2 camel-route-yaml-tools">' +
-                                '<select class="form-select form-select-sm" id="crd-template" style="max-width:14rem">' +
-                                    '<option value="">Insert template…</option>' +
-                                    templates.map(function (item) {
-                                        return '<option value="' + esc(item.id) + '">' + esc(item.label) + "</option>";
-                                    }).join("") +
-                                "</select>" +
-                                '<button class="btn btn-sm btn-outline-secondary" type="button" id="crd-find">' +
-                                    '<i class="bi bi-search me-1"></i>Find</button>' +
-                                '<button class="btn btn-sm btn-outline-secondary" type="button" id="crd-replace">' +
-                                    "Replace</button>" +
-                                '<div class="btn-group btn-group-sm" role="group" aria-label="Fold YAML">' +
-                                    '<button class="btn btn-outline-secondary" type="button" id="crd-fold" ' +
-                                        'title="Fold all" aria-label="Fold all">' +
-                                        '<i class="bi bi-arrows-collapse" aria-hidden="true"></i></button>' +
-                                    '<button class="btn btn-outline-secondary" type="button" id="crd-unfold" ' +
-                                        'title="Unfold all" aria-label="Unfold all">' +
-                                        '<i class="bi bi-arrows-expand" aria-hidden="true"></i></button>' +
-                                "</div>" +
-                            "</div>" +
-                        "</div>" +
-                        '<div class="card-body p-0">' +
-                            '<textarea id="crd-yaml" class="d-none"></textarea>' +
-                        "</div>" +
+            '<div class="card shadow mb-4" id="icg-route-yaml-card">' +
+                '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
+                    "<div>" +
+                        '<h6 class="m-0">Gateway route YAML</h6>' +
+                        '<div class="small text-muted mt-1"><code>' + esc(routeContentType) + "</code>" +
+                            " · Active libraries are deployed by Integrator Connect Gateway</div>" +
+                    "</div>" +
+                    '<div class="d-flex flex-nowrap align-items-center gap-2">' +
+                        '<select class="form-select form-select-sm" id="ird-template" style="max-width:16rem">' +
+                            '<option value="">Insert template…</option>' +
+                            templates.map(function (item) {
+                                return '<option value="' + esc(item.id) + '">' + esc(item.label) + "</option>";
+                            }).join("") +
+                        "</select>" +
+                        '<button class="btn btn-sm btn-outline-secondary" type="button" id="ird-find">' +
+                            '<i class="bi bi-search me-1"></i>Find</button>' +
                     "</div>" +
                 "</div>" +
-                '<div class="col-xl-5 mb-4">' +
-                    CadminCamelRouteGraph.card() +
+                '<div class="card-body p-0">' +
+                    '<textarea id="ird-yaml" class="d-none"></textarea>' +
                 "</div>" +
             "</div>" +
             CadminResourceHistory.card() +
             CadminResourceGraph.card() +
-            '<div class="modal fade" id="crd-meta-modal" tabindex="-1">' +
+            '<div class="modal fade" id="ird-meta-modal" tabindex="-1">' +
                 '<div class="modal-dialog">' +
-                    '<form class="modal-content" id="crd-meta-form">' +
+                    '<form class="modal-content" id="ird-meta-form">' +
                         '<div class="modal-header"><h5 class="modal-title">Edit identity</h5>' +
                             '<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>' +
                         '<div class="modal-body">' +
-                            field("Title", '<input class="form-control" id="crd-title-input">') +
-                            field("Name", '<input class="form-control font-monospace" id="crd-name">') +
-                            field("Status", '<select class="form-select" id="crd-status">' +
+                            field("Title", '<input class="form-control" id="ird-title-input">') +
+                            field("Name", '<input class="form-control font-monospace" id="ird-name">') +
+                            field("Status", '<select class="form-select" id="ird-status">' +
                                 optionsHtml(statusOptions, "") + "</select>") +
-                            field("Version", '<input class="form-control" id="crd-version">') +
-                            field("Description", '<textarea class="form-control" id="crd-description" rows="3"></textarea>') +
+                            field("Version", '<input class="form-control" id="ird-version">') +
+                            field("Description", '<textarea class="form-control" id="ird-description" rows="3"></textarea>') +
                         "</div>" +
                         '<div class="modal-footer">' +
                             '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>' +
@@ -481,10 +448,9 @@ window.CadminCamelRouteDetail = (function () {
         CadminResourceHistory.mount(library);
         renderMeta();
         mountEditor(readYaml() || templates[0].yaml);
-        CadminCamelRouteGraph.mount(editorValue);
         markEditorClean();
         bind();
-        $("#crd-meta-modal").on("show.bs.modal", populateMetaForm);
+        $("#ird-meta-modal").on("show.bs.modal", populateMetaForm);
     }
 
     function reveal(resource) {
@@ -492,7 +458,7 @@ window.CadminCamelRouteDetail = (function () {
             library = resource;
         }
         const pane = document.getElementById("app-content-detail") || document;
-        const wrap = pane.querySelector("#camel-route-yaml-card .CodeMirror");
+        const wrap = pane.querySelector("#icg-route-yaml-card .CodeMirror");
         if (wrap && wrap.CodeMirror) {
             editor = wrap.CodeMirror;
             function refreshEditor() {
@@ -507,20 +473,17 @@ window.CadminCamelRouteDetail = (function () {
                 requestAnimationFrame(refreshEditor);
             });
         } else {
-            const textarea = pane.querySelector("#crd-yaml");
+            const textarea = pane.querySelector("#ird-yaml");
             if (textarea) {
                 mountEditor(textarea.value);
             }
-        }
-        if (window.CadminCamelRouteGraph) {
-            CadminCamelRouteGraph.mount(editorValue);
         }
         syncUnsavedFlag();
     }
 
     function renderMeta() {
-        $("#crd-title").text(library.title || library.name || "Camel route");
-        $("#crd-meta").html(
+        $("#ird-title").text(library.title || library.name || "ICG route");
+        $("#ird-meta").html(
             '<dl class="row mb-0">' +
                 '<dt class="col-sm-3">Title</dt><dd class="col-sm-9">' + esc(library.title || "—") + "</dd>" +
                 '<dt class="col-sm-3">Status</dt><dd class="col-sm-9">' + statusBadge(library.status) + "</dd>" +
@@ -534,12 +497,12 @@ window.CadminCamelRouteDetail = (function () {
     }
 
     function populateMetaForm() {
-        $("#crd-title-input").val(library.title || "");
-        $("#crd-name").val(library.name || "");
-        $("#crd-status").val(library.status || "draft");
-        $("#crd-version").val(library.version || "");
-        $("#crd-description").val(library.description || "");
-        CadminApi.fillValueSetSelect("#crd-status", CadminApi.valueSets.publicationStatus, {
+        $("#ird-title-input").val(library.title || "");
+        $("#ird-name").val(library.name || "");
+        $("#ird-status").val(library.status || "draft");
+        $("#ird-version").val(library.version || "");
+        $("#ird-description").val(library.description || "");
+        CadminApi.fillValueSetSelect("#ird-status", CadminApi.valueSets.publicationStatus, {
             fallback: statusOptions,
             selected: library.status || "draft"
         });
@@ -555,10 +518,7 @@ window.CadminCamelRouteDetail = (function () {
                 editor.setValue(match.yaml);
                 editor.focus();
             } else {
-                $("#crd-yaml").val(match.yaml);
-            }
-            if (window.CadminCamelRouteGraph) {
-                CadminCamelRouteGraph.refresh();
+                $("#ird-yaml").val(match.yaml);
             }
         }
         if (editor && editor.getValue().trim()) {
@@ -574,67 +534,39 @@ window.CadminCamelRouteDetail = (function () {
 
     function bind() {
         const $root = $(CadminWorkspace.root());
-        $root.off(".crdetail");
-        $root.on("click.crdetail", "#crd-save", function () {
+        $root.off(".irdetail");
+        $root.on("click.irdetail", "#ird-save", function () {
             saveLibrary(function () {
-                CadminApi.showToast("success", "Camel route saved.");
+                CadminApi.showToast("success", "ICG route saved.");
             });
         });
-        $root.on("click.crdetail", "#crd-delete", function () {
-            CadminApi.confirm("Delete this Camel route?").done(function () {
+        $root.on("click.irdetail", "#ird-delete", function () {
+            CadminApi.confirm("Delete this ICG route?").done(function () {
                 CadminApi.fhir("/Library/" + encodeURIComponent(library.id), "DELETE").done(function () {
                     destroyEditor();
-                    if (window.CadminCamelRouteGraph) {
-                        CadminCamelRouteGraph.destroy();
-                    }
-                    CadminApi.showToast("success", "Camel route deleted.");
-                    window.location.hash = "#/camel-routes";
+                    CadminApi.showToast("success", "ICG route deleted.");
+                    window.location.hash = "#/icg-routes";
                 }).fail(function (xhr) {
-                    CadminApi.showToast("danger", "Delete Camel route failed (" + xhr.status + ").");
+                    CadminApi.showToast("danger", "Delete ICG route failed (" + xhr.status + ").");
                 });
             });
         });
-        $root.on("change.crdetail", "#crd-template", function () {
+        $root.on("change.irdetail", "#ird-template", function () {
             const id = $(this).val();
             $(this).val("");
             insertTemplate(id);
         });
-        $root.on("click.crdetail", "#crd-find", function () {
+        $root.on("click.irdetail", "#ird-find", function () {
             if (editor && CodeMirror.commands.findPersistent) {
                 CodeMirror.commands.findPersistent(editor);
             } else if (editor && CodeMirror.commands.find) {
                 CodeMirror.commands.find(editor);
             }
         });
-        $root.on("click.crdetail", "#crd-replace", function () {
-            if (editor && CodeMirror.commands.replace) {
-                CodeMirror.commands.replace(editor);
-            }
-        });
-        $root.on("click.crdetail", "#crd-fold", function () {
-            if (!editor) {
-                return;
-            }
-            editor.operation(function () {
-                for (let i = editor.firstLine(); i <= editor.lastLine(); i += 1) {
-                    editor.foldCode(CodeMirror.Pos(i, 0), null, "fold");
-                }
-            });
-        });
-        $root.on("click.crdetail", "#crd-unfold", function () {
-            if (!editor) {
-                return;
-            }
-            editor.operation(function () {
-                for (let i = editor.firstLine(); i <= editor.lastLine(); i += 1) {
-                    editor.foldCode(CodeMirror.Pos(i, 0), null, "unfold");
-                }
-            });
-        });
-        $("#crd-meta-form").on("submit", function (event) {
+        $("#ird-meta-form").on("submit", function (event) {
             event.preventDefault();
             saveLibrary(function () {
-                const el = document.getElementById("crd-meta-modal");
+                const el = document.getElementById("ird-meta-modal");
                 const modal = el && bootstrap.Modal.getInstance(el);
                 if (modal) {
                     modal.hide();

@@ -234,12 +234,21 @@
                     <li class="nav-item" data-route="settings">
                         <a class="nav-link" href="#/settings"><i class="nav-icon bi bi-gear"></i><p>Settings</p></a>
                     </li>
+                    <li class="nav-item admin-only" data-route="oidc-token">
+                        <a class="nav-link" href="#/oidc-token"><i class="nav-icon bi bi-key"></i><p>OIDC token</p></a>
+                    </li>
+                    <li class="nav-item admin-only" data-route="oidc-clients">
+                        <a class="nav-link" href="#/oidc-clients"><i class="nav-icon bi bi-app"></i><p>OIDC clients</p></a>
+                    </li>
                     <li class="nav-header admin-only">Libraries</li>
                     <li class="nav-item admin-only" data-route="pds-policies">
                         <a class="nav-link" href="#/pds-policies"><i class="nav-icon bi bi-journal-text"></i><p>PDS Policies</p></a>
                     </li>
                     <li class="nav-item admin-only" data-route="camel-routes">
                         <a class="nav-link" href="#/camel-routes"><iconify-icon class="nav-icon" icon="hugeicons:camel" aria-hidden="true"></iconify-icon><p>Camel Routes</p></a>
+                    </li>
+                    <li class="nav-item admin-only" data-route="icg-routes">
+                        <a class="nav-link" href="#/icg-routes"><iconify-icon class="nav-icon" icon="mdi:routes" aria-hidden="true"></iconify-icon><p>ICG Routes</p></a>
                     </li>
                     <li class="nav-item admin-only" data-route="search-parameters">
                         <a class="nav-link" href="#/search-parameters"><i class="nav-icon bi bi-search"></i><p>Search Parameters</p></a>
@@ -269,6 +278,9 @@
                     </li>
                     <li class="nav-item admin-only" data-route="core-admin-bridge">
                         <a class="nav-link" href="#/core-admin-bridge"><iconify-icon class="nav-icon" icon="mdi:bridge" aria-hidden="true"></iconify-icon><p>Core Admin Bridge</p></a>
+                    </li>
+                    <li class="nav-item admin-only" data-route="icg">
+                        <a class="nav-link" href="#/icg"><i class="nav-icon bi bi-router"></i><p>Integrator Connect Gateway</p></a>
                     </li>
                     <li class="nav-header admin-only">WireMock</li>
                     <li class="nav-item admin-only" data-route="wiremock-mappings">
@@ -400,6 +412,8 @@
 <script src="/js/pages/pds-policies.js"></script>
 <script src="/js/pages/camel-route-detail.js"></script>
 <script src="/js/pages/camel-routes.js"></script>
+<script src="/js/pages/icg-route-detail.js"></script>
+<script src="/js/pages/icg-routes.js"></script>
 <script src="/js/pages/search-parameter-detail.js"></script>
 <script src="/js/pages/search-parameters.js"></script>
 <script src="/js/pages/questionnaire-detail.js"></script>
@@ -422,9 +436,15 @@
 <script src="/js/pages/demo-data.js"></script>
 <script src="/js/pages/users.js"></script>
 <script src="/js/pages/settings.js"></script>
+<script src="/js/pages/oidc-token.js"></script>
+<script src="/js/pages/oidc-client-detail.js"></script>
+<script src="/js/pages/oidc-clients.js"></script>
 <script src="/js/core-admin-bridge.js"></script>
 <script src="/js/pages/core-admin-bridge-detail.js"></script>
 <script src="/js/pages/core-admin-bridge.js"></script>
+<script src="/js/icg.js"></script>
+<script src="/js/pages/icg-detail.js"></script>
+<script src="/js/pages/icg.js"></script>
 <script src="/js/wiremock.js"></script>
 <script src="/js/pages/wiremock-mapping-detail.js"></script>
 <script src="/js/pages/wiremock-mappings.js"></script>

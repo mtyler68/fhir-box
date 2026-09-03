@@ -37,6 +37,8 @@ window.CadminSubscriptionDetail = (function () {
     let statusPollTimer = 0;
     let statusPollToken = 0;
     let statusPolling = false;
+    let importStep = 1;
+    let importParameters = null;
 
     function esc(value) {
         return CadminApi.escapeHtml(value);
@@ -345,7 +347,15 @@ window.CadminSubscriptionDetail = (function () {
             '<div class="card shadow mb-4">' +
                 '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
                     '<h6 class="m-0">Channel</h6>' +
-                    '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#sd-channel-modal">Edit</button>' +
+                    '<div class="btn-group">' +
+                        '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#sd-channel-modal">Edit</button>' +
+                        '<button type="button" class="btn btn-sm btn-outline-primary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">' +
+                            '<span class="visually-hidden">More channel options</span></button>' +
+                        '<ul class="dropdown-menu dropdown-menu-end">' +
+                            '<li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#sd-channel-import-modal">' +
+                                '<i class="bi bi-hdd-network me-2" aria-hidden="true"></i>Import from endpoint</button></li>' +
+                        "</ul>" +
+                    "</div>" +
                 "</div>" +
                 '<div class="card-body" id="sd-channel"></div>' +
             "</div>" +
@@ -394,7 +404,51 @@ window.CadminSubscriptionDetail = (function () {
             modal("sd-param-modal", "Add channel parameter",
                 field("Name", '<input class="form-control font-monospace" id="sd-pn-name" required placeholder="Authorization">') +
                 field("Value", '<input class="form-control font-monospace" id="sd-pn-value" required>'),
-                "sd-param-form")
+                "sd-param-form") +
+            '<div class="modal fade" id="sd-channel-import-modal" tabindex="-1">' +
+                '<div class="modal-dialog modal-lg modal-dialog-scrollable">' +
+                    '<div class="modal-content">' +
+                        '<div class="modal-header"><h5 class="modal-title">Import channel from endpoint</h5>' +
+                            '<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>' +
+                        '<div class="modal-body">' +
+                            '<ol class="npi-wizard-steps mb-3" id="sd-imp-steps">' +
+                                '<li class="npi-wizard-step" data-imp-step="1">Select endpoint</li>' +
+                                '<li class="npi-wizard-step" data-imp-step="2">Edit channel</li>' +
+                            "</ol>" +
+                            '<div id="sd-imp-alert" class="alert d-none"></div>' +
+                            '<div data-imp-pane="1">' +
+                                '<p class="text-muted">Choose an existing Endpoint. Address, connection type, payload, and headers prefill the channel so you can review them before saving.</p>' +
+                                field("Endpoint",
+                                    '<select class="form-select" id="sd-imp-endpoint">' +
+                                        '<option value="">Select endpoint…</option></select>') +
+                            "</div>" +
+                            '<div data-imp-pane="2" class="d-none">' +
+                                field("Channel type", '<select class="form-select" id="sd-imp-type">' +
+                                    optionsHtml(channelTypes) + "</select>") +
+                                field("Endpoint", '<input class="form-control font-monospace" id="sd-imp-url" ' +
+                                    'placeholder="https://example.org/fhir/notification">') +
+                                field("Content", '<select class="form-select" id="sd-imp-content">' +
+                                    optionsHtml(contentOptions) + "</select>") +
+                                field("Content type", '<input class="form-control font-monospace" id="sd-imp-content-type">') +
+                                field("Heartbeat period (seconds)",
+                                    '<input class="form-control" id="sd-imp-heartbeat" type="number" min="0" step="1">') +
+                                field("Timeout (seconds)",
+                                    '<input class="form-control" id="sd-imp-timeout" type="number" min="0" step="1">') +
+                                field("Max count",
+                                    '<input class="form-control" id="sd-imp-max-count" type="number" min="1" step="1">') +
+                                field("End", '<input class="form-control" id="sd-imp-end" type="datetime-local">') +
+                                '<p class="form-text mb-0" id="sd-imp-param-note"></p>' +
+                            "</div>" +
+                        "</div>" +
+                        '<div class="modal-footer">' +
+                            '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>' +
+                            '<button type="button" class="btn btn-outline-secondary d-none" id="sd-imp-back">Back</button>' +
+                            '<button type="button" class="btn btn-primary" id="sd-imp-next">Next</button>' +
+                            '<button type="button" class="btn btn-primary d-none" id="sd-imp-save">Save</button>' +
+                        "</div>" +
+                    "</div>" +
+                "</div>" +
+            "</div>"
         );
         CadminResourceSource.mount(function () { return subscription; });
         CadminResourceGraph.mount(subscription);
@@ -411,10 +465,18 @@ window.CadminSubscriptionDetail = (function () {
             selected: (subscription.channelType && subscription.channelType.code) || "rest-hook",
             onConcepts: function (concepts) { channelTypes = concepts; }
         });
+        CadminApi.fillValueSetSelect("#sd-imp-type", CadminApi.valueSets.subscriptionChannelType, {
+            fallback: channelTypes,
+            selected: (subscription.channelType && subscription.channelType.code) || "rest-hook"
+        });
         CadminApi.fillValueSetSelect("#sd-content", CadminApi.valueSets.subscriptionPayloadContent, {
             fallback: contentOptions,
             selected: subscription.content || "id-only",
             onConcepts: function (concepts) { contentOptions = concepts; }
+        });
+        CadminApi.fillValueSetSelect("#sd-imp-content", CadminApi.valueSets.subscriptionPayloadContent, {
+            fallback: contentOptions,
+            selected: subscription.content || "id-only"
         });
         CadminApi.expandValueSet(CadminApi.valueSets.subscriptionStatus).done(function (concepts) {
             statusOptions = concepts;
@@ -635,6 +697,161 @@ window.CadminSubscriptionDetail = (function () {
         return Number.isFinite(value) && value >= 0 ? Math.floor(value) : null;
     }
 
+    function connectionTypeCode(endpoint) {
+        const item = Array.isArray(endpoint && endpoint.connectionType)
+            ? endpoint.connectionType[0]
+            : (endpoint && endpoint.connectionType);
+        const coding = (item && item.coding && item.coding[0]) || item || {};
+        return coding.code || "";
+    }
+
+    function channelCodeFromEndpoint(endpoint) {
+        const code = connectionTypeCode(endpoint);
+        const mapped = {
+            "hl7-fhir-rest": "rest-hook",
+            "rest-hook": "rest-hook",
+            "hl7-fhir-msg": "message",
+            message: "message",
+            "secure-email": "email",
+            "direct-project": "email",
+            email: "email",
+            websocket: "websocket",
+            "hl7v2-mllp": "message"
+        }[code];
+        if (mapped) {
+            return mapped;
+        }
+        const address = String((endpoint && endpoint.address) || "");
+        if (/^mailto:/i.test(address)) {
+            return "email";
+        }
+        if (/^wss?:/i.test(address)) {
+            return "websocket";
+        }
+        return (subscription.channelType && subscription.channelType.code) || "rest-hook";
+    }
+
+    function mimeFromEndpoint(endpoint) {
+        const payloads = (endpoint && endpoint.payload) || [];
+        for (let i = 0; i < payloads.length; i += 1) {
+            const mime = (payloads[i].mimeType || [])[0];
+            if (mime) {
+                return mime;
+            }
+        }
+        return "";
+    }
+
+    function contentFromEndpoint(endpoint) {
+        const payloads = (endpoint && endpoint.payload) || [];
+        const type = CadminApi.conceptCode(payloads[0] && payloads[0].type);
+        if (type === "none") {
+            return "empty";
+        }
+        return subscription.content || "id-only";
+    }
+
+    function parametersFromEndpoint(endpoint) {
+        return ((endpoint && endpoint.header) || []).map(function (line) {
+            const text = String(line || "");
+            const index = text.indexOf(":");
+            if (index < 0) {
+                return { name: text.trim(), value: "" };
+            }
+            return {
+                name: text.slice(0, index).trim(),
+                value: text.slice(index + 1).trim()
+            };
+        }).filter(function (item) {
+            return item.name;
+        });
+    }
+
+    function applyChannelInputs(ids, extra) {
+        const channel = channelTypes.find(function (option) {
+            return option.code === $(ids.type).val();
+        }) || channelTypes[0];
+        subscription.channelType = {
+            system: channel.system || "http://terminology.hl7.org/CodeSystem/subscription-channel-type",
+            code: channel.code,
+            display: channel.display
+        };
+        const endpoint = $(ids.endpoint).val().trim();
+        const content = $(ids.content).val();
+        const contentType = $(ids.contentType).val().trim();
+        const heartbeat = parseUnsigned(ids.heartbeat);
+        const timeout = parseUnsigned(ids.timeout);
+        const maxCount = parseUnsigned(ids.maxCount);
+        const end = fromLocalInput($(ids.end).val());
+        if (endpoint) { subscription.endpoint = endpoint; } else { delete subscription.endpoint; }
+        if (content) { subscription.content = content; } else { delete subscription.content; }
+        if (contentType) { subscription.contentType = contentType; } else { delete subscription.contentType; }
+        if (heartbeat != null) { subscription.heartbeatPeriod = heartbeat; } else { delete subscription.heartbeatPeriod; }
+        if (timeout != null) { subscription.timeout = timeout; } else { delete subscription.timeout; }
+        if (maxCount != null && maxCount >= 1) { subscription.maxCount = maxCount; } else { delete subscription.maxCount; }
+        if (end) { subscription.end = end; } else { delete subscription.end; }
+        if (extra && extra.parameters) {
+            if (extra.parameters.length) {
+                subscription.parameter = extra.parameters;
+            } else {
+                delete subscription.parameter;
+            }
+        }
+    }
+
+    function showImportStep(step) {
+        importStep = step;
+        CadminApi.showAlert("#sd-imp-alert");
+        $("#sd-channel-import-modal [data-imp-pane]").addClass("d-none");
+        $("#sd-channel-import-modal [data-imp-pane=\"" + step + "\"]").removeClass("d-none");
+        $("#sd-imp-steps .npi-wizard-step").each(function () {
+            const value = Number($(this).attr("data-imp-step"));
+            $(this).toggleClass("active", value === step);
+            $(this).toggleClass("done", value < step);
+        });
+        $("#sd-imp-back").toggleClass("d-none", step === 1);
+        $("#sd-imp-next").toggleClass("d-none", step !== 1);
+        $("#sd-imp-save").toggleClass("d-none", step !== 2);
+    }
+
+    function resetImportWizard() {
+        importStep = 1;
+        importParameters = null;
+        $("#sd-imp-param-note").text("");
+        CadminApi.showAlert("#sd-imp-alert");
+        CadminApi.destroySelect("#sd-imp-endpoint");
+        CadminApi.bindFhirSelect("#sd-imp-endpoint", "Endpoint", {
+            placeholder: "Select endpoint…"
+        });
+        showImportStep(1);
+    }
+
+    function fillImportChannel(endpoint) {
+        const type = channelCodeFromEndpoint(endpoint);
+        const mime = mimeFromEndpoint(endpoint);
+        const content = contentFromEndpoint(endpoint);
+        const end = (endpoint.period && endpoint.period.end) || subscription.end;
+        $("#sd-imp-type").val(type);
+        $("#sd-imp-url").val(endpoint.address || "");
+        $("#sd-imp-content").val(content);
+        $("#sd-imp-content-type").val(mime || subscription.contentType || "application/fhir+json");
+        $("#sd-imp-heartbeat").val(subscription.heartbeatPeriod != null ? subscription.heartbeatPeriod : "");
+        $("#sd-imp-timeout").val(subscription.timeout != null ? subscription.timeout : "");
+        $("#sd-imp-max-count").val(subscription.maxCount != null ? subscription.maxCount : "");
+        $("#sd-imp-end").val(toLocalInput(end));
+        importParameters = parametersFromEndpoint(endpoint);
+        if (importParameters.length) {
+            $("#sd-imp-param-note").text(
+                importParameters.length === 1
+                    ? "One header from this endpoint will replace the subscription channel parameters."
+                    : importParameters.length + " headers from this endpoint will replace the subscription channel parameters."
+            );
+        } else {
+            $("#sd-imp-param-note").text("This endpoint has no headers. Existing channel parameters are left unchanged.");
+            importParameters = null;
+        }
+    }
+
     function bind() {
         const $root = $(CadminWorkspace.root());
         $root.off(".subdetail");
@@ -733,31 +950,64 @@ window.CadminSubscriptionDetail = (function () {
 
         $("#sd-channel-form").on("submit", function (event) {
             event.preventDefault();
-            const channel = channelTypes.find(function (option) {
-                return option.code === $("#sd-channel-type").val();
-            }) || channelTypes[0];
-            subscription.channelType = {
-                system: channel.system || "http://terminology.hl7.org/CodeSystem/subscription-channel-type",
-                code: channel.code,
-                display: channel.display
-            };
-            const endpoint = $("#sd-endpoint").val().trim();
-            const content = $("#sd-content").val();
-            const contentType = $("#sd-content-type").val().trim();
-            const heartbeat = parseUnsigned("#sd-heartbeat");
-            const timeout = parseUnsigned("#sd-timeout");
-            const maxCount = parseUnsigned("#sd-max-count");
-            const end = fromLocalInput($("#sd-end").val());
-            if (endpoint) { subscription.endpoint = endpoint; } else { delete subscription.endpoint; }
-            if (content) { subscription.content = content; } else { delete subscription.content; }
-            if (contentType) { subscription.contentType = contentType; } else { delete subscription.contentType; }
-            if (heartbeat != null) { subscription.heartbeatPeriod = heartbeat; } else { delete subscription.heartbeatPeriod; }
-            if (timeout != null) { subscription.timeout = timeout; } else { delete subscription.timeout; }
-            if (maxCount != null && maxCount >= 1) { subscription.maxCount = maxCount; } else { delete subscription.maxCount; }
-            if (end) { subscription.end = end; } else { delete subscription.end; }
+            applyChannelInputs({
+                type: "#sd-channel-type",
+                endpoint: "#sd-endpoint",
+                content: "#sd-content",
+                contentType: "#sd-content-type",
+                heartbeat: "#sd-heartbeat",
+                timeout: "#sd-timeout",
+                maxCount: "#sd-max-count",
+                end: "#sd-end"
+            });
             saveSubscription(function () {
                 hideModal("sd-channel-modal");
                 CadminApi.showToast("success", "Channel updated.");
+            });
+        });
+
+        $("#sd-channel-import-modal").on("show.bs.modal", resetImportWizard);
+        $("#sd-channel-import-modal").on("hidden.bs.modal", function () {
+            CadminApi.destroySelect("#sd-imp-endpoint");
+            importParameters = null;
+        });
+
+        $("#sd-imp-next").on("click", function () {
+            const endpointId = CadminApi.selectValue("#sd-imp-endpoint");
+            if (!endpointId) {
+                CadminApi.showAlert("#sd-imp-alert", "danger", "Select an endpoint to continue.");
+                return;
+            }
+            const $next = $("#sd-imp-next").prop("disabled", true);
+            CadminApi.fhir("/Endpoint/" + encodeURIComponent(endpointId)).done(function (endpoint) {
+                fillImportChannel(endpoint || {});
+                showImportStep(2);
+            }).fail(function (xhr) {
+                CadminApi.showAlert("#sd-imp-alert", "danger",
+                    "Unable to load endpoint" + (xhr && xhr.status ? " (" + xhr.status + ")" : "") + ".");
+            }).always(function () {
+                $next.prop("disabled", false);
+            });
+        });
+
+        $("#sd-imp-back").on("click", function () {
+            showImportStep(1);
+        });
+
+        $("#sd-imp-save").on("click", function () {
+            applyChannelInputs({
+                type: "#sd-imp-type",
+                endpoint: "#sd-imp-url",
+                content: "#sd-imp-content",
+                contentType: "#sd-imp-content-type",
+                heartbeat: "#sd-imp-heartbeat",
+                timeout: "#sd-imp-timeout",
+                maxCount: "#sd-imp-max-count",
+                end: "#sd-imp-end"
+            }, importParameters ? { parameters: importParameters } : null);
+            saveSubscription(function () {
+                hideModal("sd-channel-import-modal");
+                CadminApi.showToast("success", "Channel imported from endpoint.");
             });
         });
 

@@ -31,6 +31,24 @@ CadminApp.register("dashboard", function () {
                     '<div class="card-header py-3"><h6 class="m-0">Gateway</h6></div>' +
                     '<div class="card-body" id="dash-gateway"></div>' +
                 '</div>' +
+                '<div class="card shadow mb-4 d-none" id="dash-wiremock-card">' +
+                    '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
+                        '<h6 class="m-0">WireMock</h6>' +
+                        '<a class="small text-decoration-none" href="#/wiremock-mappings">Mappings</a>' +
+                    "</div>" +
+                    '<div class="card-body" id="dash-wiremock">' +
+                        '<p class="text-muted mb-0">Loading…</p>' +
+                    "</div>" +
+                "</div>" +
+                '<div class="card shadow mb-4 d-none" id="dash-icg-card">' +
+                    '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
+                        '<h6 class="m-0">ICG</h6>' +
+                        '<a class="small text-decoration-none" href="#/icg">Routes</a>' +
+                    "</div>" +
+                    '<div class="card-body" id="dash-icg">' +
+                        '<p class="text-muted mb-0">Loading…</p>' +
+                    "</div>" +
+                "</div>" +
             '</div>' +
             '<div class="col-lg-5">' +
                 '<div class="card shadow mb-4">' +
@@ -52,7 +70,9 @@ CadminApp.register("dashboard", function () {
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/healthcare-services">Healthcare services</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/pds-policies">PDS policies</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/camel-routes">Camel routes</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/icg-routes">ICG routes</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/core-admin-bridge">Core Admin Bridge</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/icg">Integrator Connect Gateway</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/schedules">Schedules</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/appointments">Appointments</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/appointment-book">Find and book</a>' +
@@ -63,7 +83,9 @@ CadminApp.register("dashboard", function () {
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/questionnaires">Questionnaires</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/code-systems">Code systems</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/value-sets">Value sets</a>' +
-                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/consents">Consents</a>'
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/consents">Consents</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/oidc-token">OIDC token</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/oidc-clients">OIDC clients</a>'
                             : "") +
                         '<a class="btn btn-outline-secondary mb-2" href="#/settings">Settings</a>' +
                     '</div>' +
@@ -119,6 +141,7 @@ CadminApp.register("dashboard", function () {
         { type: "SubscriptionTopic", label: "Topics", href: "#/subscription-topics", icon: "bi-bookmark-star", border: "primary", admin: true },
         { key: "pds-policies", type: "Library", search: "type=pds-policies", label: "PDS policies", href: "#/pds-policies", icon: "bi-journal-text", border: "success", admin: true },
         { key: "camel-routes", type: "Library", search: "type=camel-route", label: "Camel routes", href: "#/camel-routes", iconify: "hugeicons:camel", border: "warning", admin: true },
+        { key: "icg-routes", type: "Library", search: "type=icg-route", label: "ICG routes", href: "#/icg-routes", iconify: "mdi:routes", border: "info", admin: true },
         { type: "SearchParameter", label: "Search params", href: "#/search-parameters", icon: "bi-search", border: "warning", admin: true },
         { type: "Questionnaire", label: "Questionnaires", href: "#/questionnaires", icon: "bi-ui-checks", border: "info", admin: true },
         { type: "CodeSystem", label: "Code systems", href: "#/code-systems", icon: "bi-braces", border: "primary", admin: true },
@@ -259,6 +282,179 @@ CadminApp.register("dashboard", function () {
         });
     }
 
+    function countLink(href, value) {
+        if (value == null) {
+            return "—";
+        }
+        return '<a href="' + href + '">' + CadminApi.escapeHtml(formatCount(value)) + "</a>";
+    }
+
+    function renderWiremockMetrics(result) {
+        const wm = window.CadminWiremock;
+        const health = result.health || {};
+        const requests = result.requests || {};
+        const journalDisabled = !!requests.requestJournalDisabled;
+        const healthy = health.status === "healthy" || health.status === "UP";
+        const up = !!(result.health || result.mappings || result.requests || result.scenarios);
+        const version = health.version || "—";
+        const mappings = wm ? wm.adminTotal(result.mappings, "mappings") : null;
+        const journal = journalDisabled ? null : (wm ? wm.adminTotal(result.requests, "requests") : null);
+        const unmatched = journalDisabled ? null : (wm ? wm.adminTotal(result.unmatched, "requests") : null);
+        const scenarios = result.scenarios && Array.isArray(result.scenarios.scenarios)
+            ? result.scenarios.scenarios.length
+            : null;
+        $("#dash-wiremock").html(
+            '<dl class="row mb-0">' +
+                '<dt class="col-sm-4">Status</dt><dd class="col-sm-8">' +
+                    (up
+                        ? '<span class="badge text-bg-success">' + (healthy ? "Healthy" : "Up") + "</span>"
+                        : '<span class="badge text-bg-danger">Down</span>') +
+                    (!up && result.error
+                        ? ' <small class="text-muted">' + CadminApi.escapeHtml(result.error) + "</small>"
+                        : "") +
+                "</dd>" +
+                '<dt class="col-sm-4">Version</dt><dd class="col-sm-8">' +
+                    CadminApi.escapeHtml(version) + "</dd>" +
+                '<dt class="col-sm-4">Uptime</dt><dd class="col-sm-8">' +
+                    CadminApi.escapeHtml(wm ? wm.formatDuration(health.uptimeInSeconds) : "—") + "</dd>" +
+                '<dt class="col-sm-4">Mappings</dt><dd class="col-sm-8">' +
+                    countLink("#/wiremock-mappings", mappings) + "</dd>" +
+                '<dt class="col-sm-4">Requests</dt><dd class="col-sm-8">' +
+                    (journalDisabled
+                        ? '<span class="text-muted">Journal disabled</span>'
+                        : countLink("#/wiremock-requests", journal)) +
+                "</dd>" +
+                '<dt class="col-sm-4">Unmatched</dt><dd class="col-sm-8">' +
+                    (journalDisabled
+                        ? "—"
+                        : countLink("#/wiremock-requests", unmatched)) +
+                "</dd>" +
+                '<dt class="col-sm-4">Scenarios</dt><dd class="col-sm-8">' +
+                    countLink("#/wiremock-scenarios", scenarios) + "</dd>" +
+            "</dl>"
+        );
+    }
+
+    function loadWiremockMetrics() {
+        if (!CadminApp.isAdmin()) {
+            return;
+        }
+        $("#dash-wiremock-card").removeClass("d-none");
+        const result = {};
+        let pending = 5;
+        let finished = false;
+
+        function finish() {
+            pending -= 1;
+            if (pending > 0 || finished) {
+                return;
+            }
+            finished = true;
+            if (!result.health && !result.mappings && !result.requests && !result.scenarios) {
+                const wm = window.CadminWiremock;
+                result.error = wm ? wm.fail("Load WireMock", result.xhr) : "WireMock is unavailable.";
+            }
+            renderWiremockMetrics(result);
+        }
+
+        function take(key, path) {
+            CadminApi.wiremock(path)
+                .done(function (body) {
+                    result[key] = body;
+                })
+                .fail(function (xhr) {
+                    result.xhr = result.xhr || xhr;
+                })
+                .always(finish);
+        }
+
+        take("health", "/__admin/health");
+        take("mappings", "/__admin/mappings?limit=1");
+        take("requests", "/__admin/requests?limit=1");
+        take("unmatched", "/__admin/requests?limit=1&unmatched=true");
+        take("scenarios", "/__admin/scenarios");
+    }
+
+    function renderIcgMetrics(result) {
+        const icg = window.CadminIcg;
+        const status = result.status || {};
+        const health = result.health || {};
+        const totals = status.totals || {};
+        const healthUp = health.status === "UP" || health.up === true;
+        const up = !!(result.status || result.health);
+        const routes = result.status && Array.isArray(status.routes) ? status.routes.length : null;
+        const libraries = result.status && Array.isArray(status.libraries) ? status.libraries.length : null;
+        const requests = result.status
+            ? (totals.requests != null ? totals.requests : 0)
+            : null;
+        const errors = result.status
+            ? (totals.errors != null ? totals.errors : 0)
+            : null;
+        $("#dash-icg").html(
+            '<dl class="row mb-0">' +
+                '<dt class="col-sm-4">Status</dt><dd class="col-sm-8">' +
+                    (up
+                        ? '<span class="badge text-bg-success">' + (healthUp ? "Up" : "Reachable") + "</span>"
+                        : '<span class="badge text-bg-danger">Down</span>') +
+                    (!up && result.error
+                        ? ' <small class="text-muted">' + CadminApi.escapeHtml(result.error) + "</small>"
+                        : "") +
+                "</dd>" +
+                '<dt class="col-sm-4">Uptime</dt><dd class="col-sm-8">' +
+                    CadminApi.escapeHtml(icg ? icg.formatDuration(totals.uptimeSeconds) : "—") + "</dd>" +
+                '<dt class="col-sm-4">Routes</dt><dd class="col-sm-8">' +
+                    countLink("#/icg", routes) + "</dd>" +
+                '<dt class="col-sm-4">Libraries</dt><dd class="col-sm-8">' +
+                    countLink("#/icg-routes", libraries) + "</dd>" +
+                '<dt class="col-sm-4">Requests</dt><dd class="col-sm-8">' +
+                    countLink("#/icg", requests) + "</dd>" +
+                '<dt class="col-sm-4">Failed</dt><dd class="col-sm-8">' +
+                    CadminApi.escapeHtml(formatCount(errors)) + "</dd>" +
+                '<dt class="col-sm-4">Success rate</dt><dd class="col-sm-8">' +
+                    CadminApi.escapeHtml(icg ? icg.successRate(totals) : "—") + "</dd>" +
+                '<dt class="col-sm-4">Mean</dt><dd class="col-sm-8">' +
+                    CadminApi.escapeHtml(icg ? icg.formatMs(totals.meanMs) : "—") + "</dd>" +
+            "</dl>"
+        );
+    }
+
+    function loadIcgMetrics() {
+        if (!CadminApp.isAdmin()) {
+            return;
+        }
+        $("#dash-icg-card").removeClass("d-none");
+        const result = {};
+        let pending = 2;
+        let finished = false;
+
+        function finish() {
+            pending -= 1;
+            if (pending > 0 || finished) {
+                return;
+            }
+            finished = true;
+            if (!result.status && !result.health) {
+                const icg = window.CadminIcg;
+                result.error = icg ? icg.fail("Load ICG", result.xhr) : "ICG is unavailable.";
+            }
+            renderIcgMetrics(result);
+        }
+
+        function take(key, path) {
+            CadminApi.icg(path)
+                .done(function (body) {
+                    result[key] = body;
+                })
+                .fail(function (xhr) {
+                    result.xhr = result.xhr || xhr;
+                })
+                .always(finish);
+        }
+
+        take("status", "/status");
+        take("health", "/actuator/health");
+    }
+
     CadminApi.get("/api/status").done(function (status) {
         const fhir = status.fhir || {};
         $("#dash-cards").html(
@@ -278,8 +474,12 @@ CadminApp.register("dashboard", function () {
             '</dl>'
         );
         loadResourceCounts();
+        loadWiremockMetrics();
+        loadIcgMetrics();
     }).fail(function () {
         $("#dash-cards").html(card("3", "danger", "Gateway", "Status check failed", "bi-exclamation-triangle"));
         loadResourceCounts();
+        loadWiremockMetrics();
+        loadIcgMetrics();
     });
 });

@@ -34,8 +34,10 @@ public class OidcSecurityConfig {
     ) {
         SecuritySupport.common(http)
                 .oauth2Login(oauth -> oauth
+                        .loginPage("/login.html")
                         .authorizationRequestResolver(authorizationRequestResolver(clients))
-                        .authenticationSuccessHandler(AjaxAuthenticationHandlers.successHandler()))
+                        .authenticationSuccessHandler(AjaxAuthenticationHandlers.successHandler())
+                        .authenticationFailureHandler(AjaxAuthenticationHandlers.failureHandler()))
                 .logout(logout -> logout
                         .requiresLogout(SecuritySupport.logoutMatcher())
                         .logoutSuccessHandler(oidcLogoutSuccessHandler(clients, postLogoutRedirectUri)));

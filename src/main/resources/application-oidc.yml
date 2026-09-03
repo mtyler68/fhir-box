@@ -65,3 +65,11 @@ spring:
               filters:
                 - StripPrefix=1
                 - RemoveRequestHeader=Cookie
+            - id: icg
+              uri: ${cadmin.icg.uri}
+              predicates:
+                - Path=/icg/**
+              filters:
+                - TokenRelay=
+                - StripPrefix=1
+                - RemoveRequestHeader=Cookie

@@ -1,7 +1,11 @@
 package io.cadmin.gateway.web;
 
 import io.cadmin.gateway.config.CadminProperties;
+import io.cadmin.gateway.keycloak.KeycloakTokenService;
+import io.cadmin.gateway.keycloak.KeycloakTokenService.GrantRequest;
+import io.cadmin.gateway.keycloak.KeycloakTokenService.IssuedToken;
 import io.cadmin.gateway.keycloak.KeycloakUserService;
+import io.cadmin.gateway.keycloak.OidcIdentifiers;
 import io.cadmin.gateway.keycloak.KeycloakUserService.CreateUserRequest;
 import io.cadmin.gateway.keycloak.UserConflictException;
 import java.util.Collection;
@@ -36,10 +40,16 @@ public class AuthController {
 
     private final CadminProperties properties;
     private final ObjectProvider<KeycloakUserService> keycloakUsers;
+    private final KeycloakTokenService keycloakTokens;
 
-    public AuthController(CadminProperties properties, ObjectProvider<KeycloakUserService> keycloakUsers) {
+    public AuthController(
+            CadminProperties properties,
+            ObjectProvider<KeycloakUserService> keycloakUsers,
+            KeycloakTokenService keycloakTokens
+    ) {
         this.properties = properties;
         this.keycloakUsers = keycloakUsers;
+        this.keycloakTokens = keycloakTokens;
     }
 
     @GetMapping("/config")
@@ -49,6 +59,10 @@ public class AuthController {
         body.put("mode", properties.security().mode());
         body.put("oidcLoginUrl", oidc ? "/oauth2/authorization/keycloak" : "");
         body.put("oidcIssuer", oidc ? properties.keycloak().issuerUri() : "");
+        body.put("oidcSubjectSystem", OidcIdentifiers.SUBJECT_SYSTEM);
+        body.put("keycloakIssuer", properties.keycloak().issuerUri());
+        body.put("keycloakClientId", properties.keycloak().clientId());
+        body.put("keycloakRealm", properties.keycloak().realm());
         body.put("fhirBaseUrl", "/fhir");
         Mono<CsrfToken> csrf = exchange.getAttribute(CsrfToken.class.getName());
         if (csrf == null) {
@@ -66,6 +80,27 @@ public class AuthController {
         return ReactiveSecurityContextHolder.getContext()
                 .map(SecurityContext::getAuthentication)
                 .map(this::toUser);
+    }
+
+    public record TokenRequest(
+            String grantType,
+            String username,
+            String password,
+            String clientId,
+            String clientSecret,
+            String scope
+    ) {
+    }
+
+    @PostMapping(path = "/token", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public Mono<IssuedToken> token(@RequestBody TokenRequest request) {
+        return keycloakTokens.issue(new GrantRequest(
+                request.grantType(),
+                request.username(),
+                request.password(),
+                request.clientId(),
+                request.clientSecret(),
+                request.scope()));
     }
 
     @GetMapping("/users")

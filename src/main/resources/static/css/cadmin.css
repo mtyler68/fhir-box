@@ -1114,6 +1114,13 @@ body.layout-fixed .app-main {
     vertical-align: -0.15em;
 }
 
+.btn iconify-icon {
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.125em;
+    color: inherit;
+}
+
 .ts-wrapper.form-select {
     padding: 0;
     background-image: none;

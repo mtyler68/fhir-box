@@ -596,7 +596,7 @@ window.CadminPractitionerRoleDetail = (function () {
                     "<td><code>" + esc(ep.address || "—") + "</code></td>" +
                     "<td>" + esc(ep.status || "—") + "</td>" +
                     '<td class="text-end"><button class="btn btn-sm btn-outline-secondary" type="button" data-unlink-endpoint="' +
-                    esc(ep.id) + '" title="Unlink" aria-label="Unlink"><i class="bi bi-x-lg"></i></button></td></tr>';
+                    esc(ep.id) + '" title="Unlink" aria-label="Unlink"><iconify-icon icon="mdi:link-off" aria-hidden="true"></iconify-icon></button></td></tr>';
             }).join(""));
         }).fail(function (xhr) {
             $("#prrd-ep-rows").html(emptyRow(4, "Unable to load endpoints."));

@@ -32,6 +32,10 @@ class CadminGatewayApplicationTests {
                 .expectBody()
                 .jsonPath("$.mode").isEqualTo("local")
                 .jsonPath("$.oidcIssuer").isEqualTo("")
+                .jsonPath("$.oidcSubjectSystem").isEqualTo("https://insulet.com/fhir/identifier/oidc/subject")
+                .jsonPath("$.keycloakIssuer").isEqualTo("http://localhost:8180/realms/cadmin")
+                .jsonPath("$.keycloakClientId").isEqualTo("cadmin-gateway")
+                .jsonPath("$.keycloakRealm").isEqualTo("cadmin")
                 .jsonPath("$.fhirBaseUrl").isEqualTo("/fhir");
     }
 
@@ -335,6 +339,15 @@ class CadminGatewayApplicationTests {
     }
 
     @Test
+    void loginRedirectsToHtml() {
+        webTestClient.get()
+                .uri("/login?error")
+                .exchange()
+                .expectStatus().isFound()
+                .expectHeader().valueEquals(org.springframework.http.HttpHeaders.LOCATION, "/login.html?error");
+    }
+
+    @Test
     void adminCanSignInViaFormLogin() {
         webTestClient.post()
                 .uri("/login")
@@ -383,6 +396,41 @@ class CadminGatewayApplicationTests {
     }
 
     @Test
+    void oidcTokenRequiresAuthentication() {
+        webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
+                .post()
+                .uri("/api/auth/token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"username\":\"admin\",\"password\":\"admin\"}")
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = {"ADMIN", "USER"})
+    void oidcTokenRejectsUnknownGrant() {
+        webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
+                .post()
+                .uri("/api/auth/token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"grantType\":\"refresh_token\"}")
+                .exchange()
+                .expectStatus().isBadRequest();
+    }
+
+    @Test
+    @WithMockUser(username = "clinician", roles = {"USER"})
+    void oidcTokenIsForbiddenForNonAdmin() {
+        webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
+                .post()
+                .uri("/api/auth/token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"username\":\"admin\",\"password\":\"admin\"}")
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
     @WithMockUser(username = "clinician", roles = {"USER"})
     void createOidcUserIsForbiddenForNonAdmin() {
         webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
@@ -392,6 +440,44 @@ class CadminGatewayApplicationTests {
                 .bodyValue("{\"firstName\":\"Jane\",\"lastName\":\"Doe\",\"username\":\"jane.doe\"}")
                 .exchange()
                 .expectStatus().isForbidden();
+    }
+
+    @Test
+    void oidcClientsRequireAuthentication() {
+        webTestClient.get()
+                .uri("/api/auth/clients")
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    @WithMockUser(username = "clinician", roles = {"USER"})
+    void oidcClientsAreForbiddenForNonAdmin() {
+        webTestClient.get()
+                .uri("/api/auth/clients")
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = {"ADMIN", "USER"})
+    void oidcClientsAreNotFoundWhenOidcIsDisabled() {
+        webTestClient.get()
+                .uri("/api/auth/clients")
+                .exchange()
+                .expectStatus().isNotFound();
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = {"ADMIN", "USER"})
+    void createOidcClientIsNotFoundWhenOidcIsDisabled() {
+        webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
+                .post()
+                .uri("/api/auth/clients")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"clientId\":\"abbott-usa\"}")
+                .exchange()
+                .expectStatus().isNotFound();
     }
 
     @Test
@@ -461,6 +547,25 @@ class CadminGatewayApplicationTests {
     void fhirChiefIsForbiddenForNonAdmin() {
         webTestClient.get()
                 .uri("/fhir-chief/status")
+                .header("Accept", "application/json")
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    void icgRequiresAuthentication() {
+        webTestClient.get()
+                .uri("/icg/status")
+                .header("Accept", "application/json")
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    @WithMockUser(username = "clinician", roles = {"USER"})
+    void icgIsForbiddenForNonAdmin() {
+        webTestClient.get()
+                .uri("/icg/status")
                 .header("Accept", "application/json")
                 .exchange()
                 .expectStatus().isForbidden();

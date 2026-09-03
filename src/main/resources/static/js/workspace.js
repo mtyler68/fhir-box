@@ -15,6 +15,7 @@ window.CadminWorkspace = (function ($) {
             listLabel: "Healthcare services" },
         "pds-policies": { type: "Library", path: "/Library/", icon: "bi-journal-text", listLabel: "PDS Policies" },
         "camel-routes": { type: "Library", path: "/Library/", icon: "hugeicons:camel", listLabel: "Camel Routes" },
+        "icg-routes": { type: "Library", path: "/Library/", icon: "mdi:routes", listLabel: "ICG Routes" },
         questionnaires: { type: "Questionnaire", path: "/Questionnaire/", icon: "bi-ui-checks", listLabel: "Questionnaires" },
         "search-parameters": { type: "SearchParameter", path: "/SearchParameter/", icon: "bi-search",
             listLabel: "Search parameters" },
@@ -48,10 +49,14 @@ window.CadminWorkspace = (function ($) {
         "demo-data": "Demo data",
         users: "Users",
         settings: "Settings",
+        "oidc-token": "OIDC token",
+        "oidc-clients": "OIDC clients",
         "search-parameters": "Search parameters",
         "code-systems": "Code systems",
         "value-sets": "Value sets",
         "camel-routes": "Camel Routes",
+        "icg-routes": "ICG Routes",
+        icg: "Integrator Connect Gateway",
         "core-admin-bridge": "Core Admin Bridge",
         schedules: "Schedules",
         slots: "Slots",
@@ -297,6 +302,8 @@ window.CadminWorkspace = (function ($) {
         "healthcare-services": true,
         "pds-policies": true,
         "camel-routes": true,
+        "icg-routes": true,
+        icg: true,
         "search-parameters": true,
         questionnaires: true,
         "code-systems": true,
@@ -320,7 +327,9 @@ window.CadminWorkspace = (function ($) {
         "plan-apply": true,
         "wiremock-mappings": true,
         "wiremock-requests": true,
-        "wiremock-scenarios": true
+        "wiremock-scenarios": true,
+        "oidc-token": true,
+        "oidc-clients": true
     };
 
     function sessionStoreKey() {
@@ -1227,20 +1236,35 @@ window.CadminWorkspace = (function ($) {
         return true;
     }
 
+    function refreshCodeMirrors(root) {
+        function run() {
+            $(root).find(".CodeMirror").each(function () {
+                if (this.CodeMirror) {
+                    this.CodeMirror.refresh();
+                }
+            });
+        }
+        run();
+        requestAnimationFrame(function () {
+            requestAnimationFrame(run);
+        });
+        window.setTimeout(run, 50);
+    }
+
     function revealDetail(key) {
         const pane = detailPane();
         if (!pane) {
             return;
         }
-        $(pane).find(".CodeMirror").each(function () {
-            if (this.CodeMirror) {
-                this.CodeMirror.refresh();
-            }
-        });
+        refreshCodeMirrors(pane);
         const tab = tabs[key];
         if (window.CadminCamelRouteDetail && typeof CadminCamelRouteDetail.reveal === "function"
                 && pane.querySelector("#crd-yaml")) {
             CadminCamelRouteDetail.reveal(tab && tab.resource);
+        }
+        if (window.CadminIcgRouteDetail && typeof CadminIcgRouteDetail.reveal === "function"
+                && pane.querySelector("#ird-yaml")) {
+            CadminIcgRouteDetail.reveal(tab && tab.resource);
         }
         if (window.CadminSubscriptionDetail && typeof CadminSubscriptionDetail.reveal === "function"
                 && pane.querySelector("#sd-title")) {
@@ -1333,6 +1357,7 @@ window.CadminWorkspace = (function ($) {
             return;
         }
         activeKey = key;
+        showPanes();
         if (key !== "workspace" && typeof tabs[key].render === "function") {
             if (parked[key] && !isLoadingStub(parked[key])) {
                 restoreParked(key);
@@ -1348,7 +1373,6 @@ window.CadminWorkspace = (function ($) {
                 revealDetail(key);
             }
         }
-        showPanes();
         renderTabStrip();
     }
 

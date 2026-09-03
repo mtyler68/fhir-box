@@ -49,6 +49,8 @@ window.CadminOrganizationDetail = (function () {
     let org = null;
     let editingRole = null;
     let rolesById = {};
+    let oidcClients = [];
+    let linkedOidcClient = null;
 
     function esc(value) {
         return CadminApi.escapeHtml(value);
@@ -96,6 +98,10 @@ window.CadminOrganizationDetail = (function () {
         return (list || []).map(function (item) {
             return [item.system, item.value].filter(Boolean).join(": ");
         }).filter(Boolean).join(" · ") || "—";
+    }
+
+    function isOidcMode() {
+        return ((window.CadminApp && CadminApp.config()) || {}).mode === "oidc";
     }
 
     function contactNameList(contact) {
@@ -283,6 +289,13 @@ window.CadminOrganizationDetail = (function () {
             "</div>" +
             editCard("Basic details", "org-basic-details", "#od-basic-modal") +
             '<div class="row">' +
+                '<div class="col-lg-6">' + card("Identifiers", "org-id-rows",
+                    ["System", "Value", ""], "#od-id-modal", "Add") + "</div>" +
+                (isOidcMode()
+                    ? '<div class="col-lg-6">' + editCard("OIDC client", "org-oidc", "#od-oidc-modal") + "</div>"
+                    : "") +
+            "</div>" +
+            '<div class="row">' +
                 '<div class="col-lg-6">' + card("Sub-organizations", "org-child-rows",
                     ["Name", "Type", "Status", ""], "#od-child-modal", "Add") + "</div>" +
                 '<div class="col-lg-6">' + card("Locations", "org-location-rows",
@@ -314,10 +327,6 @@ window.CadminOrganizationDetail = (function () {
                 field("Type", '<select class="form-select" id="od-type">' + optionsHtml(typeOptions, "code", "display") + "</select>") +
                 field("Part of", '<select class="form-select" id="od-part-of"><option value="">None</option></select>') +
                 field("Alias", '<input class="form-control" id="od-alias" placeholder="Comma-separated">') +
-                '<div class="row"><div class="col-md-6 mb-3"><label class="form-label">Identifier system</label>' +
-                    '<input class="form-control" id="od-id-system"></div>' +
-                    '<div class="col-md-6 mb-3"><label class="form-label">Identifier value</label>' +
-                    '<input class="form-control" id="od-id-value"></div></div>' +
                 '<div class="row"><div class="col-md-6 mb-3"><label class="form-label">Phone</label>' +
                     '<input class="form-control" id="od-phone"></div>' +
                     '<div class="col-md-6 mb-3"><label class="form-label">Email</label>' +
@@ -375,6 +384,18 @@ window.CadminOrganizationDetail = (function () {
                 '<div class="form-check mb-0"><input class="form-check-input" type="checkbox" id="od-pr-edit-active">' +
                     '<label class="form-check-label" for="od-pr-edit-active">Active</label></div>',
                 "od-role-edit-form") +
+            modal("od-id-modal", "Add identifier",
+                field("System", '<input class="form-control" id="od-id-system" placeholder="http://example.org/sid">') +
+                field("Value", '<input class="form-control" id="od-id-value" required>'),
+                "od-id-form") +
+            modal("od-oidc-modal", "Edit OIDC client",
+                '<p class="text-muted">The client service-account JWT <code>sub</code> is stored as an identifier using ' +
+                    "<code>" + esc(CadminApi.oidcSubjectSystem()) + "</code>.</p>" +
+                field("OIDC client",
+                    '<select class="form-select" id="od-oidc-client">' +
+                        '<option value="">Select client…</option></select>') +
+                '<button type="button" class="btn btn-outline-danger btn-sm" id="od-oidc-unlink">Remove link</button>',
+                "od-oidc-form") +
             modal("od-service-modal", "Add healthcare service",
                 field("Name", '<input class="form-control" id="od-svc-name" required>') +
                 field("Type", '<input class="form-control" id="od-svc-type" placeholder="Clinic / Center">'),
@@ -411,6 +432,8 @@ window.CadminOrganizationDetail = (function () {
         CadminResourceGraph.mount(org);
         CadminResourceHistory.mount(org);
         renderBasics();
+        renderIdentifiers();
+        loadOidcClient();
         loadChildren();
         loadLocations();
         loadAffiliations();
@@ -442,6 +465,7 @@ window.CadminOrganizationDetail = (function () {
                 selected: "doctor"
             });
         });
+        $("#od-oidc-modal").on("show.bs.modal", fillOidcClientSelect);
         $("#od-ep-attach-modal").on("show.bs.modal", fillEndpointAttach);
         $("#od-role-edit-modal").on("show.bs.modal", populateRoleEditForm);
         $("#od-role-edit-modal").on("hidden.bs.modal", function () {
@@ -457,9 +481,6 @@ window.CadminOrganizationDetail = (function () {
                 ? '<a href="#/organizations/' + encodeURIComponent(refId(org.partOf)) + '">' + esc(refLabel(org.partOf)) + "</a>"
                 : esc(refLabel(org.partOf)))
             : "—";
-        const identifiers = (org.identifier || []).map(function (id) {
-            return (id.system ? id.system + " / " : "") + (id.value || "");
-        }).filter(Boolean).join(", ") || "—";
         $("#org-basic-details").html(
             '<dl class="row mb-0">' +
                 '<dt class="col-sm-3">Name</dt><dd class="col-sm-9">' + esc(org.name || "—") + "</dd>" +
@@ -467,13 +488,169 @@ window.CadminOrganizationDetail = (function () {
                 '<dt class="col-sm-3">Type</dt><dd class="col-sm-9">' + esc(type) + "</dd>" +
                 '<dt class="col-sm-3">Part of</dt><dd class="col-sm-9">' + partOf + "</dd>" +
                 '<dt class="col-sm-3">Alias</dt><dd class="col-sm-9">' + esc(aliases) + "</dd>" +
-                '<dt class="col-sm-3">Identifier</dt><dd class="col-sm-9">' + esc(identifiers) + "</dd>" +
                 '<dt class="col-sm-3">Telecom</dt><dd class="col-sm-9">' + esc(formatTelecom(orgTelecomList())) + "</dd>" +
                 '<dt class="col-sm-3">Address</dt><dd class="col-sm-9">' + esc(formatAddress(orgAddress())) + "</dd>" +
                 '<dt class="col-sm-3">ID</dt><dd class="col-sm-9"><code>' + esc(org.id) + "</code></dd>" +
             "</dl>"
         );
         $(".page-title").first().text(org.name || "Organization");
+    }
+
+    function isManagedOidcIdentifier(identifier) {
+        const system = String((identifier && identifier.system) || "").replace(/\/+$/, "");
+        return !!(identifier && identifier.value && system && CadminApi.isOidcSubjectSystem(system));
+    }
+
+    function otherIdentifiers() {
+        return (org.identifier || []).map(function (item, index) {
+            return { item: item, index: index };
+        }).filter(function (row) {
+            return !isManagedOidcIdentifier(row.item);
+        });
+    }
+
+    function oidcSubjectValues() {
+        return (org.identifier || []).filter(function (item) {
+            return isManagedOidcIdentifier(item);
+        }).map(function (item) {
+            return item.value;
+        });
+    }
+
+    function clearOidcIdentifiers() {
+        (oidcSubjectValues() || []).forEach(function (subject) {
+            CadminApi.removeOidcSubjectIdentifier(org, subject);
+        });
+    }
+
+    function renderIdentifiers() {
+        const rows = otherIdentifiers();
+        if (!rows.length) {
+            $("#org-id-rows").html(emptyRow(3, "No identifiers."));
+            return;
+        }
+        $("#org-id-rows").html(rows.map(function (row) {
+            return "<tr><td><code>" + esc(row.item.system || "—") + "</code></td><td>" +
+                esc(row.item.value || "—") + "</td>" +
+                '<td class="text-end"><button class="btn btn-sm btn-outline-danger" type="button" data-remove-identifier="' +
+                row.index + '" title="Remove" aria-label="Remove"><i class="bi bi-trash"></i></button></td></tr>';
+        }).join(""));
+    }
+
+    function renderOidcClient(subjects, error) {
+        if (!isOidcMode()) {
+            return;
+        }
+        if (error) {
+            $("#org-oidc").html('<p class="text-danger mb-0">' + esc(error) + "</p>");
+            return;
+        }
+        if (linkedOidcClient) {
+            const enabled = linkedOidcClient.enabled !== false;
+            $("#org-oidc").html(
+                '<dl class="row mb-0">' +
+                    '<dt class="col-sm-4">Client ID</dt><dd class="col-sm-8">' +
+                        '<a href="#/oidc-clients/' + encodeURIComponent(linkedOidcClient.id) + '">' +
+                        esc(linkedOidcClient.clientId || linkedOidcClient.id) + "</a></dd>" +
+                    '<dt class="col-sm-4">Name</dt><dd class="col-sm-8">' +
+                        esc(linkedOidcClient.name || "—") + "</dd>" +
+                    '<dt class="col-sm-4">Status</dt><dd class="col-sm-8">' +
+                        '<span class="badge ' + (enabled ? "text-bg-success" : "text-bg-secondary") + '">' +
+                        (enabled ? "Enabled" : "Disabled") + "</span></dd>" +
+                    '<dt class="col-sm-4">Subject</dt><dd class="col-sm-8"><code class="small">' +
+                        esc(linkedOidcClient.subject || "") + "</code></dd>" +
+                "</dl>"
+            );
+            return;
+        }
+        if (subjects && subjects.length) {
+            $("#org-oidc").html(
+                '<p class="text-muted mb-2">This organization has an OIDC subject identifier, but no matching Keycloak client was found.</p>' +
+                '<p class="mb-0"><code class="small">' + esc(subjects[0]) + "</code></p>"
+            );
+            return;
+        }
+        $("#org-oidc").html(
+            '<p class="text-muted mb-0">No OIDC client is linked. Assign a Keycloak client to store its service-account subject as an identifier.</p>'
+        );
+    }
+
+    function loadOidcClient() {
+        if (!isOidcMode()) {
+            return;
+        }
+        const subjects = oidcSubjectValues();
+        $("#org-oidc").html('<p class="text-muted mb-0">Loading…</p>');
+        CadminApi.get("/api/auth/clients").done(function (clients) {
+            oidcClients = clients || [];
+            linkedOidcClient = null;
+            subjects.some(function (subject) {
+                linkedOidcClient = oidcClients.find(function (client) {
+                    return client.subject === subject;
+                }) || null;
+                return !!linkedOidcClient;
+            });
+            renderOidcClient(subjects);
+        }).fail(function (xhr) {
+            oidcClients = [];
+            linkedOidcClient = null;
+            const message = (xhr.responseJSON && (xhr.responseJSON.message || xhr.responseJSON.error))
+                || "Unable to load OIDC clients.";
+            renderOidcClient(subjects, message);
+        });
+    }
+
+    function fillOidcClientSelect() {
+        function paint() {
+            const selected = linkedOidcClient && linkedOidcClient.id;
+            const options = ['<option value="">Select client…</option>'].concat(oidcClients
+                .filter(function (client) { return !!client.subject; })
+                .map(function (client) {
+                    const mark = client.id === selected ? " selected" : "";
+                    const label = (client.clientId || client.id) +
+                        (client.name && client.name !== client.clientId ? " — " + client.name : "");
+                    return '<option value="' + esc(client.id) + '"' + mark + ">" + esc(label) + "</option>";
+                }));
+            $("#od-oidc-client").html(options.join(""));
+            $("#od-oidc-unlink").toggleClass("d-none", !(linkedOidcClient || oidcSubjectValues().length));
+        }
+        CadminApi.get("/api/auth/clients").done(function (clients) {
+            oidcClients = clients || [];
+            paint();
+        }).fail(function () {
+            paint();
+        });
+    }
+
+    function putOrganization(organization) {
+        return CadminApi.fhir("/Organization/" + encodeURIComponent(organization.id), "PUT", organization);
+    }
+
+    function assignOidcClient(client) {
+        const subject = client && client.subject;
+        if (!subject) {
+            return $.Deferred().reject().promise();
+        }
+        return CadminApi.findByOidcSubject("Organization", subject).then(function (current) {
+            let chain = $.Deferred().resolve().promise();
+            (current || []).forEach(function (organization) {
+                if (organization.id === org.id) {
+                    return;
+                }
+                CadminApi.removeOidcSubjectIdentifier(organization, subject);
+                chain = chain.then(function () { return putOrganization(organization); });
+            });
+            return chain.then(function () {
+                clearOidcIdentifiers();
+                CadminApi.upsertOidcSubjectIdentifier(org, subject);
+                return saveOrg();
+            });
+        });
+    }
+
+    function unlinkOidcClient() {
+        clearOidcIdentifiers();
+        return saveOrg();
     }
 
     function loadChildren() {
@@ -489,7 +666,7 @@ window.CadminOrganizationDetail = (function () {
                     "<td>" + esc(conceptLabel(child.type)) + "</td>" +
                     "<td>" + statusBadge(child.active !== false) + "</td>" +
                     '<td class="text-end"><button class="btn btn-sm btn-outline-secondary" type="button" data-unlink-org="' +
-                        esc(child.id) + '">Unlink</button></td>' +
+                        esc(child.id) + '" title="Unlink" aria-label="Unlink"><iconify-icon icon="mdi:link-off" aria-hidden="true"></iconify-icon></button></td>' +
                     "</tr>";
             }).join(""));
         }).fail(function (xhr) {
@@ -572,7 +749,7 @@ window.CadminOrganizationDetail = (function () {
             "<td>" + codeStatusBadge(ep.status) + "</td>" +
             '<td class="text-end">' + (linked
                 ? '<button class="btn btn-sm btn-outline-secondary" type="button" data-unlink-endpoint="' +
-                    esc(ep.id) + '" title="Unlink" aria-label="Unlink"><i class="bi bi-x-lg"></i></button>'
+                    esc(ep.id) + '" title="Unlink" aria-label="Unlink"><iconify-icon icon="mdi:link-off" aria-hidden="true"></iconify-icon></button>'
                 : "") + "</td>" +
             "</tr>";
     }
@@ -807,7 +984,7 @@ window.CadminOrganizationDetail = (function () {
                     "<td>" + esc(conceptLabel(item.type) !== "—" ? conceptLabel(item.type) : conceptLabel(item.specialty)) + "</td>" +
                     "<td>" + statusBadge(item.active !== false) + "</td>" +
                     '<td class="text-end"><button class="btn btn-sm btn-outline-secondary" type="button" data-unlink-service="' +
-                        esc(item.id) + '" title="Unlink" aria-label="Unlink"><i class="bi bi-x-lg"></i></button></td>' +
+                        esc(item.id) + '" title="Unlink" aria-label="Unlink"><iconify-icon icon="mdi:link-off" aria-hidden="true"></iconify-icon></button></td>' +
                     "</tr>";
             }).join(""));
         }).fail(function (xhr) {
@@ -819,10 +996,12 @@ window.CadminOrganizationDetail = (function () {
     function saveOrg(next) {
         delete org.telecom;
         delete org.address;
-        CadminApi.fhir("/Organization/" + encodeURIComponent(org.id), "PUT", org).done(function (updated) {
+        return CadminApi.fhir("/Organization/" + encodeURIComponent(org.id), "PUT", org).done(function (updated) {
             org = updated || org;
             renderBasics();
             renderContacts();
+            renderIdentifiers();
+            loadOidcClient();
             if (next) {
                 next();
             }
@@ -850,7 +1029,6 @@ window.CadminOrganizationDetail = (function () {
     }
 
     function populateBasicForm() {
-        const identifier = (org.identifier && org.identifier[0]) || {};
         const address = orgAddress() || {};
         const typeCode = currentCode(org.type);
         $("#od-name").val(org.name || "");
@@ -860,8 +1038,6 @@ window.CadminOrganizationDetail = (function () {
         }
         $("#od-type").val(typeCode);
         $("#od-alias").val((org.alias || []).join(", "));
-        $("#od-id-system").val(identifier.system || "");
-        $("#od-id-value").val(identifier.value || "");
         $("#od-phone").val(telecomValue("phone"));
         $("#od-email").val(telecomValue("email"));
         $("#od-line").val((address.line || [])[0] || "");
@@ -970,6 +1146,74 @@ window.CadminOrganizationDetail = (function () {
             });
         });
 
+        $root.on("click.orgdetail", "[data-remove-identifier]", function () {
+            const index = Number($(this).attr("data-remove-identifier"));
+            const item = (org.identifier || [])[index];
+            if (item && isManagedOidcIdentifier(item)) {
+                return;
+            }
+            org.identifier = (org.identifier || []).filter(function (_item, i) { return i !== index; });
+            if (!org.identifier.length) {
+                delete org.identifier;
+            }
+            saveOrg(function () {
+                alertMsg("success", "Identifier removed.");
+            });
+        });
+
+        $("#od-id-form").on("submit", function (event) {
+            event.preventDefault();
+            const value = $("#od-id-value").val().trim();
+            const system = $("#od-id-system").val().trim();
+            if (!value) {
+                alertMsg("danger", "Enter an identifier value.");
+                return;
+            }
+            if (system && CadminApi.isOidcSubjectSystem(system)) {
+                alertMsg("danger", "Link an OIDC client from the OIDC client card.");
+                return;
+            }
+            const identifier = { value: value };
+            if (system) {
+                identifier.system = system;
+            }
+            org.identifier = org.identifier || [];
+            org.identifier.push(identifier);
+            saveOrg(function () {
+                hideModal("od-id-modal");
+                $("#od-id-system").val("");
+                $("#od-id-value").val("");
+                alertMsg("success", "Identifier added.");
+            });
+        });
+
+        $("#od-oidc-form").on("submit", function (event) {
+            event.preventDefault();
+            const clientId = $("#od-oidc-client").val();
+            const client = oidcClients.find(function (item) { return item.id === clientId; });
+            if (!client || !client.subject) {
+                alertMsg("danger", "Select an OIDC client with a service account.");
+                return;
+            }
+            const $submit = $(this).find('[type="submit"]').prop("disabled", true);
+            assignOidcClient(client).done(function () {
+                hideModal("od-oidc-modal");
+                alertMsg("success", "OIDC client linked.");
+            }).always(function () {
+                $submit.prop("disabled", false);
+            });
+        });
+
+        $root.on("click.orgdetail", "#od-oidc-unlink", function () {
+            const $button = $(this).prop("disabled", true);
+            unlinkOidcClient().done(function () {
+                hideModal("od-oidc-modal");
+                alertMsg("success", "OIDC client unlinked.");
+            }).always(function () {
+                $button.prop("disabled", false);
+            });
+        });
+
         $("#od-basic-form").on("submit", function (event) {
             event.preventDefault();
             org.name = $("#od-name").val().trim();
@@ -1003,23 +1247,6 @@ window.CadminOrganizationDetail = (function () {
                 org.alias = aliases;
             } else {
                 delete org.alias;
-            }
-            const idSystem = $("#od-id-system").val().trim();
-            const idValue = $("#od-id-value").val().trim();
-            if (idValue) {
-                const identifier = { value: idValue };
-                if (idSystem) {
-                    identifier.system = idSystem;
-                }
-                org.identifier = [identifier].concat((org.identifier || []).slice(1));
-            } else if (idSystem) {
-                alertMsg("danger", "Enter an identifier value.");
-                return;
-            } else if (org.identifier && org.identifier.length) {
-                org.identifier = org.identifier.slice(1);
-                if (!org.identifier.length) {
-                    delete org.identifier;
-                }
             }
             setTelecom("phone", $("#od-phone").val().trim());
             setTelecom("email", $("#od-email").val().trim());

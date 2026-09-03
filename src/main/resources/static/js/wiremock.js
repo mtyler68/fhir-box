@@ -249,6 +249,43 @@ window.CadminWiremock = (function () {
         return '<tr><td colspan="' + cols + '" class="text-muted">' + text + "</td></tr>";
     }
 
+    function adminTotal(body, listKey) {
+        if (!body) {
+            return null;
+        }
+        if (body.meta && typeof body.meta.total === "number") {
+            return body.meta.total;
+        }
+        const list = body[listKey];
+        return Array.isArray(list) ? list.length : null;
+    }
+
+    function formatDuration(seconds) {
+        if (seconds == null || seconds === "" || seconds < 0) {
+            return "—";
+        }
+        const total = Math.floor(Number(seconds));
+        if (isNaN(total)) {
+            return "—";
+        }
+        if (total < 60) {
+            return total + "s";
+        }
+        const minutes = Math.floor(total / 60);
+        const rem = total % 60;
+        if (minutes < 60) {
+            return rem ? minutes + "m " + rem + "s" : minutes + "m";
+        }
+        const hours = Math.floor(minutes / 60);
+        const minRem = minutes % 60;
+        if (hours < 24) {
+            return minRem ? hours + "h " + minRem + "m" : hours + "h";
+        }
+        const days = Math.floor(hours / 24);
+        const hourRem = hours % 24;
+        return hourRem ? days + "d " + hourRem + "h" : days + "d";
+    }
+
     return {
         URL_FIELDS: URL_FIELDS,
         DEFAULT_MAPPING: DEFAULT_MAPPING,
@@ -272,6 +309,8 @@ window.CadminWiremock = (function () {
         mappingFromLogged: mappingFromLogged,
         formatTime: formatTime,
         matchesQuery: matchesQuery,
-        emptyRow: emptyRow
+        emptyRow: emptyRow,
+        adminTotal: adminTotal,
+        formatDuration: formatDuration
     };
 }());

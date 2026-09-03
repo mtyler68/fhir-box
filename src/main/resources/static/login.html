@@ -83,7 +83,8 @@
     $(function () {
         const params = new URLSearchParams(window.location.search);
         if (params.has("error")) {
-            CadminApi.showAlert("#login-alert", "danger", "Sign in failed. Check your credentials and try again.");
+            CadminApi.showAlert("#login-alert", "danger",
+                "Sign in failed. If you use Keycloak, confirm the realm is running and try again.");
         } else if (params.has("logout")) {
             CadminApi.showAlert("#login-alert", "success", "You have been signed out.");
         }

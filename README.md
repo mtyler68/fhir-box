@@ -23,7 +23,7 @@ Security is switchable:
 
 Open http://localhost:8080 and sign in with `admin` / `admin` (or `clinician` / `clinician`).
 
-The SPA is served from the gateway. Calls to `/fhir/**` are proxied to HAPI FHIR at `http://localhost:8081`, `/wiremock/**` is proxied to WireMock at `http://localhost:9090`, `/core-admin-bridge/**` is proxied to Core Admin Bridge at `http://localhost:8280`, and `/fhir-chief/**` is proxied to FHIR Chief at `http://localhost:8380` (start those stacks separately).
+The SPA is served from the gateway. Calls to `/fhir/**` are proxied to HAPI FHIR at `http://localhost:8081`, `/wiremock/**` is proxied to WireMock at `http://localhost:9090`, `/core-admin-bridge/**` is proxied to Core Admin Bridge at `http://localhost:8280`, `/fhir-chief/**` is proxied to FHIR Chief at `http://localhost:8380`, and `/icg/**` is proxied to Integrator Connect Gateway at `http://localhost:8480` (start those stacks separately).
 
 ## Live reload (DevTools)
 
@@ -92,7 +92,11 @@ Imported application users:
 - `admin` / `admin` (realm roles `admin`, `user`)
 - `clinician` / `clinician` (realm role `user`)
 
-Confidential client `cadmin-gateway` uses secret `cadmin-gateway-secret` and redirect URI `http://localhost:8080/login/oauth2/code/keycloak`.
+Confidential client `cadmin-gateway` uses secret `cadmin-gateway-secret` and redirect URI `http://localhost:8080/login/oauth2/code/keycloak`. It has default scope `icg` and optional scope `icg.admin`. Resource-server client `icg` is the access-token audience for Integrator Connect Gateway. The gateway service account needs `view-clients`, `query-clients`, and `manage-clients` (plus the existing user roles) so administrators can manage realm clients from `#/oidc-clients`.
+
+OIDC subjects are stored as FHIR identifiers with system `https://insulet.com/fhir/identifier/oidc/subject`. Users map to Practitioner. Clients map to Organization using the service-account JWT `sub`.
+
+Keycloak `--import-realm` only creates the realm when it is missing. After changing `cadmin-realm.json`, recreate the Keycloak volume (`docker compose -f docker/keycloak/compose.yml down -v && docker compose -f docker/keycloak/compose.yml up -d`) or add the ICG scopes in the admin console.
 
 Issuer and client settings can be overridden:
 
@@ -170,6 +174,28 @@ Override the FHIR Chief origin:
 export CADMIN_FHIR_CHIEF_URI=http://localhost:8380
 ```
 
+## Integrator Connect Gateway
+
+Integrator Connect Gateway is a sibling Spring Cloud Gateway (`../integrator-connect-gateway`) that polls FHIR `Library` resources with `type=icg-route` and deploys their YAML as live HTTP routes. Author those libraries in FHIR Box under **ICG Routes**. The Integrations page **Integrator Connect Gateway** shows what is currently deployed.
+
+| Service | URL / port |
+| --- | --- |
+| Integrator Connect Gateway | http://localhost:8480 |
+| Status (via gateway) | http://localhost:8080/icg/status |
+
+```bash
+cd ../integrator-connect-gateway
+./mvnw spring-boot:run
+```
+
+The gateway route `/icg/**` forwards to `cadmin.icg.uri` (default `http://localhost:8480`), strips the first path segment, and removes the browser session cookie. In OIDC mode the same route applies `TokenRelay`. ICG accepts `SCOPE_icg` for deployed routes and `SCOPE_icg.admin` (or Box realm `ROLE_ADMIN`) for `/status` and actuator. Access tokens must include audience `icg`.
+
+Override the Integrator Connect Gateway origin:
+
+```bash
+export CADMIN_ICG_URI=http://localhost:8480
+```
+
 ## Configuration
 
 | Property | Default | Purpose |
@@ -180,7 +206,8 @@ export CADMIN_FHIR_CHIEF_URI=http://localhost:8380
 | `cadmin.wiremock.uri` | `http://localhost:9090` | Downstream WireMock origin |
 | `cadmin.core-admin-bridge.uri` | `http://localhost:8280` | Downstream Core Admin Bridge origin |
 | `cadmin.fhir-chief.uri` | `http://localhost:8380` | Downstream FHIR Chief origin |
-| `spring.cloud.gateway.server.webflux.routes` | `/fhir/**`, `/wiremock/**`, `/core-admin-bridge/**`, `/fhir-chief/**` | Additional proxy routes |
+| `cadmin.icg.uri` | `http://localhost:8480` | Downstream Integrator Connect Gateway origin |
+| `spring.cloud.gateway.server.webflux.routes` | `/fhir/**`, `/wiremock/**`, `/core-admin-bridge/**`, `/fhir-chief/**`, `/icg/**` | Additional proxy routes |
 
 Local users are defined in `src/main/resources/application.yml`. Passwords are treated as plaintext unless they already use a Spring `{id}` prefix such as `{bcrypt}...`.
 

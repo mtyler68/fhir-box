@@ -246,6 +246,7 @@ class NpiRegistryServiceTest {
                 new CadminProperties.Wiremock("http://localhost:9090"),
                 new CadminProperties.CoreAdminBridge("http://localhost:8280"),
                 new CadminProperties.FhirChief("http://localhost:8380"),
+                new CadminProperties.Icg("http://localhost:8480"),
                 new CadminProperties.Keycloak(
                         "http://localhost:8180/realms/cadmin",
                         "cadmin-gateway",

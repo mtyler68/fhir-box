@@ -37,6 +37,8 @@ window.CadminApp = (function ($) {
         if ((route.name === "organizations" || route.name === "care-teams"
                 || route.name === "locations" || route.name === "pds-policies"
                 || route.name === "camel-routes"
+                || route.name === "icg-routes"
+                || route.name === "icg"
                 || route.name === "search-parameters" || route.name === "questionnaires"
                 || route.name === "code-systems" || route.name === "value-sets"
                 || route.name === "demo-data"
@@ -51,7 +53,9 @@ window.CadminApp = (function ($) {
                 || route.name === "plan-definitions" || route.name === "activity-definitions"
                 || route.name === "request-orchestrations" || route.name === "plan-apply"
                 || route.name === "wiremock-mappings" || route.name === "wiremock-requests"
-                || route.name === "wiremock-scenarios")
+                || route.name === "wiremock-scenarios"
+                || route.name === "oidc-token"
+                || route.name === "oidc-clients")
                 && !isAdmin(currentUser)) {
             window.location.hash = "#/dashboard";
             return;

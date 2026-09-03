@@ -19,7 +19,8 @@ CadminApp.register("users", function () {
             '<div class="card-body">' +
                 '<p class="text-muted">' +
                 (oidc
-                    ? "Realm accounts loaded from the Keycloak Admin API. Assign a practitioner to store the user's JWT subject as a Practitioner identifier."
+                    ? "Realm accounts loaded from the Keycloak Admin API. Assign a practitioner to store the user's JWT subject as a Practitioner identifier using " +
+                        "<code>" + CadminApi.escapeHtml(CadminApi.oidcSubjectSystem()) + "</code>."
                     : "These accounts are managed by the gateway when <code>cadmin.security.mode=local</code>.") +
                 "</p>" +
                 '<div class="table-responsive">' +
@@ -58,10 +59,6 @@ CadminApp.register("users", function () {
         return value ? CadminApi.escapeHtml(value) : "—";
     }
 
-    function oidcIssuer() {
-        return ((CadminApp.config() || {}).oidcIssuer || "").replace(/\/+$/, "");
-    }
-
     function userOidcId(user) {
         return (user && (user.oidcId || user.id)) || "";
     }
@@ -70,40 +67,6 @@ CadminApp.register("users", function () {
         const name = (resource && resource.name && resource.name[0]) || {};
         const given = (name.given || []).join(" ");
         return [given, name.family].filter(Boolean).join(" ") || (resource && resource.id) || "Unnamed";
-    }
-
-    function isOidcIdentifier(identifier, oidcId) {
-        if (!identifier || !oidcId || identifier.value !== oidcId) {
-            return false;
-        }
-        const system = identifier.system || "";
-        const issuer = oidcIssuer();
-        return !system || !issuer || system === issuer;
-    }
-
-    function oidcIdentifier(oidcId) {
-        return {
-            use: "official",
-            system: oidcIssuer(),
-            value: oidcId,
-            type: { text: "OIDC subject" }
-        };
-    }
-
-    function upsertOidcIdentifier(practitioner, oidcId) {
-        practitioner.identifier = (practitioner.identifier || []).filter(function (item) {
-            return !isOidcIdentifier(item, oidcId);
-        });
-        practitioner.identifier.push(oidcIdentifier(oidcId));
-    }
-
-    function removeOidcIdentifier(practitioner, oidcId) {
-        practitioner.identifier = (practitioner.identifier || []).filter(function (item) {
-            return !isOidcIdentifier(item, oidcId);
-        });
-        if (!practitioner.identifier.length) {
-            delete practitioner.identifier;
-        }
     }
 
     function practitionerCell(user) {
@@ -148,19 +111,13 @@ CadminApp.register("users", function () {
 
     function loadAssignments(users) {
         assignments = {};
-        const issuer = oidcIssuer();
-        if (!oidc || !issuer || !users || !users.length) {
+        if (!oidc || !users || !users.length) {
             return $.Deferred().resolve().promise();
         }
-        return CadminApi.fhir(
-            "/Practitioner?identifier=" + encodeURIComponent(issuer + "|") + "&_count=200",
-            "GET",
-            null,
-            { silent: true }
-        ).then(function (bundle) {
-            CadminApi.bundleResources(bundle, "Practitioner").forEach(function (practitioner) {
+        return CadminApi.findByOidcSubject("Practitioner").then(function (practitioners) {
+            (practitioners || []).forEach(function (practitioner) {
                 (practitioner.identifier || []).forEach(function (identifier) {
-                    if (identifier && identifier.system === issuer && identifier.value) {
+                    if (CadminApi.isOidcSubjectIdentifier(identifier) && identifier.value) {
                         assignments[identifier.value] = {
                             id: practitioner.id,
                             name: personName(practitioner)
@@ -198,12 +155,7 @@ CadminApp.register("users", function () {
     }
 
     function findCurrentPractitioners(oidcId) {
-        const issuer = oidcIssuer();
-        return CadminApi.fhir(
-            "/Practitioner?identifier=" + encodeURIComponent(issuer + "|" + oidcId) + "&_count=20"
-        ).then(function (bundle) {
-            return CadminApi.bundleResources(bundle, "Practitioner");
-        });
+        return CadminApi.findByOidcSubject("Practitioner", oidcId);
     }
 
     function putPractitioner(practitioner) {
@@ -218,7 +170,7 @@ CadminApp.register("users", function () {
                 if (practitioner.id === practitionerId) {
                     return;
                 }
-                removeOidcIdentifier(practitioner, oidcId);
+                CadminApi.removeOidcSubjectIdentifier(practitioner, oidcId);
                 chain = chain.then(function () { return putPractitioner(practitioner); });
             });
             if (!practitionerId) {
@@ -232,7 +184,7 @@ CadminApp.register("users", function () {
             }
             return chain.then(function () {
                 return CadminApi.fhir("/Practitioner/" + encodeURIComponent(practitionerId)).then(function (practitioner) {
-                    upsertOidcIdentifier(practitioner, oidcId);
+                    CadminApi.upsertOidcSubjectIdentifier(practitioner, oidcId);
                     return putPractitioner(practitioner);
                 });
             });
@@ -245,10 +197,6 @@ CadminApp.register("users", function () {
             pendingUser = usersCache[index];
             if (!pendingUser || !userOidcId(pendingUser)) {
                 CadminApi.showToast("danger", "This user has no OIDC subject id.");
-                return;
-            }
-            if (!oidcIssuer()) {
-                CadminApi.showToast("danger", "OIDC issuer is not configured.");
                 return;
             }
             bootstrap.Modal.getOrCreateInstance(document.getElementById("users-assign-modal")).show();

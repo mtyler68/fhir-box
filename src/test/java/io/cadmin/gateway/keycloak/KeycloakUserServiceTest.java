@@ -19,6 +19,8 @@ class KeycloakUserServiceTest {
 
         assertThat(keycloak.serverUri()).isEqualTo("http://localhost:8180");
         assertThat(keycloak.realm()).isEqualTo("cadmin");
+        assertThat(keycloak.tokenPath()).isEqualTo("/realms/cadmin/protocol/openid-connect/token");
+        assertThat(keycloak.tokenUri()).isEqualTo("http://localhost:8180/realms/cadmin/protocol/openid-connect/token");
     }
 
     @Test

@@ -15,6 +15,7 @@ public record CadminProperties(
     @DefaultValue Wiremock wiremock,
     @DefaultValue CoreAdminBridge coreAdminBridge,
     @DefaultValue FhirChief fhirChief,
+    @DefaultValue Icg icg,
     @DefaultValue Keycloak keycloak
 ) {
 
@@ -73,6 +74,9 @@ public record CadminProperties(
     public record FhirChief(@DefaultValue("http://localhost:8380") String uri) {
     }
 
+    public record Icg(@DefaultValue("http://localhost:8480") String uri) {
+    }
+
     public record Keycloak(
             @DefaultValue("http://localhost:8180/realms/cadmin") String issuerUri,
             @DefaultValue("cadmin-gateway") String clientId,
@@ -105,6 +109,14 @@ public record CadminProperties(
             int slash = rest.indexOf('/');
             String realm = slash < 0 ? rest : rest.substring(0, slash);
             return realm.isBlank() ? "cadmin" : realm;
+        }
+
+        public String tokenUri() {
+            return issuerUri + "/protocol/openid-connect/token";
+        }
+
+        public String tokenPath() {
+            return "/realms/" + realm() + "/protocol/openid-connect/token";
         }
 
         private static int realmIndex(String issuer) {

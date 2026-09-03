@@ -16,9 +16,17 @@ CadminApp.register("settings", function () {
                             '<dt class="col-sm-4">Roles</dt><dd class="col-sm-8">' + CadminApi.escapeHtml((user.roles || []).join(", ")) + "</dd>" +
                         "</dl>" +
                         '<hr>' +
-                        "<p class=\"small text-muted mb-0\">Change mode with Spring profiles: " +
+                        "<p class=\"small text-muted mb-2\">Change mode with Spring profiles: " +
                         "<code>local</code> (application users) or <code>oidc</code> (Keycloak). " +
                         "See the project README for Docker Compose bootstrap commands.</p>" +
+                        (CadminApp.isAdmin()
+                            ? '<a class="btn btn-sm btn-outline-primary me-2" href="#/oidc-token">' +
+                                '<i class="bi bi-key me-1"></i>Request an OIDC access token</a>' +
+                                ((config.mode || "") === "oidc"
+                                    ? '<a class="btn btn-sm btn-outline-primary" href="#/oidc-clients">' +
+                                        '<i class="bi bi-app me-1"></i>Manage OIDC clients</a>'
+                                    : "")
+                            : "") +
                     "</div>" +
                 "</div>" +
             "</div>" +
@@ -32,6 +40,7 @@ CadminApp.register("settings", function () {
                             "<li><code>/wiremock/**</code> → WireMock (<code>cadmin.wiremock.uri</code>)</li>" +
                             "<li><code>/core-admin-bridge/**</code> → Core Admin Bridge (<code>cadmin.core-admin-bridge.uri</code>)</li>" +
                             "<li><code>/fhir-chief/**</code> → FHIR Chief (<code>cadmin.fhir-chief.uri</code>)</li>" +
+                            "<li><code>/icg/**</code> → Integrator Connect Gateway (<code>cadmin.icg.uri</code>)</li>" +
                             "<li><code>/api/**</code> → gateway JSON endpoints</li>" +
                         "</ul>" +
                     "</div>" +

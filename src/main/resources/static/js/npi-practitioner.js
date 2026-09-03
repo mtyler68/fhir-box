@@ -240,19 +240,6 @@ window.CadminNpiPractitioner = (function ($) {
         return "Unknown";
     }
 
-    function oidcIssuer() {
-        return ((window.CadminApp && CadminApp.config() || {}).oidcIssuer || "").replace(/\/+$/, "");
-    }
-
-    function oidcIdentifier(oidcId) {
-        return {
-            use: "official",
-            system: oidcIssuer(),
-            value: oidcId,
-            type: { text: "OIDC subject" }
-        };
-    }
-
     function slugPart(value) {
         return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
     }
@@ -438,10 +425,6 @@ window.CadminNpiPractitioner = (function ($) {
             const linked = selectedLinkUser();
             if (!linked) {
                 fieldError("npi-oidc-link", "Select an existing OIDC user.");
-                return { ok: false, choice: choice };
-            }
-            if (!oidcIssuer()) {
-                showAlert("OIDC issuer is not configured.");
                 return { ok: false, choice: choice };
             }
             return { ok: true, choice: choice, user: linked };
@@ -677,8 +660,8 @@ window.CadminNpiPractitioner = (function ($) {
             name: [name],
             gender: result.gender || "unknown"
         };
-        if (oidcId && oidcIssuer()) {
-            resource.identifier.push(oidcIdentifier(oidcId));
+        if (oidcId) {
+            resource.identifier.push(CadminApi.oidcSubjectIdentifier(oidcId));
         }
         const telecom = [];
         if (isOidcMode() && oidcChoice() === "create") {

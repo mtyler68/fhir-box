@@ -1317,6 +1317,10 @@ window.CadminPdsPolicyDetail = (function () {
             window.location.hash = "#/camel-routes/" + encodeURIComponent(resource.id);
             return;
         }
+        if (CadminApi.isLibraryType(resource, "icg-route")) {
+            window.location.hash = "#/icg-routes/" + encodeURIComponent(resource.id);
+            return;
+        }
         library = resource;
         const $root = $(CadminWorkspace.root());
         $root.html(
