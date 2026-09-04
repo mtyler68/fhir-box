@@ -174,6 +174,17 @@ Override the FHIR Chief origin:
 export CADMIN_FHIR_CHIEF_URI=http://localhost:8380
 ```
 
+## Custom libraries
+
+FHIR Box authors FHIR `Library` resources with custom `type` codes. Admins manage them under **Libraries** in the sidebar.
+
+| Type | Content | UI |
+| --- | --- | --- |
+| `pds-policies` | Policy YAML (`application/x-policy+x-yaml`) | **PDS Policies** |
+| `camel-route` | Camel YAML (`application/camel+yaml`) | **Camel Routes** |
+| `icg-route` | Spring Cloud Gateway YAML (`application/gateway+yaml`) | **ICG Routes** |
+| `jolt` | Jolt transform JSON (`application/jolt+json`) | **Jolt** |
+
 ## Integrator Connect Gateway
 
 Integrator Connect Gateway is a sibling Spring Cloud Gateway (`../integrator-connect-gateway`) that polls FHIR `Library` resources with `type=icg-route` and deploys their YAML as live HTTP routes. Author those libraries in FHIR Box under **ICG Routes**. The Integrations page **Integrator Connect Gateway** shows what is currently deployed.

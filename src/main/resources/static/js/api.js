@@ -485,6 +485,9 @@ window.CadminApi = (function ($) {
         if (type === "Library" && isLibraryType(resource, "icg-route")) {
             return "#/icg-routes/" + encodeURIComponent(id);
         }
+        if (type === "Library" && isLibraryType(resource, "jolt")) {
+            return "#/jolts/" + encodeURIComponent(id);
+        }
         const prefix = DETAIL_PREFIX[type];
         if (prefix) {
             return prefix + encodeURIComponent(id);

@@ -71,6 +71,7 @@ CadminApp.register("dashboard", function () {
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/pds-policies">PDS policies</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/camel-routes">Camel routes</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/icg-routes">ICG routes</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/jolts">Jolt</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/core-admin-bridge">Core Admin Bridge</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/icg">Integrator Connect Gateway</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/schedules">Schedules</a>' +
@@ -142,6 +143,7 @@ CadminApp.register("dashboard", function () {
         { key: "pds-policies", type: "Library", search: "type=pds-policies", label: "PDS policies", href: "#/pds-policies", icon: "bi-journal-text", border: "success", admin: true },
         { key: "camel-routes", type: "Library", search: "type=camel-route", label: "Camel routes", href: "#/camel-routes", iconify: "hugeicons:camel", border: "warning", admin: true },
         { key: "icg-routes", type: "Library", search: "type=icg-route", label: "ICG routes", href: "#/icg-routes", iconify: "mdi:routes", border: "info", admin: true },
+        { key: "jolts", type: "Library", search: "type=jolt", label: "Jolt", href: "#/jolts", iconify: "mdi:code-json", border: "secondary", admin: true },
         { type: "SearchParameter", label: "Search params", href: "#/search-parameters", icon: "bi-search", border: "warning", admin: true },
         { type: "Questionnaire", label: "Questionnaires", href: "#/questionnaires", icon: "bi-ui-checks", border: "info", admin: true },
         { type: "CodeSystem", label: "Code systems", href: "#/code-systems", icon: "bi-braces", border: "primary", admin: true },

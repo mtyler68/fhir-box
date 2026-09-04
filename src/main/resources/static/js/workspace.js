@@ -16,6 +16,7 @@ window.CadminWorkspace = (function ($) {
         "pds-policies": { type: "Library", path: "/Library/", icon: "bi-journal-text", listLabel: "PDS Policies" },
         "camel-routes": { type: "Library", path: "/Library/", icon: "hugeicons:camel", listLabel: "Camel Routes" },
         "icg-routes": { type: "Library", path: "/Library/", icon: "mdi:routes", listLabel: "ICG Routes" },
+        jolts: { type: "Library", path: "/Library/", icon: "mdi:code-json", listLabel: "Jolt" },
         questionnaires: { type: "Questionnaire", path: "/Questionnaire/", icon: "bi-ui-checks", listLabel: "Questionnaires" },
         "search-parameters": { type: "SearchParameter", path: "/SearchParameter/", icon: "bi-search",
             listLabel: "Search parameters" },
@@ -56,6 +57,7 @@ window.CadminWorkspace = (function ($) {
         "value-sets": "Value sets",
         "camel-routes": "Camel Routes",
         "icg-routes": "ICG Routes",
+        jolts: "Jolt",
         icg: "Integrator Connect Gateway",
         "core-admin-bridge": "Core Admin Bridge",
         schedules: "Schedules",
@@ -303,6 +305,7 @@ window.CadminWorkspace = (function ($) {
         "pds-policies": true,
         "camel-routes": true,
         "icg-routes": true,
+        jolts: true,
         icg: true,
         "search-parameters": true,
         questionnaires: true,
@@ -1265,6 +1268,10 @@ window.CadminWorkspace = (function ($) {
         if (window.CadminIcgRouteDetail && typeof CadminIcgRouteDetail.reveal === "function"
                 && pane.querySelector("#ird-yaml")) {
             CadminIcgRouteDetail.reveal(tab && tab.resource);
+        }
+        if (window.CadminJoltDetail && typeof CadminJoltDetail.reveal === "function"
+                && pane.querySelector("#bjd-json")) {
+            CadminJoltDetail.reveal(tab && tab.resource);
         }
         if (window.CadminSubscriptionDetail && typeof CadminSubscriptionDetail.reveal === "function"
                 && pane.querySelector("#sd-title")) {

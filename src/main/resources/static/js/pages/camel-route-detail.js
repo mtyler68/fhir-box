@@ -387,6 +387,10 @@ window.CadminCamelRouteDetail = (function () {
             window.location.hash = "#/icg-routes/" + encodeURIComponent(resource.id);
             return;
         }
+        if (CadminApi.isLibraryType(resource, "jolt")) {
+            window.location.hash = "#/jolts/" + encodeURIComponent(resource.id);
+            return;
+        }
         library = resource;
         const $root = $(CadminWorkspace.root());
         $root.html(
