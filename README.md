@@ -183,7 +183,7 @@ FHIR Box authors FHIR `Library` resources with custom `type` codes. Admins manag
 | `pds-policies` | Policy YAML (`application/x-policy+x-yaml`) | **PDS Policies** |
 | `camel-route` | Camel YAML (`application/camel+yaml`) | **Camel Routes** |
 | `icg-route` | Spring Cloud Gateway YAML (`application/gateway+yaml`) | **ICG Routes** |
-| `jolt` | Jolt transform JSON (`application/jolt+json`) | **Jolt** |
+| `jolt` | Jolt transform JSON (`application/jolt+json`) and optional samples (`application/jolt-samples+json`) | **Jolt** |
 
 ## Integrator Connect Gateway
 
@@ -249,3 +249,32 @@ docker/wiremock/                    WireMock mappings and files
 ```bash
 ./mvnw test
 ```
+
+## Jolt Transforms in ICG
+
+ICG now has a JoltTransform response filter. It uses the same Jolt stack as FHIR Chief (jolt-complete 0.2.0) and the same FHIR jolt Library resources that FHIR Box edits.
+
+Route YAML
+
+````yaml
+- id: ratings
+  uri: https://httpbin.org
+  predicates:
+    - Path=/ratings/**
+      filters:
+    - StripPrefix=1
+    - name: JoltTransform
+      args:
+      name: ratings
+      version: "^1.2.0"
+      Shortcut: - JoltTransform=ratings,^1.2.0
+````
+
+name is Library.name. version is an exact SemVer (1.2.3) or a semver4j range (^1.2.0, >=1.0.0 <2.0.0). If several active libraries share that name, ICG uses the highest matching version.
+
+Hot swap
+JoltLibraryPoller uses the same interval and rules as ICG routes / CAB Camel routes: first poll is a full snapshot; later polls are incremental on _lastUpdated. Active specs are cached as Chainr; draft/retired/missing libraries are evicted; a spec change replaces the cached transform. /status now includes joltLibraries.
+
+JSON responses are rewritten before they go back to the client. Non-JSON bodies pass through. No matching library or a failed transform returns 502.
+
+The ICG route editor in FHIR Box has a Jolt JSON response template and JoltTransform in the YAML hints. ICG tests passed. Restart ICG to pick this up.

@@ -162,7 +162,7 @@ window.CadminResourceHistory = (function () {
     }
 
     function setBusy(busy) {
-        $("[data-history-refresh], [data-history-more]").prop("disabled", !!busy);
+        $("[data-history-refresh], [data-history-more], [data-history-rollback]").prop("disabled", !!busy);
     }
 
     function renderEmpty(message) {
@@ -194,14 +194,20 @@ window.CadminResourceHistory = (function () {
             const isCurrent = vid && currentVid && vid === currentVid;
             const canView = !!(entry && entry.resource) || (action !== "DELETE" && vid);
             const canDiff = canView && !isCurrent;
-            const viewBtn = canView
-                ? '<button class="btn btn-sm btn-outline-secondary" type="button" data-history-view="' +
-                    index + '"><i class="bi bi-code-slash me-1"></i>JSON</button>'
-                : '<button class="btn btn-sm btn-outline-secondary" type="button" disabled>JSON</button>';
+            const canRollback = canView && !isCurrent;
+            const viewBtn = '<button class="btn btn-sm btn-outline-secondary" type="button"' +
+                (canView ? ' data-history-view="' + index + '"' : " disabled") +
+                ' title="View JSON" aria-label="View JSON">' +
+                '<i class="bi bi-code-slash" aria-hidden="true"></i></button>';
             const diffBtn = '<button class="btn btn-sm btn-outline-secondary" type="button"' +
                 (canDiff ? ' data-history-diff="' + index + '"' : " disabled") +
                 ' title="Diff with current" aria-label="Diff with current">' +
                 '<i class="bi bi-file-diff" aria-hidden="true"></i></button>';
+            const rollbackBtn = '<button class="btn btn-sm btn-outline-secondary" type="button"' +
+                (canRollback ? ' data-history-rollback="' + index + '"' : " disabled") +
+                ' title="' + (isCurrent ? "Already the current version" : "Roll back to this version") +
+                '" aria-label="Roll back to this version">' +
+                '<i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i></button>';
             return "<tr>" +
                 "<td><code>" + esc(vid ? "v" + vid : "—") + "</code>" +
                     (isCurrent ? ' <span class="badge text-bg-primary">Current</span>' : "") +
@@ -209,7 +215,7 @@ window.CadminResourceHistory = (function () {
                 "<td>" + esc(formatWhen(whenOf(entry))) + "</td>" +
                 '<td><span class="badge ' + badge + '">' + esc(label) + "</span></td>" +
                 '<td class="text-end"><div class="btn-group btn-group-sm" role="group">' +
-                    viewBtn + diffBtn + "</div></td>" +
+                    viewBtn + diffBtn + rollbackBtn + "</div></td>" +
                 "</tr>";
         }).join("");
         const more = moreEl();
@@ -684,6 +690,62 @@ window.CadminResourceHistory = (function () {
             });
     }
 
+    function resourceForRollback(resource) {
+        const copy = cloneJson(resource);
+        if (!copy || typeof copy !== "object") {
+            return null;
+        }
+        if (copy.meta) {
+            delete copy.meta.versionId;
+            delete copy.meta.lastUpdated;
+        }
+        return copy;
+    }
+
+    function rollbackAt(index) {
+        const entry = entries[index];
+        if (!entry || !mounted || !mounted.resourceType || !mounted.id) {
+            return;
+        }
+        const vid = versionId(entry);
+        const currentVid = currentVersionId();
+        if (vid && currentVid && vid === currentVid) {
+            return;
+        }
+        const label = vid ? "version v" + vid : "this version";
+        CadminApi.confirm({
+            title: "Roll back to " + label + "?",
+            text: "This writes that snapshot as a new current version. Existing history is kept.",
+            confirmText: "Roll back",
+            icon: "warning"
+        }).done(function () {
+            setBusy(true);
+            loadVersion(entry, function (resource) {
+                const payload = resourceForRollback(resource);
+                if (!payload || !payload.resourceType) {
+                    setBusy(false);
+                    CadminApi.showToast("danger", "Unable to roll back that version.");
+                    return;
+                }
+                payload.id = mounted.id;
+                payload.resourceType = mounted.resourceType;
+                const path = "/" + encodeURIComponent(mounted.resourceType) + "/" +
+                    encodeURIComponent(mounted.id);
+                CadminApi.fhir(path, "PUT", payload).done(function (updated) {
+                    CadminApi.showToast("success", "Rolled back to " + label + ".");
+                    if (window.CadminWorkspace && typeof CadminWorkspace.refreshActive === "function") {
+                        CadminWorkspace.refreshActive(updated && updated.resourceType ? updated : payload);
+                    }
+                }).always(function () {
+                    setBusy(false);
+                });
+            }, function () {
+                setBusy(false);
+                CadminApi.showToast("danger", "Unable to load that version.");
+            });
+        });
+    }
+
     function viewAt(index) {
         const entry = entries[index];
         if (!entry || !window.CadminResourceSource) {
@@ -739,6 +801,10 @@ window.CadminResourceHistory = (function () {
         $(document).on("click.resourcehistory", "[data-history-diff]", function (event) {
             event.preventDefault();
             diffAt(Number($(this).attr("data-history-diff")));
+        });
+        $(document).on("click.resourcehistory", "[data-history-rollback]", function (event) {
+            event.preventDefault();
+            rollbackAt(Number($(this).attr("data-history-rollback")));
         });
         $(window).on("hashchange.resourcehistory", hideDiff);
     }

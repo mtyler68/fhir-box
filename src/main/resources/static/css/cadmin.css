@@ -648,6 +648,132 @@ body.layout-fixed .app-main {
     color: rgba(255, 255, 255, 0.8);
 }
 
+.jolt-spec-split > [class*="col-"] {
+    min-height: 0;
+}
+
+.jolt-op-list,
+.jolt-sample-list {
+    max-height: 28rem;
+    overflow: auto;
+}
+
+.jolt-op-item,
+.jolt-sample-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+
+.jolt-op-item .cadmin-list-grip,
+.jolt-sample-item .cadmin-list-grip {
+    cursor: grab;
+}
+
+.jolt-op-item.is-dragging,
+.jolt-sample-item.is-dragging {
+    opacity: 0.45;
+}
+
+.jolt-op-item.drop-before,
+.jolt-sample-item.drop-before {
+    box-shadow: inset 0 2px 0 var(--bs-primary);
+}
+
+.jolt-op-item.drop-after,
+.jolt-sample-item.drop-after {
+    box-shadow: inset 0 -2px 0 var(--bs-primary);
+}
+
+.jolt-op-index {
+    color: var(--bs-secondary-color);
+    font-size: 0.8rem;
+    min-width: 1.25rem;
+}
+
+.jolt-op-name,
+.jolt-sample-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.jolt-spec-host {
+    min-width: 0;
+}
+
+.jolt-spec-host .CodeMirror {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.375rem;
+    height: 14rem;
+    font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.875rem;
+    color: var(--bs-body-color);
+    background: var(--bs-body-bg);
+}
+
+.jolt-spec-host .CodeMirror-scroll,
+.jolt-spec-host .CodeMirror-sizer,
+.jolt-spec-host .CodeMirror-gutters {
+    background: var(--bs-body-bg);
+}
+
+.jolt-spec-host .CodeMirror-gutters {
+    border-right-color: var(--bs-border-color);
+}
+
+.jolt-spec-host .CodeMirror-cursor {
+    border-left-color: var(--bs-body-color);
+}
+
+.jolt-spec-host .CodeMirror-selected,
+.jolt-spec-host .CodeMirror-focused .CodeMirror-selected {
+    background: rgba(var(--bs-primary-rgb), 0.38);
+}
+
+.jolt-spec-host .cm-s-default .cm-atom { color: var(--bs-primary); }
+.jolt-spec-host .cm-s-default .cm-keyword { color: #6f42c1; font-weight: 600; }
+.jolt-spec-host .cm-s-default .cm-string { color: #198754; }
+.jolt-spec-host .cm-s-default .cm-number { color: var(--bs-primary); }
+.jolt-spec-host .cm-s-default .cm-comment { color: var(--bs-tertiary-color); font-style: italic; }
+
+[data-bs-theme="dark"] .jolt-spec-host .cm-s-default .cm-keyword { color: #c4b5fd; }
+[data-bs-theme="dark"] .jolt-spec-host .cm-s-default .cm-string { color: #75b798; }
+
+.jolt-spec-host .jolt-diff-changed {
+    background: rgba(255, 193, 7, 0.35);
+}
+
+.jolt-spec-host .jolt-diff-missing {
+    background: rgba(220, 53, 69, 0.22);
+}
+
+.jolt-spec-host .jolt-diff-extra {
+    background: rgba(13, 110, 253, 0.2);
+}
+
+.jolt-diff-swatch {
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 0.15rem;
+    margin-right: 0.35rem;
+    vertical-align: middle;
+}
+
+.jolt-diff-swatch.jolt-diff-changed {
+    background: rgba(255, 193, 7, 0.7);
+}
+
+.jolt-diff-swatch.jolt-diff-missing {
+    background: rgba(220, 53, 69, 0.55);
+}
+
+.jolt-diff-swatch.jolt-diff-extra {
+    background: rgba(13, 110, 253, 0.5);
+}
+
 .yaml-preview-host .CodeMirror {
     border: 1px solid var(--bs-border-color);
     border-radius: 0.375rem;

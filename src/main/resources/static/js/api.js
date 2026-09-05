@@ -151,7 +151,7 @@ window.CadminApi = (function ($) {
         return ajax(options);
     }
 
-    function fhirChief(path, method, data) {
+    function fhirChief(path, method, data, contentType) {
         const verb = (method || "GET").toUpperCase();
         const options = {
             url: "/fhir-chief" + path,
@@ -167,7 +167,7 @@ window.CadminApi = (function ($) {
         };
         if (data !== undefined && data !== null && verb !== "GET" && verb !== "HEAD") {
             options.data = typeof data === "string" ? data : JSON.stringify(data);
-            options.contentType = "application/fhir+json";
+            options.contentType = contentType || "application/fhir+json";
         }
         return ajax(options);
     }

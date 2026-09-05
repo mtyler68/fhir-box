@@ -27,6 +27,11 @@ window.CadminIcgRouteDetail = (function () {
             id: "rewrite",
             label: "Rewrite path",
             yaml: "- id: rewrite_api\n  uri: http://localhost:9090\n  predicates:\n    - name: Path\n      args:\n        pattern: /legacy/**\n  filters:\n    - name: RewritePath\n      args:\n        regexp: /legacy/(?<segment>.*)\n        replacement: /${segment}\n"
+        },
+        {
+            id: "jolt",
+            label: "Jolt JSON response",
+            yaml: "- id: jolt_ratings\n  uri: https://httpbin.org\n  predicates:\n    - Path=/ratings/**\n  filters:\n    - StripPrefix=1\n    - name: JoltTransform\n      args:\n        name: ratings\n        version: \"^1.0.0\"\n"
         }
     ];
     const hintWords = [
@@ -36,6 +41,7 @@ window.CadminIcgRouteDetail = (function () {
         "StripPrefix", "PrefixPath", "SetPath", "RewritePath", "AddRequestHeader",
         "AddResponseHeader", "RemoveRequestHeader", "RemoveResponseHeader",
         "SetStatus", "Retry", "PreserveHostHeader", "RequestRateLimiter",
+        "JoltTransform", "version",
         "name", "args", "pattern", "parts", "regexp", "replacement"
     ];
     let library = null;

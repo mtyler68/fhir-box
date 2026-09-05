@@ -1216,6 +1216,10 @@ window.CadminWorkspace = (function ($) {
             paintedKey = "";
             return;
         }
+        if (window.CadminJoltDetail && typeof CadminJoltDetail.suspend === "function"
+                && pane.querySelector("#bjd-spec-form")) {
+            CadminJoltDetail.suspend();
+        }
         const frag = document.createDocumentFragment();
         while (pane.firstChild) {
             frag.appendChild(pane.firstChild);
@@ -1270,7 +1274,7 @@ window.CadminWorkspace = (function ($) {
             CadminIcgRouteDetail.reveal(tab && tab.resource);
         }
         if (window.CadminJoltDetail && typeof CadminJoltDetail.reveal === "function"
-                && pane.querySelector("#bjd-json")) {
+                && pane.querySelector("#bjd-spec-form")) {
             CadminJoltDetail.reveal(tab && tab.resource);
         }
         if (window.CadminSubscriptionDetail && typeof CadminSubscriptionDetail.reveal === "function"
@@ -1301,6 +1305,11 @@ window.CadminWorkspace = (function ($) {
 
     function teardownDetail(key) {
         const target = key || paintedKey;
+        const tab = tabs[target];
+        if (tab && tab.resource && tab.routeName === "jolts"
+                && window.CadminJoltDetail && typeof CadminJoltDetail.drop === "function") {
+            CadminJoltDetail.drop(tab.resource.id);
+        }
         dropParked(target);
         const pane = detailPane();
         if (paintedKey === target && pane) {
@@ -1668,6 +1677,22 @@ window.CadminWorkspace = (function ($) {
         }
     }
 
+    function refreshActive(resource) {
+        const key = activeKey;
+        const tab = tabs[key];
+        if (!key || key === "workspace" || !tab || typeof tab.render !== "function") {
+            return;
+        }
+        if (resource && resource.resourceType && resource.id) {
+            tab.resource = resource;
+            tab.title = titleOf(resource) || tab.title;
+            tab.dirty = false;
+        }
+        dropParked(key);
+        renderTabStrip();
+        paint(key);
+    }
+
     function notifyWrite(info) {
         const method = info && info.method;
         if (method === "DELETE") {
@@ -1720,6 +1745,7 @@ window.CadminWorkspace = (function ($) {
         handleRoute: handleRoute,
         consumeHashChange: consumeHashChange,
         notifyWrite: notifyWrite,
+        refreshActive: refreshActive,
         close: close,
         restore: restoreSession
     };
