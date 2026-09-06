@@ -1,0 +1,50 @@
+{
+  "resourceType": "Practitioner",
+  "id": "702905de-752f-4f84-a506-83fb3e4b4579",
+  "meta": {
+    "versionId": "1",
+    "lastUpdated": "2026-08-19T16:28:36.868+00:00",
+    "tag": [
+      {
+        "system": "https://cadmin.io/fhir/tags",
+        "code": "demo-data",
+        "display": "Demo data"
+      }
+    ]
+  },
+  "active": true,
+  "name": [
+    {
+      "family": "Santos",
+      "given": [
+        "Naomi"
+      ]
+    }
+  ],
+  "telecom": [
+    {
+      "system": "phone",
+      "value": "503-403-7519",
+      "use": "work"
+    },
+    {
+      "system": "email",
+      "value": "naomi.santos@example.com"
+    }
+  ],
+  "gender": "female",
+  "birthDate": "1970-04-14",
+  "address": [
+    {
+      "use": "home",
+      "type": "both",
+      "line": [
+        "8455 Maple Ave"
+      ],
+      "city": "Portland",
+      "state": "OR",
+      "postalCode": "97201",
+      "country": "US"
+    }
+  ]
+}
