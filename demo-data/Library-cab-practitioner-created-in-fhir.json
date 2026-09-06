@@ -1,0 +1,29 @@
+{
+  "resourceType": "Library",
+  "id": "cab-practitioner-created-in-fhir",
+  "meta": {
+    "versionId": "26",
+    "lastUpdated": "2026-09-04T18:35:34.991+00:00"
+  },
+  "version": "1.0.0",
+  "name": "practitioner-created-in-fhir",
+  "title": "Practitioner Created in FHIR",
+  "status": "active",
+  "type": {
+    "coding": [
+      {
+        "code": "camel-route",
+        "display": "Camel Route"
+      }
+    ],
+    "text": "camel-route"
+  },
+  "description": "Called from FHIR subscription. Needs to check source to ensure not from Salesforce to prevent recursion.",
+  "content": [
+    {
+      "contentType": "application/camel+yaml",
+      "data": "LSByZXN0OgogICAgcG9zdDoKICAgICAgLSBwYXRoOiAvZmhpci9jYWItcHJhY3RpdGlvbmVyLWNyZWF0ZWQKICAgICAgICB0bzogZGlyZWN0OmNhYi1wcmFjdGl0aW9uZXItY3JlYXRlZAotIHJvdXRlOgogICAgaWQ6IGNhYi1wcmFjdGl0aW9uZXItY3JlYXRlZAogICAgZnJvbToKICAgICAgdXJpOiBkaXJlY3Q6Y2FiLXByYWN0aXRpb25lci1jcmVhdGVkCiAgICAgIHN0ZXBzOgogICAgICAgIC0gbG9nOiAKICAgICAgICAgICAgbWVzc2FnZTogIlJlY2VpdmVkIG5ldyBQcmFjdGl0aW9uZXIgJHtib2R5fSIKICAgICAgICAtIGNob2ljZTogCiAgICAgICAgICAgIHdoZW46IAogICAgICAgICAgICAgIC0gc2ltcGxlOiAidHJ1ZSIKICAgICAgICAgICAgICAgIHN0ZXBzOiAKICAgICAgICAgICAgICAgICAgLSBsb2c6IAogICAgICAgICAgICAgICAgICAgICAgbWVzc2FnZTogImlzIHRydWUiCiAgICAgICAgICAgICAgICAgIC0gc2V0SGVhZGVyOiAKICAgICAgICAgICAgICAgICAgICAgIG5hbWU6IENhbWVsSHR0cFBhdGgKICAgICAgICAgICAgICAgICAgICAgIHNpbXBsZTogL2ZoaXIvcHJhY3RpdGlvbmVyLWNyZWF0ZWQKICAgICAgICAgICAgICAgICAgLSB0bzoKICAgICAgICAgICAgICAgICAgICAgIHVyaTogInt7Q0FCX0NSTV9NVUxFU09GVF9IT1NUfX0/YnJpZGdlRW5kcG9pbnQ9dHJ1ZSIKICAgICAgICAgICAgb3RoZXJ3aXNlOiAKICAgICAgICAgICAgICBzdGVwczoKICAgICAgICAgICAgICAgIC0gbG9nOgogICAgICAgICAgICAgICAgICAgIG1lc3NhZ2U6ICJub3QgdHJ1ZSIKICAgICAgICAtIHRvOiAKICAgICAgICAgICAgdXJpOiBsb2c6ZG9uZQ==",
+      "title": "Camel route"
+    }
+  ]
+}
