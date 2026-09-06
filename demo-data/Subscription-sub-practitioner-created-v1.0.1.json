@@ -1,0 +1,22 @@
+{
+  "resourceType": "Subscription",
+  "id": "sub-practitioner-created-v1.0.1",
+  "meta": {
+    "versionId": "73",
+    "lastUpdated": "2026-09-06T13:32:45.896+00:00"
+  },
+  "name": "Practitioner Created",
+  "status": "off",
+  "topic": "https://insulet.com/fhir/SubscriptionTopic/stp-practitioner-created",
+  "channelType": {
+    "system": "http://terminology.hl7.org/CodeSystem/subscription-channel-type",
+    "code": "rest-hook",
+    "display": "Rest Hook"
+  },
+  "endpoint": "http://host.docker.internal:8280/fhir/cab-practitioner-created",
+  "heartbeatPeriod": 15,
+  "timeout": 15,
+  "contentType": "application/fhir+json",
+  "content": "full-resource",
+  "maxCount": 3
+}
