@@ -15,6 +15,10 @@ Security is switchable:
 - Docker and Docker Compose v2 (for Keycloak, HAPI FHIR, and WireMock)
 - Maven Wrapper is included (`./mvnw`)
 
+````shell
+docker network create fhir-box-network
+````
+
 ## Quick start (local users)
 
 ```bash
@@ -49,6 +53,10 @@ In IntelliJ IDEA use **Build → Build Project** (or enable automatic build whil
 Then refresh the browser. DevTools is not included in the packaged jar (`java -jar`), so production starts are unchanged.
 
 ## HAPI FHIR JPA Starter
+
+````shell
+docker network create fhir-box-network
+````
 
 ```bash
 docker compose -f docker/fhir/compose.yml up -d

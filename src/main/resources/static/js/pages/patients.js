@@ -83,6 +83,10 @@ function renderPatientList(initialQuery) {
                             "</select></div>" +
                         '<div class="mb-3"><label class="form-label">Birth date</label>' +
                             '<input type="date" class="form-control" id="p-birth"></div>' +
+                        '<div class="mb-3"><label class="form-label">Email</label>' +
+                            '<input class="form-control" id="p-email" type="email" autocomplete="off"></div>' +
+                        '<div class="mb-3"><label class="form-label">Mobile phone</label>' +
+                            '<input class="form-control" id="p-mobile" type="tel" inputmode="tel" autocomplete="off"></div>' +
                         '<div class="mb-0"><label class="form-label">SSN</label>' +
                             '<input class="form-control" id="p-ssn" placeholder="000-00-0000"></div>' +
                     "</div>" +
@@ -265,6 +269,18 @@ function renderPatientList(initialQuery) {
         const birth = $("#p-birth").val();
         if (birth) {
             resource.birthDate = birth;
+        }
+        const telecom = [];
+        const email = $("#p-email").val().trim();
+        const mobile = $("#p-mobile").val().trim();
+        if (email) {
+            telecom.push({ system: "email", value: email });
+        }
+        if (mobile) {
+            telecom.push({ system: "phone", value: mobile, use: "mobile" });
+        }
+        if (telecom.length) {
+            resource.telecom = telecom;
         }
         const ssn = $("#p-ssn").val().trim();
         if (ssn) {
