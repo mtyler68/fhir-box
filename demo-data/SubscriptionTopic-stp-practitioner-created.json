@@ -1,0 +1,29 @@
+{
+  "resourceType": "SubscriptionTopic",
+  "id": "stp-practitioner-created",
+  "meta": {
+    "versionId": "4",
+    "lastUpdated": "2026-08-22T20:26:16.651+00:00"
+  },
+  "url": "https://insulet.com/fhir/SubscriptionTopic/stp-practitioner-created",
+  "name": "stp-practitioner-created",
+  "title": "Practitioner Created",
+  "status": "active",
+  "description": "Triggers whenever any practitioner is created",
+  "resourceTrigger": [
+    {
+      "resource": "Practitioner",
+      "supportedInteraction": [
+        "create"
+      ]
+    }
+  ],
+  "notificationShape": [
+    {
+      "resource": "Practitioner",
+      "revInclude": [
+        "PractitionerRole:practitioner"
+      ]
+    }
+  ]
+}
