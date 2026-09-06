@@ -602,6 +602,67 @@ class CadminGatewayApplicationTests {
     }
 
     @Test
+    void joltTransformRequiresAuthentication() {
+        webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
+                .post()
+                .uri("/jolt/$transform")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"input\":{},\"spec\":[]}")
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    @WithMockUser(username = "clinician", roles = {"USER"})
+    void joltTransformIsForbiddenForNonAdmin() {
+        webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
+                .post()
+                .uri("/jolt/$transform")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"input\":{},\"spec\":[]}")
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = {"ADMIN", "USER"})
+    void joltTransformRunsChainrShift() {
+        webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
+                .post()
+                .uri("/jolt/$transform")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "input": { "rating": { "primary": { "value": 3, "max": 5 } } },
+                          "spec": [{
+                            "operation": "shift",
+                            "spec": { "rating": { "primary": { "value": "Rating", "max": "RatingRange" } } }
+                          }]
+                        }
+                        """)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.Rating").isEqualTo(3)
+                .jsonPath("$.RatingRange").isEqualTo(5);
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = {"ADMIN", "USER"})
+    void joltTransformRejectsMissingSpec() {
+        webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
+                .post()
+                .uri("/jolt/$transform")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"input\":{\"id\":\"1\"}}")
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody()
+                .jsonPath("$.resourceType").isEqualTo("OperationOutcome")
+                .jsonPath("$.issue[0].diagnostics").isEqualTo("Jolt spec is required");
+    }
+
+    @Test
     void unknownUserIsRejected() {
         webTestClient.post()
                 .uri("/api/auth/login")

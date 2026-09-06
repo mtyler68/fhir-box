@@ -1596,10 +1596,20 @@ window.CadminWorkspace = (function ($) {
             workspaceLabel = spec.listLabel;
         }
         if (tabs[key]) {
+            const renderChanged = typeof renderFn === "function" && tabs[key].render !== renderFn;
             if (typeof renderFn === "function") {
                 tabs[key].render = renderFn;
             }
+            tabs[key].routeName = routeName;
+            tabs[key].hash = hash;
+            if (spec && spec.icon) {
+                tabs[key].icon = spec.icon;
+            }
             applyPendingReopen(key);
+            if (renderChanged) {
+                dropParked(key);
+                paintedKey = "";
+            }
             activate(key);
             syncHash(hash);
             return;
@@ -1728,6 +1738,9 @@ window.CadminWorkspace = (function ($) {
     function handleRoute(route) {
         const key = routeKey(route);
         if (!key || !tabs[key] || typeof tabs[key].render !== "function") {
+            return false;
+        }
+        if (tabs[key].routeName && route && route.name && tabs[key].routeName !== route.name) {
             return false;
         }
         applyPendingReopen(key);

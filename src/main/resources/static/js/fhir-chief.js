@@ -60,10 +60,6 @@ window.CadminFhirChief = (function () {
             return CadminApi.fhirChief("/RequestOrchestration/" + encodeURIComponent(orchestrationId) + "/$cancel",
                 "POST", parameters(values || {}));
         },
-        status: function () { return CadminApi.fhirChief("/status"); },
-        transform: function (input, spec) {
-            return CadminApi.fhirChief("/jolt/$transform", "POST", { input: input, spec: spec },
-                "application/json");
-        }
+        status: function () { return CadminApi.fhirChief("/status"); }
     };
 }());

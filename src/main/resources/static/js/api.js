@@ -1122,6 +1122,10 @@ window.CadminApi = (function ($) {
         return get("/api/geocode" + (params.length ? "?" + params.join("&") : ""));
     }
 
+    function joltTransform(input, spec) {
+        return send("/jolt/$transform", "POST", { input: input, spec: spec });
+    }
+
     function npiLookup(number, kind) {
         let url = "/api/npi?number=" + encodeURIComponent(String(number || "").replace(/\D/g, ""));
         if (kind) {
@@ -2077,6 +2081,7 @@ window.CadminApi = (function ($) {
         fillValueSetChecks: fillValueSetChecks,
         valueSetDisplay: valueSetDisplay,
         geocode: geocode,
+        joltTransform: joltTransform,
         npiLookup: npiLookup,
         post: function (url, data) { return send(url, "POST", data); },
         destroySelect: destroySelect,
