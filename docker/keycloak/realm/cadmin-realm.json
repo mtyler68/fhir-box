@@ -482,6 +482,25 @@
   "webAuthnPolicyPasswordlessExtraOrigins": [],
   "users": [
     {
+      "username": "admin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Cadmin",
+      "lastName": "Admin",
+      "email": "admin@cadmin.local",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "admin",
+        "user"
+      ]
+    },
+    {
       "id": "f7ccadde-1bf0-4ec1-8be3-951ea81bca16",
       "username": "service-account-abbott-fr",
       "emailVerified": false,
@@ -812,7 +831,7 @@
       "enabled": true,
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
-      "secret": "**********",
+      "secret": "cadmin-gateway-secret",
       "redirectUris": [
         "http://localhost:8080/*",
         "http://localhost:8080/login/oauth2/code/keycloak"
