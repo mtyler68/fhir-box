@@ -1,0 +1,28 @@
+{
+  "resourceType": "Library",
+  "id": "b856514a-eb9f-46c8-b5b7-575430edb640",
+  "meta": {
+    "versionId": "24",
+    "lastUpdated": "2026-09-05T07:35:49.363+00:00"
+  },
+  "version": "1.0.0",
+  "name": "patient-details-api",
+  "title": "Patient Details (API)",
+  "status": "active",
+  "type": {
+    "coding": [
+      {
+        "code": "icg-route",
+        "display": "ICG Route"
+      }
+    ],
+    "text": "icg-route"
+  },
+  "content": [
+    {
+      "contentType": "application/gateway+yaml",
+      "data": "LSBpZDogcGF0aWVudF9kZXRhaWxzX2FwaQogIHVyaTogJHtGSElSX1NFUlZFUl9VUkx9CiAgcHJlZGljYXRlczoKICAgIC0gUGF0aD0vYXBpL3YxL3BhdGllbnQve2lkfQogICAgLSBNZXRob2Q9R0VUCiAgZmlsdGVyczoKICAgIC0gbmFtZTogUmV3cml0ZVBhdGgKICAgICAgYXJnczoKICAgICAgICByZWdleHA6IC9hcGkvdjEvcGF0aWVudC8oPzxpZD4uKikKICAgICAgICByZXBsYWNlbWVudDogL2ZoaXIvUGF0aWVudC8ke2lkfQogICAgLSBuYW1lOiBKb2x0VHJhbnNmb3JtCiAgICAgIGFyZ3M6CiAgICAgICAgbmFtZTogZmhpci1wYXRpZW50LXRvLXBhdGllbnQtYXBpCiAgICAgICAgdmVyc2lvbjogIjEuMC4wIgo=",
+      "title": "ICG route"
+    }
+  ]
+}
