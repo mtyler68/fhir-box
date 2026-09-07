@@ -1160,7 +1160,7 @@ window.CadminJoltDetail = (function () {
         }
     }
 
-    function chiefErrorMessage(xhr) {
+    function transformErrorMessage(xhr) {
         const body = xhr && xhr.responseJSON;
         if (body && body.resourceType === "OperationOutcome") {
             const issue = (body.issue && body.issue[0]) || {};
@@ -1169,8 +1169,11 @@ window.CadminJoltDetail = (function () {
                 return details;
             }
         }
+        if (body && body.message) {
+            return body.message;
+        }
         if (xhr && xhr.status === 0) {
-            return "Transform failed. Is FHIR Chief running on port 8380?";
+            return "Transform failed. Is FHIR Box running?";
         }
         return "Transform failed (" + ((xhr && xhr.status) || "error") + ").";
     }
@@ -1192,11 +1195,11 @@ window.CadminJoltDetail = (function () {
         }
         const $button = $page("#bjd-sample-transform");
         $button.prop("disabled", true);
-        CadminFhirChief.transform(samples[selectedSample].input, spec.steps).done(function (output) {
+        CadminApi.joltTransform(samples[selectedSample].input, spec.steps).done(function (output) {
             setJsonHostText($page("#bjd-sample-actual-host"), pretty(output == null ? null : output));
             highlightSampleDiff();
         }).fail(function (xhr) {
-            CadminApi.showToast("danger", chiefErrorMessage(xhr));
+            CadminApi.showToast("danger", transformErrorMessage(xhr));
         }).always(function () {
             $button.prop("disabled", false);
         });

@@ -1,10 +1,6 @@
 {
   "resourceType": "Subscription",
   "id": "sub-practitioner-created-v1.0.1",
-  "meta": {
-    "versionId": "73",
-    "lastUpdated": "2026-09-06T13:32:45.896+00:00"
-  },
   "name": "Practitioner Created",
   "status": "off",
   "topic": "https://insulet.com/fhir/SubscriptionTopic/stp-practitioner-created",

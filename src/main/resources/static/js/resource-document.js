@@ -152,11 +152,11 @@ window.CadminResourceDocument = (function ($) {
         busy(true);
         CadminApi.fhir(path, method, resource, { silent: true })
             .done(function (body, _status, xhr) {
-                finishCreate(body, xhr);
+                finishCreate(body, xhr, resource);
             })
             .fail(function (xhr) {
                 if (xhr.status >= 200 && xhr.status < 300) {
-                    finishCreate(src.bodyFromXhr(xhr), xhr);
+                    finishCreate(src.bodyFromXhr(xhr), xhr, resource);
                     return;
                 }
                 const body = src.bodyFromXhr(xhr);
@@ -167,15 +167,21 @@ window.CadminResourceDocument = (function ($) {
             });
     }
 
-    function finishCreate(body, xhr) {
+    function finishCreate(body, xhr, submitted) {
         const created = body && body.resourceType === currentType ? body : null;
-        const id = CadminApi.createdResourceId(created || body, xhr, currentType) || (created && created.id) || "";
+        const id = CadminApi.createdResourceId(created || body, xhr, currentType)
+            || (created && created.id)
+            || (submitted && submitted.id)
+            || "";
+        const forHref = created || (submitted
+            ? $.extend({}, submitted, id ? { id: id } : {})
+            : null);
         const modalEl = document.getElementById(MODAL_ID);
         const instance = modalEl && bootstrap.Modal.getInstance(modalEl);
         const go = function () {
             CadminApi.showToast("success", currentType + " created.");
             if (id) {
-                window.location.hash = CadminApi.detailHref(currentType, id);
+                window.location.hash = CadminApi.detailHref(currentType, id, forHref);
             }
         };
         busy(false);

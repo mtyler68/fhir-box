@@ -1,14 +1,16 @@
 {
   "resourceType": "Practitioner",
-  "id": "917ece12-93ec-4693-9a5a-a34d70f8ae6e",
   "meta": {
-    "versionId": "1",
-    "lastUpdated": "2026-08-19T16:28:36.995+00:00",
     "tag": [
       {
         "system": "https://cadmin.io/fhir/tags",
         "code": "demo-data",
         "display": "Demo data"
+      },
+      {
+        "system": "https://insulet.com/fhir/meta-tag/source",
+        "code": "data-cloud",
+        "display": "Data Cloud"
       }
     ]
   },

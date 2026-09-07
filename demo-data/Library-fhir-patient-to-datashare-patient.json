@@ -1,13 +1,13 @@
 {
   "resourceType": "Library",
-  "id": "05898921-4775-46fb-b5c0-10cef9120a5b",
+  "id": "jolt-fhir-patient-to-datashare-patient",
   "meta": {
     "versionId": "6",
     "lastUpdated": "2026-09-05T07:16:30.443+00:00"
   },
   "version": "1.0.0",
-  "name": "fhir-patient-to-patient-api",
-  "title": "FHIR Patient to Patient API",
+  "name": "fhir-patient-to-datashare-patient",
+  "title": "FHIR Patient to Datashare Patient",
   "status": "active",
   "type": {
     "coding": [

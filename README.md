@@ -193,6 +193,8 @@ FHIR Box authors FHIR `Library` resources with custom `type` codes. Admins manag
 | `icg-route` | Spring Cloud Gateway YAML (`application/gateway+yaml`) | **ICG Routes** |
 | `jolt` | Jolt transform JSON (`application/jolt+json`) and optional samples (`application/jolt-samples+json`) | **Jolt** |
 
+The Jolt editor **Transform** action posts `{ "input", "spec" }` to `POST /jolt/$transform` on this gateway (same contract as FHIR Chief) and does not call FHIR Chief.
+
 ## Integrator Connect Gateway
 
 Integrator Connect Gateway is a sibling Spring Cloud Gateway (`../integrator-connect-gateway`) that polls FHIR `Library` resources with `type=icg-route` and deploys their YAML as live HTTP routes. Author those libraries in FHIR Box under **ICG Routes**. The Integrations page **Integrator Connect Gateway** shows what is currently deployed.

@@ -1,10 +1,6 @@
 {
   "resourceType": "Library",
   "id": "cab-practitioner-created-in-fhir",
-  "meta": {
-    "versionId": "26",
-    "lastUpdated": "2026-09-04T18:35:34.991+00:00"
-  },
   "version": "1.0.0",
   "name": "practitioner-created-in-fhir",
   "title": "Practitioner Created in FHIR",

@@ -44,6 +44,7 @@ final class SecuritySupport {
                         .pathMatchers("/fhir/SubscriptionTopic", "/fhir/SubscriptionTopic/**").hasRole("ADMIN")
                         .pathMatchers("/fhir/Consent", "/fhir/Consent/**").hasRole("ADMIN")
                         .pathMatchers(HttpMethod.POST, "/fhir", "/fhir/").hasRole("ADMIN")
+                        .pathMatchers("/jolt/$transform").hasRole("ADMIN")
                         .pathMatchers("/api/geocode").hasRole("ADMIN")
                         .pathMatchers("/api/npi").authenticated()
                         .pathMatchers("/api/auth/users/available").hasRole("ADMIN")
