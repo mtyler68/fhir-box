@@ -42,11 +42,11 @@ window.CadminCamelRouteDetail = (function () {
         "delay", "throttle", "circuitBreaker", "saga", "transacted", "onException",
         "try", "doTry", "doCatch", "doFinally", "intercept", "interceptFrom", "interceptSendToEndpoint",
         "rest", "get", "post", "put", "delete", "patch", "head", "consumes", "produces",
-        "simple", "constant", "jsonpath", "xpath", "header", "exchangeProperty", "body",
+        "simple", "constant", "fhirJson", "jsonpath", "xpath", "header", "exchangeProperty", "body",
         "timer", "direct", "seda", "vm", "kafka", "jms", "http", "https", "file", "ftp",
         "sftp", "sql", "jdbc", "mongodb", "rest", "platform-http", "vertx", "netty",
         "id", "description", "autoStartup", "startupOrder", "streamCache", "message", "name",
-        "expression", "simple", "constant", "datasonnet", "groovy", "javascript"
+        "expression", "simple", "constant", "datasonnet", "groovy", "javascript", "unpackArray"
     ];
     let library = null;
     let editor = null;
@@ -365,6 +365,7 @@ window.CadminCamelRouteDetail = (function () {
             renderMeta();
             CadminResourceSource.mount(function () { return library; });
             CadminResourceGraph.mount(library);
+            CadminLibraryRelated.mount(library);
             if (window.CadminCamelRouteGraph) {
                 CadminCamelRouteGraph.refresh();
             }
@@ -457,6 +458,7 @@ window.CadminCamelRouteDetail = (function () {
                     CadminCamelRouteGraph.card() +
                 "</div>" +
             "</div>" +
+            CadminLibraryRelated.cards() +
             CadminResourceHistory.card() +
             CadminResourceGraph.card() +
             '<div class="modal fade" id="crd-meta-modal" tabindex="-1">' +
@@ -483,6 +485,7 @@ window.CadminCamelRouteDetail = (function () {
         CadminResourceSource.mount(function () { return library; });
         CadminResourceGraph.mount(library);
         CadminResourceHistory.mount(library);
+        CadminLibraryRelated.mount(library);
         renderMeta();
         mountEditor(readYaml() || templates[0].yaml);
         CadminCamelRouteGraph.mount(editorValue);

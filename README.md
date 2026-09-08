@@ -288,3 +288,14 @@ JoltLibraryPoller uses the same interval and rules as ICG routes / CAB Camel rou
 JSON responses are rewritten before they go back to the client. Non-JSON bodies pass through. No matching library or a failed transform returns 502.
 
 The ICG route editor in FHIR Box has a Jolt JSON response template and JoltTransform in the YAML hints. ICG tests passed. Restart ICG to pick this up.
+
+# On Subscriptions and CAB Routes
+
+One approach is to create a subscription and Camel route for each interested
+consumer. This isolates consumers from each other, but produces more artifacts
+to manage.
+
+Another approach is to create a single subscription for the event and to create
+a single route that relays that event to all the interested consumers. This
+keeps the number of artifacts down, but incurs additional complexity in the
+routes and does not allow for isolation of consumers.

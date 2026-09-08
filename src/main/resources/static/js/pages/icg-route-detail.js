@@ -356,6 +356,7 @@ window.CadminIcgRouteDetail = (function () {
             renderMeta();
             CadminResourceSource.mount(function () { return library; });
             CadminResourceGraph.mount(library);
+            CadminLibraryRelated.mount(library);
             markEditorClean();
             if (next) {
                 next();
@@ -430,6 +431,7 @@ window.CadminIcgRouteDetail = (function () {
                     '<textarea id="ird-yaml" class="d-none"></textarea>' +
                 "</div>" +
             "</div>" +
+            CadminLibraryRelated.cards() +
             CadminResourceHistory.card() +
             CadminResourceGraph.card() +
             '<div class="modal fade" id="ird-meta-modal" tabindex="-1">' +
@@ -456,6 +458,7 @@ window.CadminIcgRouteDetail = (function () {
         CadminResourceSource.mount(function () { return library; });
         CadminResourceGraph.mount(library);
         CadminResourceHistory.mount(library);
+        CadminLibraryRelated.mount(library);
         renderMeta();
         mountEditor(readYaml() || templates[0].yaml);
         markEditorClean();

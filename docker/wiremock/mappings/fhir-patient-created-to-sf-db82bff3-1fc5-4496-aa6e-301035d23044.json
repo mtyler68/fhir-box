@@ -1,0 +1,20 @@
+{
+  "id" : "db82bff3-1fc5-4496-aa6e-301035d23044",
+  "name" : "fhir-patient-created-to-sf",
+  "request" : {
+    "url" : "/fhir/patient-created",
+    "method" : "POST",
+    "headers" : {
+      "Content-Type" : {
+        "equalTo" : "application/json; charset=UTF-8",
+        "caseInsensitive" : true
+      }
+    }
+  },
+  "response" : {
+    "status" : 204
+  },
+  "uuid" : "db82bff3-1fc5-4496-aa6e-301035d23044",
+  "persistent" : true,
+  "insertionIndex" : 3
+}

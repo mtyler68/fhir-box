@@ -1,0 +1,23 @@
+{
+  "id" : "070e5fec-a441-40cc-bbf8-1e9fe326693a",
+  "name" : "fhir_patient-created",
+  "request" : {
+    "url" : "/fhir/patient-created",
+    "method" : "POST",
+    "headers" : {
+      "Accept" : {
+        "equalTo" : "application/fhir+json;q=1.0, application/json+fhir;q=0.9"
+      },
+      "Content-Type" : {
+        "equalTo" : "application/fhir+json",
+        "caseInsensitive" : true
+      }
+    }
+  },
+  "response" : {
+    "status" : 204
+  },
+  "uuid" : "070e5fec-a441-40cc-bbf8-1e9fe326693a",
+  "persistent" : true,
+  "insertionIndex" : 2
+}

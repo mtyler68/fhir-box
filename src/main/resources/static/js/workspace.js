@@ -1166,6 +1166,9 @@ window.CadminWorkspace = (function ($) {
         if (window.CadminResourceHistory && typeof CadminResourceHistory.reset === "function") {
             CadminResourceHistory.reset();
         }
+        if (window.CadminLibraryRelated && typeof CadminLibraryRelated.reset === "function") {
+            CadminLibraryRelated.reset();
+        }
         if (window.CadminLocationDetail && typeof CadminLocationDetail.destroyMap === "function") {
             CadminLocationDetail.destroyMap();
         }
@@ -1290,6 +1293,10 @@ window.CadminWorkspace = (function ($) {
             }
             if (window.CadminResourceHistory && typeof CadminResourceHistory.mount === "function") {
                 CadminResourceHistory.mount(tab.resource);
+            }
+            if (window.CadminLibraryRelated && typeof CadminLibraryRelated.mount === "function"
+                    && tab.resource.resourceType === "Library") {
+                CadminLibraryRelated.mount(tab.resource);
             }
         }
         if (window.CadminLocationDetail && typeof CadminLocationDetail.resizeMap === "function") {

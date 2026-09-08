@@ -1365,6 +1365,7 @@ window.CadminJoltDetail = (function () {
             renderMeta();
             CadminResourceSource.mount(function () { return library; });
             CadminResourceGraph.mount(library);
+            CadminLibraryRelated.mount(library);
             markEditorClean();
             if (next) {
                 next();
@@ -1563,6 +1564,7 @@ window.CadminJoltDetail = (function () {
                 "</div>" +
                 '<div class="card-body" id="bjd-meta"></div>' +
             "</div>" +
+            CadminLibraryRelated.cards() +
             CadminResourceHistory.card() +
             CadminResourceGraph.card() +
             viewModal("bjd-json-modal", "Generated JSON",
@@ -1616,6 +1618,7 @@ window.CadminJoltDetail = (function () {
         CadminResourceSource.mount(function () { return library; });
         CadminResourceGraph.mount(library);
         CadminResourceHistory.mount(library);
+        CadminLibraryRelated.mount(library);
         renderMeta();
         const stored = readJson();
         const steps = stepsFromText(stored);

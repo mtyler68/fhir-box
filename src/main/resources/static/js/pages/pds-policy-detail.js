@@ -1420,6 +1420,7 @@ window.CadminPdsPolicyDetail = (function () {
                 '<div class="col-lg-6">' + card("Related artifacts", "pds-artifact-rows",
                     ["Type", "Display", ""], "#pd-artifact-modal", "Add") + "</div>" +
             "</div>" +
+            CadminLibraryRelated.cards() +
             CadminResourceHistory.card() +
             CadminResourceGraph.card() +
             viewModal("pd-yaml-modal", "Generated YAML",
@@ -1476,6 +1477,7 @@ window.CadminPdsPolicyDetail = (function () {
         CadminResourceSource.mount(function () { return library; });
         CadminResourceGraph.mount(library);
         CadminResourceHistory.mount(library);
+        CadminLibraryRelated.mount(library);
         renderBasics();
         renderIdentity();
         renderPurpose();
@@ -1715,6 +1717,7 @@ window.CadminPdsPolicyDetail = (function () {
                 }
             }
             refreshLists();
+            CadminLibraryRelated.mount(library);
             if (next) {
                 next();
             }
