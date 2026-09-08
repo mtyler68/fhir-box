@@ -1,0 +1,28 @@
+{
+  "resourceType": "Library",
+  "id": "808f4240-b935-4eee-b6fc-99986a56976b",
+  "meta": {
+    "versionId": "2",
+    "lastUpdated": "2026-08-20T03:31:43.907+00:00"
+  },
+  "name": "jwt-required",
+  "title": "JWT Required",
+  "status": "draft",
+  "type": {
+    "coding": [
+      {
+        "code": "pds-policies",
+        "display": "PDS Policies"
+      }
+    ],
+    "text": "pds-policies"
+  },
+  "description": "Denies request if JWT is missing",
+  "content": [
+    {
+      "contentType": "application/x-policy+x-yaml",
+      "data": "aWQ6IGp3dC1yZXF1aXJlZApkZXNjcmlwdGlvbjogRGVuaWVzIHJlcXVlc3QgaWYgSldUIGlzIG1pc3NpbmcKdmVyc2lvbjogIiIKc3RhdHVzOiBkcmFmdAppbXBvcnRzOiBbXQp0YXJnZXQ6ICIiCmFwcGx5OiBkZW55LW92ZXJyaWRlcwpvblRhcmdldDogW10KcnVsZXM6CiAgLSBpZDogcnVsZS0xCiAgICBkZXNjcmlwdGlvbjogIiIKICAgIHRhcmdldDogInJlcXVlc3QuYWN0aW9uID09ICdyZWFkJyIKICAgIHdoZW46IHJlcXVlc3Quc3ViamVjdCA9PSBudWxsIG9yIHJlcXVlc3Quc3ViamVjdC5qd3QgPT0gbnVsbAogICAgb3V0Y29tZTogZGVueQogICAgb25EZW55OgogICAgICAtICJyZXNwb25zZS5yZWFzb24gPSAnTWlzc2luZyBKV1QnIgo=",
+      "title": "Policy"
+    }
+  ]
+}
