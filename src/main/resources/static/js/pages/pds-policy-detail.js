@@ -24,17 +24,6 @@ window.CadminPdsPolicyDetail = (function () {
         { code: "text/cql", display: "CQL" },
         { code: "text/markdown", display: "Markdown" }
     ];
-    const artifactTypes = [
-        { code: "documentation", display: "Documentation" },
-        { code: "justification", display: "Justification" },
-        { code: "citation", display: "Citation" },
-        { code: "predecessor", display: "Predecessor" },
-        { code: "successor", display: "Successor" },
-        { code: "derived-from", display: "Derived from" },
-        { code: "depends-on", display: "Depends on" },
-        { code: "composed-of", display: "Composed of" }
-    ];
-
     let library = null;
     let otherPolicies = [];
     let targetEditor = null;
@@ -1417,8 +1406,6 @@ window.CadminPdsPolicyDetail = (function () {
             '<div class="row">' +
                 '<div class="col-lg-6">' + card("Content", "pds-content-rows",
                     ["Title", "Type", ""], "#pd-content-modal", "Add") + "</div>" +
-                '<div class="col-lg-6">' + card("Related artifacts", "pds-artifact-rows",
-                    ["Type", "Display", ""], "#pd-artifact-modal", "Add") + "</div>" +
             "</div>" +
             CadminLibraryRelated.cards() +
             CadminResourceHistory.card() +
@@ -1466,13 +1453,7 @@ window.CadminPdsPolicyDetail = (function () {
                 field("Content type", '<select class="form-select" id="pd-content-type">' + optionsHtml(contentTypes) + "</select>") +
                 field("URL", '<input class="form-control" id="pd-content-url" placeholder="Optional instead of inline data">') +
                 field("Data", '<textarea class="form-control font-monospace" id="pd-content-data" rows="8" placeholder="Inline policy text"></textarea>'),
-                "pd-content-form", true) +
-            modal("pd-artifact-modal", "Add related artifact",
-                field("Type", '<select class="form-select" id="pd-art-type">' + optionsHtml(artifactTypes) + "</select>") +
-                field("Display", '<input class="form-control" id="pd-art-display" required>') +
-                field("URL", '<input class="form-control" id="pd-art-url">') +
-                field("Resource", '<input class="form-control" id="pd-art-resource" placeholder="e.g. Library/123">'),
-                "pd-artifact-form")
+                "pd-content-form", true)
         );
         CadminResourceSource.mount(function () { return library; });
         CadminResourceGraph.mount(library);
@@ -1485,7 +1466,6 @@ window.CadminPdsPolicyDetail = (function () {
         renderIdentifiers();
         renderContacts();
         renderContent();
-        renderArtifacts();
         renderPolicyEditor();
         loadImportChoices();
         bindForms();
@@ -1659,19 +1639,6 @@ window.CadminPdsPolicyDetail = (function () {
         $("#pds-content-rows").html(rows.join(""));
     }
 
-    function renderArtifacts() {
-        const items = library.relatedArtifact || [];
-        if (!items.length) {
-            $("#pds-artifact-rows").html(emptyRow(3, "No related artifacts."));
-            return;
-        }
-        $("#pds-artifact-rows").html(items.map(function (item, index) {
-            return "<tr><td>" + esc(item.type || "—") + "</td><td>" + esc(item.display || item.url || item.resource || "—") + "</td>" +
-                '<td class="text-end"><button class="btn btn-sm btn-outline-danger" type="button" data-remove="relatedArtifact" data-index="' +
-                index + '" title="Remove" aria-label="Remove"><i class="bi bi-trash"></i></button></td></tr>';
-        }).join(""));
-    }
-
     function refreshLists() {
         renderBasics();
         renderIdentity();
@@ -1680,7 +1647,6 @@ window.CadminPdsPolicyDetail = (function () {
         renderIdentifiers();
         renderContacts();
         renderContent();
-        renderArtifacts();
         renderPolicyEditor();
         $(".page-title").first().text(library.title || library.name || "PDS policy");
     }
@@ -1987,28 +1953,6 @@ window.CadminPdsPolicyDetail = (function () {
 
         $("#pd-yaml-modal").on("shown.bs.modal", showGeneratedYaml);
         $("#pd-yaml-modal").on("hidden.bs.modal", teardownYamlPreview);
-
-        $("#pd-artifact-form").on("submit", function (event) {
-            event.preventDefault();
-            const artifact = {
-                type: $("#pd-art-type").val() || "documentation",
-                display: $("#pd-art-display").val()
-            };
-            const url = $("#pd-art-url").val();
-            const resourceRef = $("#pd-art-resource").val();
-            if (url) {
-                artifact.url = url;
-            }
-            if (resourceRef) {
-                artifact.resource = resourceRef;
-            }
-            library.relatedArtifact = library.relatedArtifact || [];
-            library.relatedArtifact.push(artifact);
-            saveLibrary(function () {
-                hideModal("pd-artifact-modal");
-                alertMsg("success", "Related artifact added.");
-            });
-        });
     }
 
     return { render: render };

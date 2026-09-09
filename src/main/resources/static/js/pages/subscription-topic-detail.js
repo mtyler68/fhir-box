@@ -40,6 +40,7 @@ window.CadminSubscriptionTopicDetail = (function () {
 
     let topic = null;
     let editingTriggerIndex = -1;
+    let savedBasics = "";
 
     function esc(value) {
         return CadminApi.escapeHtml(value);
@@ -144,15 +145,23 @@ window.CadminSubscriptionTopicDetail = (function () {
         CadminApi.showAlert("#topic-detail-alert", "danger", action + " failed (" + xhr.status + ").");
     }
 
+    function rememberTopic() {
+        if (window.CadminWorkspace && typeof CadminWorkspace.rememberResource === "function") {
+            CadminWorkspace.rememberResource(topic);
+        }
+    }
+
     function saveTopic(next) {
         migrateR5();
         CadminApi.fhir("/SubscriptionTopic/" + encodeURIComponent(topic.id), "PUT", topic).done(function (updated) {
             topic = updated || topic;
             migrateR5();
+            rememberTopic();
             renderBasics();
             renderTriggers();
             renderFilters();
             renderShapes();
+            CadminResourceSource.mount(function () { return topic; });
             if (next) {
                 next();
             }
@@ -181,14 +190,41 @@ window.CadminSubscriptionTopicDetail = (function () {
         "</div>";
     }
 
-    function card(title, bodyId, columns, addTarget, addLabel) {
-        return '<div class="card shadow mb-4">' +
-            '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                "<h6 class=\"m-0\">" + title + "</h6>" +
-                (addTarget
-                    ? '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="' +
-                        addTarget + '">' + addLabel + "</button>"
-                    : "") +
+    function topicLabel() {
+        return topic.title || topic.name || topic.url || "Subscription topic";
+    }
+
+    function navButton(paneId, icon, label, opts) {
+        opts = opts || {};
+        const classes = ["list-group-item", "list-group-item-action", "text-start"];
+        if (opts.active) {
+            classes.push("active");
+        }
+        if (opts.danger) {
+            classes.push("text-danger");
+        }
+        return '<button type="button" class="' + classes.join(" ") + '" id="' + paneId + '-btn" ' +
+            'data-bs-toggle="pill" data-bs-target="#' + paneId + '" role="tab" aria-controls="' + paneId +
+            '" aria-selected="' + (opts.active ? "true" : "false") + '">' +
+            '<i class="' + icon + ' me-2" aria-hidden="true"></i>' + label +
+            "</button>";
+    }
+
+    function tabPane(id, body, active) {
+        return '<div class="tab-pane fade' + (active ? " show active" : "") + '" id="' + id +
+            '" role="tabpanel" aria-labelledby="' + id + '-btn">' + body + "</div>";
+    }
+
+    function card(title, bodyId, columns, addTarget, addLabel, extraTools) {
+        let tools = extraTools || "";
+        if (addTarget) {
+            tools += '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="' +
+                addTarget + '">' + addLabel + "</button>";
+        }
+        return '<div class="card">' +
+            '<div class="card-header">' +
+                '<h3 class="card-title">' + title + "</h3>" +
+                (tools ? '<div class="card-tools">' + tools + "</div>" : "") +
             "</div>" +
             '<div class="card-body">' +
                 '<div class="table-responsive">' +
@@ -229,63 +265,121 @@ window.CadminSubscriptionTopicDetail = (function () {
     function render(resource) {
         topic = resource;
         const $root = $(CadminWorkspace.root());
+        const label = esc(topicLabel());
         $root.html(
-            '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
+            '<div class="d-flex align-items-center justify-content-between mb-3">' +
                 "<div>" +
-                    '<a class="small text-decoration-none" href="#/subscription-topics">' +
-                        '<i class="bi bi-arrow-left me-1"></i>Subscription topics</a>' +
-                    '<h1 class="h3 mb-0 page-title">' + esc(topic.title || topic.name || topic.url || "Subscription topic") + "</h1>" +
+                    '<nav aria-label="breadcrumb">' +
+                        '<ol class="breadcrumb mb-1">' +
+                            '<li class="breadcrumb-item"><a href="#/subscription-topics">Subscription topics</a></li>' +
+                            '<li class="breadcrumb-item active" aria-current="page" id="td-crumb">' + label + "</li>" +
+                        "</ol>" +
+                    "</nav>" +
+                    '<div class="d-flex align-items-center flex-wrap gap-2">' +
+                        '<h1 class="mb-0 fs-3 page-title" id="td-page-title">' + label + "</h1>" +
+                        '<span id="td-status-badge">' + statusBadge(topic.status) + "</span>" +
+                        (topic.id
+                            ? '<code class="small" id="td-fhir-id">' + esc(topic.id) + "</code>"
+                            : '<code class="small d-none" id="td-fhir-id"></code>') +
+                        CadminApi.unsavedFlagHtml() +
+                    "</div>" +
                 "</div>" +
                 '<div class="d-flex flex-wrap gap-2">' +
-                    '<button class="btn btn-outline-primary" type="button" id="topic-new-sub">' +
-                        '<i class="bi bi-broadcast me-1"></i>New subscription</button>' +
-                    '<button class="btn btn-outline-danger" type="button" id="td-delete">' +
-                        '<i class="bi bi-trash me-1"></i>Delete</button>' +
                     CadminResourceSource.button() +
                 "</div>" +
             "</div>" +
             '<div id="topic-detail-alert" class="alert d-none"></div>' +
-            '<div class="card shadow mb-4">' +
-                '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                    '<h6 class="m-0">Basics</h6>' +
-                    '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#td-basic-modal">Edit</button>' +
+            '<div class="row g-3">' +
+                '<div class="col-md-3">' +
+                    '<div class="list-group list-group-flush nav nav-pills flex-column" id="td-settings-nav" role="tablist">' +
+                        navButton("td-pane-basics", "bi bi-info-circle", "Basics", { active: true }) +
+                        navButton("td-pane-triggers", "bi bi-lightning-charge", "Resource triggers") +
+                        navButton("td-pane-filters", "bi bi-funnel", "Can filter by") +
+                        navButton("td-pane-shapes", "bi bi-bounding-box", "Notification shape") +
+                        navButton("td-pane-subscriptions", "bi bi-broadcast", "Subscriptions") +
+                        navButton("td-pane-graph", "bi bi-diagram-3", "Reference graph") +
+                        navButton("td-pane-history", "bi bi-clock-history", "History") +
+                        navButton("td-pane-danger", "bi bi-exclamation-triangle", "Danger zone", { danger: true }) +
+                    "</div>" +
                 "</div>" +
-                '<div class="card-body" id="td-basics"></div>' +
-            "</div>" +
-            card("Resource triggers", "td-trigger-rows",
-                ["Resource", "Interactions", "Criteria", ""], "#td-trigger-modal", "Add") +
-            '<div class="row">' +
-                '<div class="col-lg-6">' +
-                    card("Can filter by", "td-filter-rows",
-                        ["Parameter", "Resource", "Comparators", ""], "#td-filter-modal", "Add") +
-                "</div>" +
-                '<div class="col-lg-6">' +
-                    card("Notification shape", "td-shape-rows",
-                        ["Resource", "Include", ""], "#td-shape-modal", "Add") +
-                "</div>" +
-            "</div>" +
-            '<div class="card shadow mb-4">' +
-                '<div class="card-header py-3"><h6 class="m-0">Subscriptions using this topic</h6></div>' +
-                '<div class="card-body">' +
-                    '<div class="table-responsive">' +
-                        '<table class="table table-hover align-middle mb-0">' +
-                            "<thead><tr><th>Name</th><th>Status</th><th>Channel</th><th>Endpoint</th></tr></thead>" +
-                            '<tbody id="td-sub-rows"><tr><td colspan="4" class="text-muted">Loading…</td></tr></tbody>' +
-                        "</table>" +
+                '<div class="col-md-9">' +
+                    '<div class="tab-content">' +
+                        tabPane("td-pane-basics",
+                            '<div class="card">' +
+                                '<div class="card-header"><h3 class="card-title">Basics</h3></div>' +
+                                '<div class="card-body">' +
+                                    '<form class="row g-3" id="td-basic-form">' +
+                                        '<div class="col-md-6">' +
+                                            '<label class="form-label" for="td-url">URL</label>' +
+                                            '<input class="form-control font-monospace" id="td-url" required>' +
+                                        "</div>" +
+                                        '<div class="col-md-6">' +
+                                            '<label class="form-label" for="td-status">Status</label>' +
+                                            '<select class="form-select" id="td-status">' + optionsHtml(statusOptions) + "</select>" +
+                                        "</div>" +
+                                        '<div class="col-md-6">' +
+                                            '<label class="form-label" for="td-title">Title</label>' +
+                                            '<input class="form-control" id="td-title">' +
+                                        "</div>" +
+                                        '<div class="col-md-6">' +
+                                            '<label class="form-label" for="td-name">Name</label>' +
+                                            '<input class="form-control font-monospace" id="td-name">' +
+                                        "</div>" +
+                                        '<div class="col-12 col-md-6">' +
+                                            '<label class="form-label" for="td-version">Version</label>' +
+                                            '<input class="form-control" id="td-version" autocomplete="off">' +
+                                        "</div>" +
+                                        '<div class="col-12">' +
+                                            '<label class="form-label" for="td-description">Description</label>' +
+                                            '<textarea class="form-control" id="td-description" rows="3"></textarea>' +
+                                        "</div>" +
+                                        '<div class="col-12">' +
+                                            '<label class="form-label" for="td-purpose">Purpose</label>' +
+                                            '<textarea class="form-control" id="td-purpose" rows="2"></textarea>' +
+                                        "</div>" +
+                                        '<div class="col-12">' +
+                                            '<button type="submit" class="btn btn-primary">Save changes</button>' +
+                                        "</div>" +
+                                    "</form>" +
+                                "</div>" +
+                            "</div>",
+                            true) +
+                        tabPane("td-pane-triggers",
+                            card("Resource triggers", "td-trigger-rows",
+                                ["Resource", "Interactions", "Criteria", ""], "#td-trigger-modal", "Add")) +
+                        tabPane("td-pane-filters",
+                            card("Can filter by", "td-filter-rows",
+                                ["Parameter", "Resource", "Comparators", ""], "#td-filter-modal", "Add")) +
+                        tabPane("td-pane-shapes",
+                            card("Notification shape", "td-shape-rows",
+                                ["Resource", "Include", ""], "#td-shape-modal", "Add")) +
+                        tabPane("td-pane-subscriptions",
+                            card("Subscriptions using this topic", "td-sub-rows",
+                                ["Name", "Status", "Channel", "Endpoint"], null, null,
+                                '<button class="btn btn-sm btn-outline-primary" type="button" id="topic-new-sub">' +
+                                    '<i class="bi bi-broadcast me-1"></i>New subscription</button>')) +
+                        tabPane("td-pane-graph", CadminResourceGraph.card()) +
+                        tabPane("td-pane-history", CadminResourceHistory.card()) +
+                        tabPane("td-pane-danger",
+                            '<div class="card border-danger">' +
+                                '<div class="card-header bg-danger-subtle">' +
+                                    '<h3 class="card-title text-danger">Danger zone</h3>' +
+                                "</div>" +
+                                '<div class="card-body">' +
+                                    '<div class="d-flex justify-content-between align-items-start">' +
+                                        "<div>" +
+                                            '<p class="mb-0 fw-semibold text-danger">Delete this subscription topic</p>' +
+                                            '<small class="text-secondary">' +
+                                                "This permanently deletes the topic. Subscriptions that still point at it will no longer resolve." +
+                                            "</small>" +
+                                        "</div>" +
+                                        '<button class="btn btn-danger" type="button" id="td-delete">Delete</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</div>") +
                     "</div>" +
                 "</div>" +
             "</div>" +
-            CadminResourceHistory.card() +
-            CadminResourceGraph.card() +
-            modal("td-basic-modal", "Edit basics",
-                field("URL", '<input class="form-control font-monospace" id="td-url" required>') +
-                field("Title", '<input class="form-control" id="td-title">') +
-                field("Name", '<input class="form-control font-monospace" id="td-name">') +
-                field("Version", '<input class="form-control" id="td-version" autocomplete="off">') +
-                field("Status", '<select class="form-select" id="td-status">' + optionsHtml(statusOptions) + "</select>") +
-                field("Description", '<textarea class="form-control" id="td-description" rows="3"></textarea>') +
-                field("Purpose", '<textarea class="form-control" id="td-purpose" rows="2"></textarea>'),
-                "td-basic-form") +
             modal("td-trigger-modal", "Resource trigger",
                 field("Description", '<input class="form-control" id="td-trig-desc" placeholder="Optional">') +
                 field("Resource", '<select class="form-select" id="td-resource">' + optionsHtml(resourceTypes) + "</select>") +
@@ -338,7 +432,11 @@ window.CadminSubscriptionTopicDetail = (function () {
         CadminApi.fillValueSetSelect("#td-status", CadminApi.valueSets.publicationStatus, {
             fallback: statusOptions,
             selected: topic.status || "draft",
-            onConcepts: function (concepts) { statusOptions = concepts; }
+            onConcepts: function (concepts) {
+                statusOptions = concepts;
+                renderHeader();
+                syncUnsavedFlag();
+            }
         });
         CadminApi.fillValueSetSelect("#td-resource", CadminApi.valueSets.resourceTypes, {
             fallback: resourceFallback,
@@ -382,18 +480,50 @@ window.CadminSubscriptionTopicDetail = (function () {
         });
     }
 
+    function renderHeader() {
+        const label = topicLabel();
+        $("#td-crumb").text(label);
+        $("#td-page-title").text(label);
+        $("#td-status-badge").html(statusBadge(topic.status));
+        if (topic.id) {
+            $("#td-fhir-id").text(topic.id).removeClass("d-none");
+        } else {
+            $("#td-fhir-id").text("").addClass("d-none");
+        }
+    }
+
+    function basicsSnapshot() {
+        return [
+            $("#td-url").val() || "",
+            $("#td-status").val() || "",
+            $("#td-title").val() || "",
+            $("#td-name").val() || "",
+            $("#td-version").val() || "",
+            $("#td-description").val() || "",
+            $("#td-purpose").val() || ""
+        ].join("\n");
+    }
+
+    function syncUnsavedFlag() {
+        const root = window.CadminWorkspace ? CadminWorkspace.root() : document;
+        CadminApi.setUnsavedFlag(root, basicsSnapshot() !== savedBasics);
+    }
+
+    function markBasicsClean() {
+        savedBasics = basicsSnapshot();
+        syncUnsavedFlag();
+    }
+
     function renderBasics() {
-        $("#td-basics").html(
-            '<dl class="row mb-0">' +
-                '<dt class="col-sm-3">URL</dt><dd class="col-sm-9"><code>' + esc(topic.url || "—") + "</code></dd>" +
-                '<dt class="col-sm-3">Title</dt><dd class="col-sm-9">' + esc(topic.title || "—") + "</dd>" +
-                '<dt class="col-sm-3">Name</dt><dd class="col-sm-9">' + esc(topic.name || "—") + "</dd>" +
-                '<dt class="col-sm-3">Version</dt><dd class="col-sm-9">' + esc(topic.version || "—") + "</dd>" +
-                '<dt class="col-sm-3">Status</dt><dd class="col-sm-9">' + statusBadge(topic.status) + "</dd>" +
-                '<dt class="col-sm-3">Description</dt><dd class="col-sm-9">' + esc(topic.description || "—") + "</dd>" +
-                '<dt class="col-sm-3">Purpose</dt><dd class="col-sm-9">' + esc(topic.purpose || "—") + "</dd>" +
-            "</dl>"
-        );
+        renderHeader();
+        $("#td-url").val(topic.url || "");
+        $("#td-title").val(topic.title || "");
+        $("#td-name").val(topic.name || "");
+        $("#td-version").val(topic.version || "");
+        $("#td-status").val(topic.status || "draft");
+        $("#td-description").val(topic.description || "");
+        $("#td-purpose").val(topic.purpose || "");
+        markBasicsClean();
     }
 
     function triggerCriteriaLabel(item) {
@@ -547,15 +677,13 @@ window.CadminSubscriptionTopicDetail = (function () {
         const $root = $(CadminWorkspace.root());
         $root.off(".topicdetail");
 
-        $("#td-basic-modal").on("show.bs.modal", function () {
-            $("#td-url").val(topic.url || "");
-            $("#td-title").val(topic.title || "");
-            $("#td-name").val(topic.name || "");
-            $("#td-version").val(topic.version || "");
-            $("#td-status").val(topic.status || "draft");
-            $("#td-description").val(topic.description || "");
-            $("#td-purpose").val(topic.purpose || "");
+        $root.on("shown.bs.tab.topicdetail", "#td-pane-graph-btn", function () {
+            if (typeof CadminResourceGraph.resize === "function") {
+                CadminResourceGraph.resize();
+            }
         });
+
+        $root.on("input.topicdetail change.topicdetail", "#td-basic-form :input", syncUnsavedFlag);
 
         $("#td-trigger-modal").on("show.bs.modal", function (event) {
             const related = event.relatedTarget;
@@ -584,7 +712,6 @@ window.CadminSubscriptionTopicDetail = (function () {
             if (description) { topic.description = description; } else { delete topic.description; }
             if (purpose) { topic.purpose = purpose; } else { delete topic.purpose; }
             saveTopic(function () {
-                hideModal("td-basic-modal");
                 CadminApi.showToast("success", "Topic updated.");
             });
         });

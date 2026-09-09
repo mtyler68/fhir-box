@@ -78,6 +78,7 @@ window.CadminResourceGraph = (function () {
     let graphDepth = DEPTH_DEFAULT;
     let mountedResource = null;
     let mountedByKey = null;
+    let reverseFetched = {};
     let graphResizeObserver = null;
     let expandToken = 0;
     let themeBound = false;
@@ -583,6 +584,13 @@ window.CadminResourceGraph = (function () {
         valueSet: true
     };
 
+    const CANONICAL_TYPE_BY_LEAF = {
+        topic: "SubscriptionTopic",
+        questionnaire: "Questionnaire",
+        valueSet: "ValueSet",
+        library: "Library"
+    };
+
     function pathLeaf(path) {
         const text = String(path || "");
         const dot = text.lastIndexOf(".");
@@ -629,6 +637,19 @@ window.CadminResourceGraph = (function () {
             return null;
         }
         return { type: "CodeSystem", id: id };
+    }
+
+    function typedCanonicalTarget(path, value) {
+        const type = CANONICAL_TYPE_BY_LEAF[pathLeaf(path)];
+        if (!type) {
+            return null;
+        }
+        const parsed = parseReference(value);
+        if (parsed && parsed.type === type) {
+            return parsed;
+        }
+        const id = (parsed && parsed.id) || canonicalStubId(value);
+        return id ? { type: type, id: id } : null;
     }
 
     function findByCanonical(byKey, url) {
@@ -778,7 +799,7 @@ window.CadminResourceGraph = (function () {
                 return found;
             }
             if (isCanonicalPath(path)) {
-                const parsed = parseReference(value);
+                const parsed = parseReference(value) || typedCanonicalTarget(path, value);
                 if (parsed) {
                     pushReference(found, seen, parsed, "", path, "canonical", value);
                 }
@@ -2212,15 +2233,16 @@ window.CadminResourceGraph = (function () {
             return byKey[key] && !byKey[key]._display;
         });
         return needed.concat(expand).slice(0, NEIGHBOR_FETCH_LIMIT).map(function (key) {
-            if (byKey[key] && !byKey[key]._display) {
-                return { type: byKey[key].resourceType, id: byKey[key].id };
-            }
-            if (byKey[key] && byKey[key]._canonical) {
+            const resource = byKey[key];
+            if (resource && resource._canonical) {
                 return {
-                    type: byKey[key].resourceType,
-                    id: byKey[key].id,
-                    url: String(byKey[key]._canonical).split("|")[0]
+                    type: resource.resourceType,
+                    id: resource.id,
+                    url: String(resource._canonical).split("|")[0]
                 };
+            }
+            if (resource && !resource._display) {
+                return { type: resource.resourceType, id: resource.id };
             }
             const parts = key.split("/");
             return { type: parts[0], id: parts.slice(1).join("/") };
@@ -2230,6 +2252,60 @@ window.CadminResourceGraph = (function () {
     function loadByCanonical(type, url) {
         return CadminApi.fhir("/" + encodeURIComponent(type) + "?url=" + encodeURIComponent(url) + "&_count=5",
             "GET", null, { silent: true });
+    }
+
+    function topicCanonicalUrl(resource) {
+        if (!resource || resource.resourceType !== "SubscriptionTopic") {
+            return "";
+        }
+        return String(resource.url || resource._canonical || "").split("|")[0].trim();
+    }
+
+    function loadReverseCanonicalLinks(byKey) {
+        const urls = [];
+        Object.keys(byKey || {}).forEach(function (key) {
+            const url = topicCanonicalUrl(byKey[key]);
+            if (!url || reverseFetched[url]) {
+                return;
+            }
+            reverseFetched[url] = true;
+            urls.push(url);
+        });
+        if (!urls.length) {
+            return $.Deferred().resolve([]).promise();
+        }
+        const deferred = $.Deferred();
+        const collected = [];
+        let pending = urls.length;
+        urls.forEach(function (url) {
+            CadminApi.fhir("/Subscription?topic=" + encodeURIComponent(url) + "&_count=50",
+                "GET", null, { silent: true })
+                .done(function (bundle) {
+                    collected.push(bundle);
+                })
+                .always(function () {
+                    pending -= 1;
+                    if (pending === 0) {
+                        deferred.resolve(collected);
+                    }
+                });
+        });
+        return deferred.promise();
+    }
+
+    function mergeReverseCanonicalLinks(token, next) {
+        loadReverseCanonicalLinks(mountedByKey).done(function (bundles) {
+            if (token !== expandToken || !mountedByKey) {
+                return;
+            }
+            (bundles || []).forEach(function (bundle) {
+                mergeBundle(mountedByKey, bundle);
+            });
+            redrawMounted();
+            if (next) {
+                next();
+            }
+        });
     }
 
     function loadNeighbor(item) {
@@ -2290,7 +2366,9 @@ window.CadminResourceGraph = (function () {
                 mergeBundle(mountedByKey, item);
             });
             redrawMounted();
-            expandFromHop(hop + 1, token, depth);
+            mergeReverseCanonicalLinks(token, function () {
+                expandFromHop(hop + 1, token, depth);
+            });
         });
     }
 
@@ -2308,7 +2386,16 @@ window.CadminResourceGraph = (function () {
             }
             mergeBundle(mountedByKey, bundle);
             redrawMounted();
-            expandFromHop(1, token, depth);
+            mergeReverseCanonicalLinks(token, function () {
+                expandFromHop(1, token, depth);
+            });
+        }).fail(function () {
+            if (token !== expandToken || !mountedByKey) {
+                return;
+            }
+            mergeReverseCanonicalLinks(token, function () {
+                expandFromHop(1, token, depth);
+            });
         });
     }
 
@@ -2335,6 +2422,7 @@ window.CadminResourceGraph = (function () {
         syncDepthInput();
         mountedResource = resource;
         mountedByKey = {};
+        reverseFetched = {};
         remember(mountedByKey, resource);
         redrawMounted();
         startExpand();

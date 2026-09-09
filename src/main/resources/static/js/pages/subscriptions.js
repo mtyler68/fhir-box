@@ -147,6 +147,20 @@ function renderSubscriptionList(initialQuery) {
         return sub.name || sub.reason || sub.id || "Subscription";
     }
 
+    function statusToggleButton(sub) {
+        if (sub._deleted || sub.status === "entered-in-error") {
+            return "";
+        }
+        if (sub.status === "off" || sub.status === "error") {
+            return '<button class="btn btn-sm btn-outline-primary me-1 sub-status-toggle" type="button"' +
+                ' data-id="' + esc(sub.id) + '" data-next="requested" title="Play" aria-label="Play">' +
+                '<i class="bi bi-play-circle" aria-hidden="true"></i></button>';
+        }
+        return '<button class="btn btn-sm btn-outline-secondary me-1 sub-status-toggle" type="button"' +
+            ' data-id="' + esc(sub.id) + '" data-next="off" title="Stop" aria-label="Stop">' +
+            '<i class="bi bi-stop-circle" aria-hidden="true"></i></button>';
+    }
+
     function ensureNewId(id, $field) {
         const deferred = $.Deferred();
         const value = String(id || "").trim();
@@ -255,7 +269,8 @@ function renderSubscriptionList(initialQuery) {
                     "<td><code>" + esc(sub.endpoint || "—") + "</code></td>" +
                     "<td>" + statusBadge(sub.status) + "</td>" +
                     "<td><code>" + esc(sub.id) + "</code></td>" +
-                    '<td class="text-end"><a class="btn btn-sm btn-outline-primary" href="#/subscriptions/' +
+                    '<td class="text-end text-nowrap">' + statusToggleButton(sub) +
+                    '<a class="btn btn-sm btn-outline-primary" href="#/subscriptions/' +
                         encodeURIComponent(sub.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a></td>' +
                     "</tr>";
             });
@@ -271,6 +286,35 @@ function renderSubscriptionList(initialQuery) {
     $("#sub-search-form").on("submit", function (event) {
         event.preventDefault();
         load($("#sub-query").val());
+    });
+
+    $root.off("click.sublist").on("click.sublist", ".sub-status-toggle", function () {
+        const $btn = $(this);
+        const id = $btn.attr("data-id");
+        const next = $btn.attr("data-next");
+        if (!id || !next) {
+            return;
+        }
+        const starting = next === "requested";
+        CadminApi.confirm({
+            title: starting ? "Start this subscription?" : "Stop this subscription?",
+            confirmText: starting ? "Play" : "Stop"
+        }).done(function () {
+            $btn.prop("disabled", true);
+            CadminApi.fhir("/Subscription/" + encodeURIComponent(id)).done(function (sub) {
+                sub.status = next;
+                CadminApi.fhir("/Subscription/" + encodeURIComponent(id), "PUT", sub).done(function () {
+                    CadminApi.showToast("success", next === "off" ? "Subscription stopped." : "Subscription started.");
+                    load($("#sub-query").val(), listPage);
+                }).fail(function (xhr) {
+                    $btn.prop("disabled", false);
+                    CadminApi.showToast("danger", "Update failed (" + xhr.status + ").");
+                });
+            }).fail(function (xhr) {
+                $btn.prop("disabled", false);
+                CadminApi.showToast("danger", "Update failed (" + xhr.status + ").");
+            });
+        });
     });
 
     $("#create-sub-modal").on("show.bs.modal", function () {

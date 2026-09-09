@@ -1694,6 +1694,23 @@ window.CadminWorkspace = (function ($) {
         }
     }
 
+    function rememberResource(resource) {
+        if (!resource || !resource.resourceType || !resource.id) {
+            return;
+        }
+        const key = tabKey(resource.resourceType, resource.id);
+        const tab = tabs[key];
+        if (!tab) {
+            return;
+        }
+        tab.resource = resource;
+        tab.title = titleOf(resource) || tab.title;
+        tab.dirty = false;
+        if (activeKey === key) {
+            renderTabStrip();
+        }
+    }
+
     function refreshActive(resource) {
         const key = activeKey;
         const tab = tabs[key];
@@ -1765,6 +1782,7 @@ window.CadminWorkspace = (function ($) {
         handleRoute: handleRoute,
         consumeHashChange: consumeHashChange,
         notifyWrite: notifyWrite,
+        rememberResource: rememberResource,
         refreshActive: refreshActive,
         close: close,
         restore: restoreSession

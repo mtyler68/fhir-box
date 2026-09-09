@@ -1164,6 +1164,7 @@ window.CadminApi = (function ($) {
         Appointment: { type: "Appointment", noun: "appointments", sort: "-date", queryParam: "_id" },
         PlanDefinition: { type: "PlanDefinition", noun: "plans", sort: "title", queryParam: "title" },
         ActivityDefinition: { type: "ActivityDefinition", noun: "activities", sort: "title", queryParam: "title" },
+        Library: { type: "Library", noun: "libraries", sort: "name", queryParam: "name" },
         RequestOrchestration: { type: "RequestOrchestration", noun: "orchestrations", sort: "-_lastUpdated",
             queryParam: "_id" }
     };
@@ -1252,6 +1253,13 @@ window.CadminApi = (function ($) {
                 return name + " — " + address;
             }
             return name || address || resource.id || "";
+        }
+        if (resource.resourceType === "Library") {
+            const title = resource.title || resource.name || resource.id || "";
+            const type = libraryTypeOf(resource);
+            const version = resource.version || "";
+            const extra = [type, version].filter(Boolean).join(" · ");
+            return extra ? title + " (" + extra + ")" : title;
         }
         if (resource.resourceType === "PlanDefinition" || resource.resourceType === "ActivityDefinition") {
             return resource.title || resource.name || resource.id || "";

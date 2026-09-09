@@ -88,9 +88,22 @@ window.CadminSubscriptionDetail = (function () {
         return !!document.getElementById("sd-title");
     }
 
+    function resourceVersion(resource) {
+        const vid = resource && resource.meta && resource.meta.versionId;
+        const n = Number(vid);
+        return isNaN(n) ? 0 : n;
+    }
+
+    function rememberSubscription(resource) {
+        if (resource && window.CadminWorkspace && typeof CadminWorkspace.rememberResource === "function") {
+            CadminWorkspace.rememberResource(resource);
+        }
+    }
+
     function applyPolledSubscription(updated) {
         const previousVid = subscription && subscription.meta && subscription.meta.versionId;
         subscription = updated || subscription;
+        rememberSubscription(subscription);
         if (!subscriptionPageVisible()) {
             return;
         }
@@ -207,6 +220,7 @@ window.CadminSubscriptionDetail = (function () {
         CadminApi.fhir("/Subscription/" + encodeURIComponent(subscription.id), "PUT", subscription)
             .done(function (updated) {
                 subscription = updated || subscription;
+                rememberSubscription(subscription);
                 renderHeader();
                 renderBasics();
                 renderChannel();
@@ -493,9 +507,29 @@ window.CadminSubscriptionDetail = (function () {
         });
     }
 
+    function refreshFromServer() {
+        const id = subscription && subscription.id;
+        if (!id) {
+            return;
+        }
+        CadminApi.fhir("/Subscription/" + encodeURIComponent(id), "GET", null, { silent: true })
+            .done(function (updated) {
+                if (!subscription || subscription.id !== id) {
+                    return;
+                }
+                applyPolledSubscription(updated);
+                if (subscription.status === "requested") {
+                    startStatusPoll();
+                }
+            });
+    }
+
     function reveal(resource) {
         if (resource) {
-            subscription = resource;
+            const same = subscription && subscription.id === resource.id;
+            if (!same || resourceVersion(resource) >= resourceVersion(subscription)) {
+                subscription = resource;
+            }
         }
         if (!subscriptionPageVisible()) {
             return;
@@ -505,6 +539,7 @@ window.CadminSubscriptionDetail = (function () {
         renderChannel();
         renderFilters();
         renderParameters();
+        refreshFromServer();
     }
 
     function renderHeader() {
@@ -512,15 +547,14 @@ window.CadminSubscriptionDetail = (function () {
         const status = subscription.status;
         let actions = statusDisplay();
         if (status === "error") {
-            actions += ' <span class="text-muted small align-middle">Server reported an error. Re-request to retry.</span>';
-        }
-        if (status !== "off" && status !== "entered-in-error") {
-            actions += '<button class="btn btn-outline-secondary" type="button" id="sd-off">' +
-                '<i class="bi bi-pause-circle me-1"></i>Turn off</button>';
+            actions += ' <span class="text-muted small align-middle">Server reported an error. Play to retry.</span>';
         }
         if (status === "off" || status === "error") {
-            actions += '<button class="btn btn-outline-primary" type="button" id="sd-rerequest">' +
-                '<i class="bi bi-arrow-repeat me-1"></i>Re-request</button>';
+            actions += '<button class="btn btn-outline-primary" type="button" id="sd-toggle" data-next="requested">' +
+                '<i class="bi bi-play-circle me-1"></i>Play</button>';
+        } else if (status !== "entered-in-error") {
+            actions += '<button class="btn btn-outline-secondary" type="button" id="sd-toggle" data-next="off">' +
+                '<i class="bi bi-stop-circle me-1"></i>Stop</button>';
         }
         actions += '<button class="btn btn-outline-danger" type="button" id="sd-delete">' +
             '<i class="bi bi-trash me-1"></i>Delete</button>';
@@ -856,19 +890,29 @@ window.CadminSubscriptionDetail = (function () {
         const $root = $(CadminWorkspace.root());
         $root.off(".subdetail");
 
-        $root.on("click.subdetail", "#sd-off", function () {
-            stopStatusPoll();
-            subscription.status = "off";
-            saveSubscription(function () {
-                CadminApi.showToast("success", "Subscription turned off.");
-            });
-        });
-
-        $root.on("click.subdetail", "#sd-rerequest", function () {
-            subscription.status = "requested";
-            saveSubscription(function () {
-                CadminApi.showToast("success", "Subscription re-requested.");
-                startStatusPoll();
+        $root.on("click.subdetail", "#sd-toggle", function () {
+            const next = $(this).attr("data-next");
+            const starting = next === "requested";
+            if (next !== "off" && !starting) {
+                return;
+            }
+            CadminApi.confirm({
+                title: starting ? "Start this subscription?" : "Stop this subscription?",
+                confirmText: starting ? "Play" : "Stop"
+            }).done(function () {
+                if (starting) {
+                    subscription.status = "requested";
+                    saveSubscription(function () {
+                        CadminApi.showToast("success", "Subscription started.");
+                        startStatusPoll();
+                    });
+                    return;
+                }
+                stopStatusPoll();
+                subscription.status = "off";
+                saveSubscription(function () {
+                    CadminApi.showToast("success", "Subscription stopped.");
+                });
             });
         });
 
