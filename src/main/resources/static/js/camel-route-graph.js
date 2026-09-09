@@ -15,6 +15,7 @@ window.CadminCamelRouteGraph = (function () {
     let observer = null;
     let sizeWait = null;
     let sourceFn = null;
+    let onNodeClick = null;
     let refreshTimer = 0;
     let lastYaml = null;
     let lastGraph = null;
@@ -96,16 +97,14 @@ window.CadminCamelRouteGraph = (function () {
     }
 
     function card() {
-        return '<div class="card shadow h-100" id="camel-route-graph-card">' +
-            '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
-                '<div>' +
-                    '<h6 class="m-0">' +
-                        '<iconify-icon class="me-1" icon="hugeicons:camel" aria-hidden="true"></iconify-icon>' +
-                        "Route graph</h6>" +
-                    '<div class="small text-muted" id="camel-route-graph-status"></div>' +
-                "</div>" +
-                '<div class="d-flex flex-wrap align-items-center gap-2">' +
-                    '<span class="small text-muted d-none d-lg-inline">Scroll to zoom · drag to pan</span>' +
+        return '<div class="card h-100" id="camel-route-graph-card">' +
+            '<div class="card-header">' +
+                '<h3 class="card-title">' +
+                    '<iconify-icon class="me-1" icon="hugeicons:camel" aria-hidden="true"></iconify-icon>' +
+                    "Route graph</h3>" +
+                '<div class="card-tools">' +
+                    '<span class="small text-muted me-2 d-none" id="camel-route-graph-status"></span>' +
+                    '<span class="small text-muted d-none d-lg-inline me-2">Scroll to zoom · drag to pan</span>' +
                     '<button class="btn btn-sm btn-outline-secondary" type="button" id="camel-route-graph-refresh" ' +
                         'title="Refresh graph" aria-label="Refresh graph">' +
                         '<i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button>' +
@@ -329,6 +328,101 @@ window.CadminCamelRouteGraph = (function () {
         }
     }
 
+    function escapeRe(value) {
+        return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+
+    function indentOf(line) {
+        const match = /^(\s*)/.exec(line || "");
+        return match ? match[1].length : 0;
+    }
+
+    function isBlankOrComment(line) {
+        const text = String(line || "").trim();
+        return !text || text.charAt(0) === "#";
+    }
+
+    function lineHasMappingKey(line, kind) {
+        return new RegExp("^\\s*(?:-\\s+)?['\"]?" + escapeRe(kind) + "['\"]?\\s*:").test(line || "");
+    }
+
+    function blockContains(lines, start, needle) {
+        if (!needle) {
+            return true;
+        }
+        const indent = indentOf(lines[start]);
+        let i;
+        for (i = start; i < lines.length; i += 1) {
+            if (i > start) {
+                if (isBlankOrComment(lines[i])) {
+                    continue;
+                }
+                if (indentOf(lines[i]) <= indent) {
+                    break;
+                }
+            }
+            if (lines[i].indexOf(needle) >= 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function nodeHint(body) {
+        if (typeof body === "string" || typeof body === "number") {
+            return String(body);
+        }
+        const uri = uriOf(body);
+        if (uri) {
+            return uri;
+        }
+        const expr = exprOf(body);
+        if (expr) {
+            return expr;
+        }
+        if (body && typeof body === "object") {
+            if (body.id) {
+                return String(body.id);
+            }
+            if (body.path) {
+                return String(body.path);
+            }
+        }
+        return "";
+    }
+
+    function locateYamlLine(lines, used, kind, body) {
+        const hint = nodeHint(body);
+        const keyLines = [];
+        let i;
+        for (i = 0; i < lines.length; i += 1) {
+            if (!used[i] && lineHasMappingKey(lines[i], kind)) {
+                keyLines.push(i);
+            }
+        }
+        let chosen = null;
+        if (hint) {
+            for (i = 0; i < keyLines.length; i += 1) {
+                if (blockContains(lines, keyLines[i], hint)) {
+                    chosen = keyLines[i];
+                    break;
+                }
+            }
+        }
+        if (chosen == null && keyLines.length) {
+            chosen = keyLines[0];
+        }
+        if (chosen == null && hint) {
+            for (i = 0; i < lines.length; i += 1) {
+                if (!used[i] && lines[i].indexOf(hint) >= 0) {
+                    chosen = i;
+                    break;
+                }
+            }
+        }
+        return chosen;
+    }
+
     function flattenDefs(value) {
         const out = [];
         function walk(item) {
@@ -347,15 +441,21 @@ window.CadminCamelRouteGraph = (function () {
         return out;
     }
 
-    function buildGraph(value) {
+    function buildGraph(value, yamlText) {
         const nodes = [];
         const edges = [];
         const nodeById = {};
+        const yamlLines = String(yamlText || "").split(/\r?\n/);
+        const usedLines = {};
         let seq = 0;
 
         function addNode(kind, body, level) {
             seq += 1;
             const id = "crn-" + seq;
+            const yamlLine = locateYamlLine(yamlLines, usedLines, kind, body);
+            if (yamlLine != null) {
+                usedLines[yamlLine] = true;
+            }
             const node = {
                 id: id,
                 label: labelOf(kind, body),
@@ -363,6 +463,7 @@ window.CadminCamelRouteGraph = (function () {
                 group: groupOf(kind),
                 level: typeof level === "number" ? level : 0,
                 endpointUri: FROM_KINDS[kind] || TO_KINDS[kind] ? uriOf(body) : "",
+                yamlLine: yamlLine,
                 font: { multi: true, face: "inherit", size: 13 }
             };
             nodes.push(node);
@@ -890,6 +991,35 @@ window.CadminCamelRouteGraph = (function () {
             finishLayout(false);
             observe();
         });
+        network.on("hoverNode", function () {
+            el.style.cursor = "pointer";
+        });
+        network.on("blurNode", function () {
+            el.style.cursor = "";
+        });
+        network.on("click", function (params) {
+            if (!params.nodes || params.nodes.length !== 1 || typeof onNodeClick !== "function") {
+                return;
+            }
+            const id = params.nodes[0];
+            let node = null;
+            if (lastGraph && lastGraph.nodes) {
+                lastGraph.nodes.some(function (item) {
+                    if (item.id === id) {
+                        node = item;
+                        return true;
+                    }
+                    return false;
+                });
+            }
+            if (!node) {
+                node = network.body.data.nodes.get(id);
+            }
+            if (!node || typeof node.yamlLine !== "number") {
+                return;
+            }
+            onNodeClick(node.yamlLine, node);
+        });
     }
 
     function draw(graph) {
@@ -947,7 +1077,7 @@ window.CadminCamelRouteGraph = (function () {
             }
             return;
         }
-        const graph = buildGraph(parsed.value);
+        const graph = buildGraph(parsed.value, yaml);
         if (!graph.nodes.length) {
             setStatus("");
             emptyMessage("No route, from, or rest blocks found in this YAML.");
@@ -976,9 +1106,11 @@ window.CadminCamelRouteGraph = (function () {
         });
     }
 
-    function mount(getYaml) {
+    function mount(getYaml, options) {
         destroy();
+        options = options || {};
         sourceFn = typeof getYaml === "function" ? getYaml : function () { return ""; };
+        onNodeClick = typeof options.onNodeClick === "function" ? options.onNodeClick : null;
         bind();
         refresh();
     }
@@ -991,6 +1123,7 @@ window.CadminCamelRouteGraph = (function () {
         $("#camel-route-graph-card").off(".crgraph");
         destroyNetwork();
         sourceFn = null;
+        onNodeClick = null;
         lastYaml = null;
         lastGraph = null;
         lastCanvasSize = "";

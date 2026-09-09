@@ -154,18 +154,24 @@
     margin-bottom: 0;
 }
 
-#td-settings-nav {
+#td-settings-nav,
+#sd-settings-nav,
+#crd-settings-nav {
     position: sticky;
     top: 0.5rem;
     gap: 0.15rem;
 }
 
-#td-settings-nav .list-group-item {
+#td-settings-nav .list-group-item,
+#sd-settings-nav .list-group-item,
+#crd-settings-nav .list-group-item {
     border: 0;
     border-radius: var(--bs-border-radius);
 }
 
-#td-settings-nav .list-group-item.active {
+#td-settings-nav .list-group-item.active,
+#sd-settings-nav .list-group-item.active,
+#crd-settings-nav .list-group-item.active {
     font-weight: 600;
 }
 
@@ -1265,6 +1271,10 @@ body.layout-fixed .app-main {
 .ts-wrapper.form-select {
     padding: 0;
     background-image: none;
+}
+
+#sd-basic-form .min-w-0 > .ts-wrapper {
+    width: 100%;
 }
 
 .ts-wrapper.form-select .ts-control {

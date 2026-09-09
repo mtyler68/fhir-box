@@ -39,6 +39,7 @@ window.CadminSubscriptionDetail = (function () {
     let statusPolling = false;
     let importStep = 1;
     let importParameters = null;
+    let savedForms = "";
 
     function esc(value) {
         return CadminApi.escapeHtml(value);
@@ -108,7 +109,11 @@ window.CadminSubscriptionDetail = (function () {
             return;
         }
         renderHeader();
-        renderBasics();
+        if (!formsAreDirty()) {
+            fillBasicsForm();
+            fillChannelForm();
+            markFormsClean();
+        }
         const nextVid = subscription && subscription.meta && subscription.meta.versionId;
         if (nextVid && nextVid !== previousVid) {
             CadminResourceSource.mount(function () { return subscription; });
@@ -131,7 +136,10 @@ window.CadminSubscriptionDetail = (function () {
         const maxMs = 45000;
         if (subscriptionPageVisible()) {
             renderHeader();
-            renderBasics();
+            if (!formsAreDirty()) {
+                fillBasicsForm();
+                fillChannelForm();
+            }
         }
 
         function tick() {
@@ -147,10 +155,7 @@ window.CadminSubscriptionDetail = (function () {
                     const status = subscription.status;
                     if (status && status !== "requested") {
                         stopStatusPoll();
-                        if (subscriptionPageVisible()) {
-                            renderHeader();
-                            renderBasics();
-                        }
+                        paintAfterStatus();
                         if (status === "active") {
                             CadminApi.showToast("success", "Subscription is active.");
                         } else if (status === "error") {
@@ -162,10 +167,7 @@ window.CadminSubscriptionDetail = (function () {
                     }
                     if (Date.now() - started >= maxMs) {
                         stopStatusPoll();
-                        if (subscriptionPageVisible()) {
-                            renderHeader();
-                            renderBasics();
-                        }
+                        paintAfterStatus();
                         CadminApi.showToast("warning",
                             "Still waiting for the server to update this subscription.");
                         return;
@@ -178,27 +180,13 @@ window.CadminSubscriptionDetail = (function () {
                     }
                     if (Date.now() - started >= maxMs) {
                         stopStatusPoll();
-                        if (subscriptionPageVisible()) {
-                            renderHeader();
-                            renderBasics();
-                        }
+                        paintAfterStatus();
                         return;
                     }
                     statusPollTimer = window.setTimeout(tick, intervalMs);
                 });
         }
         statusPollTimer = window.setTimeout(tick, intervalMs);
-    }
-
-    function channelLabel(sub) {
-        const coding = (sub && sub.channelType) || {};
-        const match = channelTypes.find(function (option) { return option.code === coding.code; });
-        return (match && match.display) || coding.display || coding.code || "—";
-    }
-
-    function contentLabel(code) {
-        const match = contentOptions.find(function (option) { return option.code === code; });
-        return match ? match.display : (code || "—");
     }
 
     function subscriptionName() {
@@ -222,10 +210,12 @@ window.CadminSubscriptionDetail = (function () {
                 subscription = updated || subscription;
                 rememberSubscription(subscription);
                 renderHeader();
-                renderBasics();
-                renderChannel();
+                fillBasicsForm();
+                fillChannelForm();
                 renderFilters();
                 renderParameters();
+                markFormsClean();
+                CadminResourceSource.mount(function () { return subscription; });
                 if (next) {
                     next();
                 }
@@ -254,14 +244,37 @@ window.CadminSubscriptionDetail = (function () {
         "</div>";
     }
 
-    function card(title, bodyId, columns, addTarget, addLabel) {
-        return '<div class="card shadow mb-4">' +
-            '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                "<h6 class=\"m-0\">" + title + "</h6>" +
-                (addTarget
-                    ? '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="' +
-                        addTarget + '" id="' + bodyId + '-add">' + addLabel + "</button>"
-                    : "") +
+    function navButton(paneId, icon, label, opts) {
+        opts = opts || {};
+        const classes = ["list-group-item", "list-group-item-action", "text-start"];
+        if (opts.active) {
+            classes.push("active");
+        }
+        if (opts.danger) {
+            classes.push("text-danger");
+        }
+        return '<button type="button" class="' + classes.join(" ") + '" id="' + paneId + '-btn" ' +
+            'data-bs-toggle="pill" data-bs-target="#' + paneId + '" role="tab" aria-controls="' + paneId +
+            '" aria-selected="' + (opts.active ? "true" : "false") + '">' +
+            '<i class="' + icon + ' me-2" aria-hidden="true"></i>' + label +
+            "</button>";
+    }
+
+    function tabPane(id, body, active) {
+        return '<div class="tab-pane fade' + (active ? " show active" : "") + '" id="' + id +
+            '" role="tabpanel" aria-labelledby="' + id + '-btn">' + body + "</div>";
+    }
+
+    function card(title, bodyId, columns, addTarget, addLabel, extraTools) {
+        let tools = extraTools || "";
+        if (addTarget) {
+            tools += '<button class="btn btn-sm btn-outline-primary" type="button" id="' + bodyId +
+                '-add" data-bs-toggle="modal" data-bs-target="' + addTarget + '">' + addLabel + "</button>";
+        }
+        return '<div class="card">' +
+            '<div class="card-header">' +
+                '<h3 class="card-title">' + title + "</h3>" +
+                (tools ? '<div class="card-tools">' + tools + "</div>" : "") +
             "</div>" +
             '<div class="card-body">' +
                 '<div class="table-responsive">' +
@@ -328,86 +341,169 @@ window.CadminSubscriptionDetail = (function () {
         return isNaN(date.getTime()) ? "" : date.toISOString();
     }
 
-    function formatInstant(instant) {
-        if (!instant) {
-            return "—";
-        }
-        const date = new Date(instant);
-        return isNaN(date.getTime()) ? instant : date.toLocaleString();
-    }
-
     function render(resource) {
         stopStatusPoll();
         subscription = resource;
         topicResource = null;
         const $root = $(CadminWorkspace.root());
+        const label = esc(subscriptionName());
         $root.html(
-            '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
+            '<div class="d-flex align-items-center justify-content-between mb-3">' +
                 "<div>" +
-                    '<a class="small text-decoration-none" href="#/subscriptions">' +
-                        '<i class="bi bi-arrow-left me-1"></i>Subscriptions</a>' +
-                    '<h1 class="h3 mb-0 page-title" id="sd-title"></h1>' +
+                    '<nav aria-label="breadcrumb">' +
+                        '<ol class="breadcrumb mb-1">' +
+                            '<li class="breadcrumb-item"><a href="#/subscriptions">Subscriptions</a></li>' +
+                            '<li class="breadcrumb-item active" aria-current="page" id="sd-crumb">' + label + "</li>" +
+                        "</ol>" +
+                    "</nav>" +
+                    '<div class="d-flex align-items-center flex-wrap gap-2">' +
+                        '<h1 class="mb-0 fs-3 page-title" id="sd-title">' + label + "</h1>" +
+                        '<span id="sd-status-badge">' + statusDisplay() + "</span>" +
+                        (subscription.id
+                            ? '<code class="small" id="sd-fhir-id">' + esc(subscription.id) + "</code>"
+                            : '<code class="small d-none" id="sd-fhir-id"></code>') +
+                        CadminApi.unsavedFlagHtml() +
+                    "</div>" +
+                    '<div class="small text-muted d-none" id="sd-error-note">' +
+                        "Server reported an error. Play to retry.</div>" +
                 "</div>" +
-                '<div class="d-flex flex-wrap gap-2" id="sd-actions"></div>' +
+                '<div class="d-flex flex-wrap gap-2 align-items-center">' +
+                    '<span id="sd-toggle-slot"></span>' +
+                    CadminResourceSource.button() +
+                "</div>" +
             "</div>" +
             '<div id="sub-detail-alert" class="alert d-none"></div>' +
-            '<div class="card shadow mb-4">' +
-                '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                    '<h6 class="m-0">Basics</h6>' +
-                    '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#sd-basic-modal">Edit</button>' +
-                "</div>" +
-                '<div class="card-body" id="sd-basics"></div>' +
-            "</div>" +
-            '<div class="card shadow mb-4">' +
-                '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                    '<h6 class="m-0">Channel</h6>' +
-                    '<div class="btn-group">' +
-                        '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#sd-channel-modal">Edit</button>' +
-                        '<button type="button" class="btn btn-sm btn-outline-primary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">' +
-                            '<span class="visually-hidden">More channel options</span></button>' +
-                        '<ul class="dropdown-menu dropdown-menu-end">' +
-                            '<li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#sd-channel-import-modal">' +
-                                '<i class="bi bi-hdd-network me-2" aria-hidden="true"></i>Import from endpoint</button></li>' +
-                        "</ul>" +
+            '<div class="row g-3">' +
+                '<div class="col-md-3">' +
+                    '<div class="list-group list-group-flush nav nav-pills flex-column" id="sd-settings-nav" role="tablist">' +
+                        navButton("sd-pane-basics", "bi bi-info-circle", "Basics", { active: true }) +
+                        navButton("sd-pane-channel", "bi bi-broadcast", "Channel") +
+                        navButton("sd-pane-filters", "bi bi-funnel", "Filters") +
+                        navButton("sd-pane-params", "bi bi-sliders", "Channel parameters") +
+                        navButton("sd-pane-graph", "bi bi-diagram-3", "Reference graph") +
+                        navButton("sd-pane-history", "bi bi-clock-history", "History") +
+                        navButton("sd-pane-danger", "bi bi-exclamation-triangle", "Danger zone", { danger: true }) +
                     "</div>" +
                 "</div>" +
-                '<div class="card-body" id="sd-channel"></div>' +
-            "</div>" +
-            '<div class="row">' +
-                '<div class="col-lg-6">' +
-                    card("Filters", "sd-filter-rows",
-                        ["Parameter", "Comparator", "Value", ""], "#sd-filter-modal", "Add") +
+                '<div class="col-md-9">' +
+                    '<div class="tab-content">' +
+                        tabPane("sd-pane-basics",
+                            '<div class="card">' +
+                                '<div class="card-header"><h3 class="card-title">Basics</h3></div>' +
+                                '<div class="card-body">' +
+                                    '<form class="row g-3" id="sd-basic-form">' +
+                                        '<div class="col-md-6">' +
+                                            '<label class="form-label" for="sd-name">Name</label>' +
+                                            '<input class="form-control" id="sd-name">' +
+                                        "</div>" +
+                                        '<div class="col-md-6">' +
+                                            '<label class="form-label" for="sd-topic">Topic</label>' +
+                                            '<div class="d-flex gap-2">' +
+                                                '<div class="flex-grow-1 min-w-0">' +
+                                                    '<select class="form-select" id="sd-topic" required></select>' +
+                                                "</div>" +
+                                                '<a class="btn btn-outline-secondary d-none flex-shrink-0" id="sd-topic-open" ' +
+                                                    'title="Open subscription topic">' +
+                                                    '<i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>' +
+                                                    '<span class="visually-hidden">Open topic</span></a>' +
+                                            "</div>" +
+                                        "</div>" +
+                                        '<div class="col-12">' +
+                                            '<label class="form-label" for="sd-reason">Reason</label>' +
+                                            '<input class="form-control" id="sd-reason">' +
+                                        "</div>" +
+                                        '<div class="col-md-6">' +
+                                            '<label class="form-label" for="sd-org">Managing organization</label>' +
+                                            '<select class="form-select" id="sd-org"><option value="">None</option></select>' +
+                                        "</div>" +
+                                        '<div class="col-12">' +
+                                            '<button type="submit" class="btn btn-primary">Save changes</button>' +
+                                        "</div>" +
+                                    "</form>" +
+                                "</div>" +
+                            "</div>",
+                            true) +
+                        tabPane("sd-pane-channel",
+                            '<div class="card">' +
+                                '<div class="card-header">' +
+                                    '<h3 class="card-title">Channel</h3>' +
+                                    '<div class="card-tools">' +
+                                        '<button class="btn btn-sm btn-outline-primary" type="button" ' +
+                                            'data-bs-toggle="modal" data-bs-target="#sd-channel-import-modal">' +
+                                            '<i class="bi bi-hdd-network me-1" aria-hidden="true"></i>Import from endpoint</button>' +
+                                    "</div>" +
+                                "</div>" +
+                                '<div class="card-body">' +
+                                    '<form class="row g-3" id="sd-channel-form">' +
+                                        '<div class="col-md-6">' +
+                                            '<label class="form-label" for="sd-channel-type">Channel type</label>' +
+                                            '<select class="form-select" id="sd-channel-type">' +
+                                                optionsHtml(channelTypes) + "</select>" +
+                                        "</div>" +
+                                        '<div class="col-md-6">' +
+                                            '<label class="form-label" for="sd-endpoint">Endpoint</label>' +
+                                            '<input class="form-control font-monospace" id="sd-endpoint" ' +
+                                                'placeholder="https://example.org/fhir/notification">' +
+                                        "</div>" +
+                                        '<div class="col-md-6">' +
+                                            '<label class="form-label" for="sd-content">Content</label>' +
+                                            '<select class="form-select" id="sd-content">' +
+                                                optionsHtml(contentOptions) + "</select>" +
+                                        "</div>" +
+                                        '<div class="col-md-6">' +
+                                            '<label class="form-label" for="sd-content-type">Content type</label>' +
+                                            '<input class="form-control font-monospace" id="sd-content-type">' +
+                                        "</div>" +
+                                        '<div class="col-md-4">' +
+                                            '<label class="form-label" for="sd-heartbeat">Heartbeat (seconds)</label>' +
+                                            '<input class="form-control" id="sd-heartbeat" type="number" min="0" step="1">' +
+                                        "</div>" +
+                                        '<div class="col-md-4">' +
+                                            '<label class="form-label" for="sd-timeout">Timeout (seconds)</label>' +
+                                            '<input class="form-control" id="sd-timeout" type="number" min="0" step="1">' +
+                                        "</div>" +
+                                        '<div class="col-md-4">' +
+                                            '<label class="form-label" for="sd-max-count">Max count</label>' +
+                                            '<input class="form-control" id="sd-max-count" type="number" min="1" step="1">' +
+                                        "</div>" +
+                                        '<div class="col-md-6">' +
+                                            '<label class="form-label" for="sd-end">End</label>' +
+                                            '<input class="form-control" id="sd-end" type="datetime-local">' +
+                                        "</div>" +
+                                        '<div class="col-12">' +
+                                            '<button type="submit" class="btn btn-primary">Save changes</button>' +
+                                        "</div>" +
+                                    "</form>" +
+                                "</div>" +
+                            "</div>") +
+                        tabPane("sd-pane-filters",
+                            card("Filters", "sd-filter-rows",
+                                ["Parameter", "Comparator", "Value", ""], "#sd-filter-modal", "Add")) +
+                        tabPane("sd-pane-params",
+                            card("Channel parameters", "sd-param-rows",
+                                ["Name", "Value", ""], "#sd-param-modal", "Add")) +
+                        tabPane("sd-pane-graph", CadminResourceGraph.card()) +
+                        tabPane("sd-pane-history", CadminResourceHistory.card()) +
+                        tabPane("sd-pane-danger",
+                            '<div class="card border-danger">' +
+                                '<div class="card-header bg-danger-subtle">' +
+                                    '<h3 class="card-title text-danger">Danger zone</h3>' +
+                                "</div>" +
+                                '<div class="card-body">' +
+                                    '<div class="d-flex justify-content-between align-items-start">' +
+                                        "<div>" +
+                                            '<p class="mb-0 fw-semibold text-danger">Delete this subscription</p>' +
+                                            '<small class="text-secondary">' +
+                                                "This permanently deletes the subscription. The topic and endpoint are not removed." +
+                                            "</small>" +
+                                        "</div>" +
+                                        '<button class="btn btn-danger" type="button" id="sd-delete">Delete</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</div>") +
+                    "</div>" +
                 "</div>" +
-                '<div class="col-lg-6">' +
-                    card("Channel parameters", "sd-param-rows",
-                        ["Name", "Value", ""], "#sd-param-modal", "Add") +
-                "</div>" +
             "</div>" +
-            CadminResourceHistory.card() +
-            CadminResourceGraph.card() +
-            modal("sd-basic-modal", "Edit basics",
-                field("Name", '<input class="form-control" id="sd-name">') +
-                field("Topic", '<select class="form-select" id="sd-topic" required></select>') +
-                field("Reason", '<input class="form-control" id="sd-reason">') +
-                field("Managing organization",
-                    '<select class="form-select" id="sd-org"><option value="">None</option></select>'),
-                "sd-basic-form") +
-            modal("sd-channel-modal", "Edit channel",
-                field("Channel type", '<select class="form-select" id="sd-channel-type">' +
-                    optionsHtml(channelTypes) + "</select>") +
-                field("Endpoint", '<input class="form-control font-monospace" id="sd-endpoint" ' +
-                    'placeholder="https://example.org/fhir/notification">') +
-                field("Content", '<select class="form-select" id="sd-content">' +
-                    optionsHtml(contentOptions) + "</select>") +
-                field("Content type", '<input class="form-control font-monospace" id="sd-content-type">') +
-                field("Heartbeat period (seconds)",
-                    '<input class="form-control" id="sd-heartbeat" type="number" min="0" step="1">') +
-                field("Timeout (seconds)",
-                    '<input class="form-control" id="sd-timeout" type="number" min="0" step="1">') +
-                field("Max count",
-                    '<input class="form-control" id="sd-max-count" type="number" min="1" step="1">') +
-                field("End", '<input class="form-control" id="sd-end" type="datetime-local">'),
-                "sd-channel-form") +
             modal("sd-filter-modal", "Add filter",
                 field("Filter parameter", '<select class="form-select" id="sd-fp-name" required></select>') +
                 field("Resource", '<input class="form-control font-monospace" id="sd-fp-resource" readonly>') +
@@ -468,16 +564,26 @@ window.CadminSubscriptionDetail = (function () {
         CadminResourceGraph.mount(subscription);
         CadminResourceHistory.mount(subscription);
         renderHeader();
-        renderBasics();
-        renderChannel();
+        fillBasicsForm();
+        fillChannelForm();
         renderFilters();
         renderParameters();
+        fillTopicSelect(subscription.topic || "");
+        fillOrgSelect(refId(subscription.managingEntity));
         loadTopic();
         bind();
+        markFormsClean();
         CadminApi.fillValueSetSelect("#sd-channel-type", CadminApi.valueSets.subscriptionChannelType, {
             fallback: channelTypes,
             selected: (subscription.channelType && subscription.channelType.code) || "rest-hook",
-            onConcepts: function (concepts) { channelTypes = concepts; }
+            onConcepts: function (concepts) {
+                channelTypes = concepts;
+                if (!formsAreDirty()) {
+                    fillChannelForm();
+                    markFormsClean();
+                }
+                syncUnsavedFlag();
+            }
         });
         CadminApi.fillValueSetSelect("#sd-imp-type", CadminApi.valueSets.subscriptionChannelType, {
             fallback: channelTypes,
@@ -486,7 +592,14 @@ window.CadminSubscriptionDetail = (function () {
         CadminApi.fillValueSetSelect("#sd-content", CadminApi.valueSets.subscriptionPayloadContent, {
             fallback: contentOptions,
             selected: subscription.content || "id-only",
-            onConcepts: function (concepts) { contentOptions = concepts; }
+            onConcepts: function (concepts) {
+                contentOptions = concepts;
+                if (!formsAreDirty()) {
+                    fillChannelForm();
+                    markFormsClean();
+                }
+                syncUnsavedFlag();
+            }
         });
         CadminApi.fillValueSetSelect("#sd-imp-content", CadminApi.valueSets.subscriptionPayloadContent, {
             fallback: contentOptions,
@@ -494,10 +607,7 @@ window.CadminSubscriptionDetail = (function () {
         });
         CadminApi.expandValueSet(CadminApi.valueSets.subscriptionStatus).done(function (concepts) {
             statusOptions = concepts;
-            if (subscriptionPageVisible()) {
-                renderHeader();
-                renderBasics();
-            }
+            paintAfterStatus();
         });
         CadminApi.expandValueSet(CadminApi.valueSets.searchComparator).done(function (concepts) {
             comparatorOptions = concepts;
@@ -535,86 +645,118 @@ window.CadminSubscriptionDetail = (function () {
             return;
         }
         renderHeader();
-        renderBasics();
-        renderChannel();
+        if (!formsAreDirty()) {
+            fillBasicsForm();
+            fillChannelForm();
+        }
         renderFilters();
         renderParameters();
         refreshFromServer();
     }
 
-    function renderHeader() {
-        $("#sd-title").text(subscriptionName());
-        const status = subscription.status;
-        let actions = statusDisplay();
-        if (status === "error") {
-            actions += ' <span class="text-muted small align-middle">Server reported an error. Play to retry.</span>';
+    function paintAfterStatus() {
+        if (!subscriptionPageVisible()) {
+            return;
         }
+        renderHeader();
+        if (!formsAreDirty()) {
+            fillBasicsForm();
+            fillChannelForm();
+        }
+    }
+
+    function currentTopicUrl() {
+        const val = CadminApi.selectValue("#sd-topic");
+        if (val) {
+            return val;
+        }
+        const el = document.getElementById("sd-topic");
+        if (!el || (!el.tomselect && $("#sd-topic option").length <= 1)) {
+            return subscription.topic || "";
+        }
+        return "";
+    }
+
+    function formsSnapshot() {
+        return [
+            $("#sd-name").val() || "",
+            currentTopicUrl(),
+            $("#sd-reason").val() || "",
+            CadminApi.selectValue("#sd-org") || "",
+            $("#sd-channel-type").val() || "",
+            $("#sd-endpoint").val() || "",
+            $("#sd-content").val() || "",
+            $("#sd-content-type").val() || "",
+            $("#sd-heartbeat").val() || "",
+            $("#sd-timeout").val() || "",
+            $("#sd-max-count").val() || "",
+            $("#sd-end").val() || ""
+        ].join("\n");
+    }
+
+    function formsAreDirty() {
+        return !!savedForms && formsSnapshot() !== savedForms;
+    }
+
+    function syncUnsavedFlag() {
+        const root = window.CadminWorkspace ? CadminWorkspace.root() : document;
+        CadminApi.setUnsavedFlag(root, formsAreDirty());
+    }
+
+    function markFormsClean() {
+        savedForms = formsSnapshot();
+        syncUnsavedFlag();
+    }
+
+    function renderHeader() {
+        const label = subscriptionName();
+        $("#sd-title").text(label);
+        $("#sd-crumb").text(label);
+        $("#sd-status-badge").html(statusDisplay());
+        if (subscription.id) {
+            $("#sd-fhir-id").text(subscription.id).removeClass("d-none");
+        } else {
+            $("#sd-fhir-id").text("").addClass("d-none");
+        }
+        $("#sd-error-note").toggleClass("d-none", subscription.status !== "error");
+        const status = subscription.status;
+        let toggle = "";
         if (status === "off" || status === "error") {
-            actions += '<button class="btn btn-outline-primary" type="button" id="sd-toggle" data-next="requested">' +
+            toggle = '<button class="btn btn-outline-primary" type="button" id="sd-toggle" data-next="requested">' +
                 '<i class="bi bi-play-circle me-1"></i>Play</button>';
         } else if (status !== "entered-in-error") {
-            actions += '<button class="btn btn-outline-secondary" type="button" id="sd-toggle" data-next="off">' +
+            toggle = '<button class="btn btn-outline-secondary" type="button" id="sd-toggle" data-next="off">' +
                 '<i class="bi bi-stop-circle me-1"></i>Stop</button>';
         }
-        actions += '<button class="btn btn-outline-danger" type="button" id="sd-delete">' +
-            '<i class="bi bi-trash me-1"></i>Delete</button>';
-        actions += CadminResourceSource.button();
-        $("#sd-actions").html(actions);
+        $("#sd-toggle-slot").html(toggle);
     }
 
-    function topicHtml() {
-        const url = subscription.topic || "";
-        if (!url) {
-            return "—";
-        }
+    function updateTopicLink() {
+        const $link = $("#sd-topic-open");
         if (topicResource && topicResource.id) {
-            return CadminApi.resourceLink("#/subscription-topics/" + encodeURIComponent(topicResource.id),
-                topicResource.title || topicResource.name || url);
+            $link.attr("href", "#/subscription-topics/" + encodeURIComponent(topicResource.id))
+                .removeClass("d-none");
+        } else {
+            $link.addClass("d-none").removeAttr("href");
         }
-        return "<code>" + esc(url) + "</code>";
     }
 
-    function managingHtml() {
-        const ref = subscription.managingEntity;
-        const id = refId(ref);
-        if (id && CadminApp.isAdmin()) {
-            return '<a href="#/organizations/' + encodeURIComponent(id) + '">' + esc(refLabel(ref)) + "</a>";
-        }
-        return esc(refLabel(ref));
+    function fillBasicsForm() {
+        $("#sd-name").val(subscription.name || "");
+        $("#sd-reason").val(subscription.reason || "");
+        setTopicSelectValue(subscription.topic || "");
+        updateTopicLink();
     }
 
-    function renderBasics() {
-        $("#sd-basics").html(
-            '<dl class="row mb-0">' +
-                '<dt class="col-sm-3">Name</dt><dd class="col-sm-9">' + esc(subscription.name || "—") + "</dd>" +
-                '<dt class="col-sm-3">Status</dt><dd class="col-sm-9">' + statusDisplay() + "</dd>" +
-                '<dt class="col-sm-3">Topic</dt><dd class="col-sm-9">' + topicHtml() + "</dd>" +
-                '<dt class="col-sm-3">Reason</dt><dd class="col-sm-9">' + esc(subscription.reason || "—") + "</dd>" +
-                '<dt class="col-sm-3">Managing entity</dt><dd class="col-sm-9">' + managingHtml() + "</dd>" +
-                '<dt class="col-sm-3">ID</dt><dd class="col-sm-9"><code>' + esc(subscription.id) + "</code></dd>" +
-            "</dl>"
-        );
-    }
-
-    function renderChannel() {
-        $("#sd-channel").html(
-            '<dl class="row mb-0">' +
-                '<dt class="col-sm-3">Type</dt><dd class="col-sm-9">' + esc(channelLabel(subscription)) + "</dd>" +
-                '<dt class="col-sm-3">Endpoint</dt><dd class="col-sm-9"><code>' +
-                    esc(subscription.endpoint || "—") + "</code></dd>" +
-                '<dt class="col-sm-3">Content</dt><dd class="col-sm-9">' +
-                    esc(contentLabel(subscription.content)) + "</dd>" +
-                '<dt class="col-sm-3">Content type</dt><dd class="col-sm-9"><code>' +
-                    esc(subscription.contentType || "—") + "</code></dd>" +
-                '<dt class="col-sm-3">Heartbeat</dt><dd class="col-sm-9">' +
-                    esc(subscription.heartbeatPeriod != null ? subscription.heartbeatPeriod + " s" : "—") + "</dd>" +
-                '<dt class="col-sm-3">Timeout</dt><dd class="col-sm-9">' +
-                    esc(subscription.timeout != null ? subscription.timeout + " s" : "—") + "</dd>" +
-                '<dt class="col-sm-3">Max count</dt><dd class="col-sm-9">' +
-                    esc(subscription.maxCount != null ? String(subscription.maxCount) : "—") + "</dd>" +
-                '<dt class="col-sm-3">End</dt><dd class="col-sm-9">' + esc(formatInstant(subscription.end)) + "</dd>" +
-            "</dl>"
-        );
+    function fillChannelForm() {
+        $("#sd-channel-type").val((subscription.channelType && subscription.channelType.code) || "rest-hook");
+        $("#sd-endpoint").val(subscription.endpoint || "");
+        $("#sd-content").val(subscription.content || "id-only");
+        $("#sd-content-type").val(subscription.contentType || "application/fhir+json");
+        $("#sd-heartbeat").val(subscription.heartbeatPeriod != null ? subscription.heartbeatPeriod : "");
+        $("#sd-timeout").val(subscription.timeout != null ? subscription.timeout : "");
+        $("#sd-max-count").val(subscription.maxCount != null ? subscription.maxCount : "");
+        $("#sd-end").val(toLocalInput(subscription.end));
     }
 
     function renderFilters() {
@@ -668,29 +810,76 @@ window.CadminSubscriptionDetail = (function () {
         CadminApi.fhir("/SubscriptionTopic?url=" + encodeURIComponent(subscription.topic) + "&_count=1")
             .done(function (bundle) {
                 topicResource = CadminApi.bundleResources(bundle, "SubscriptionTopic")[0] || null;
-                renderBasics();
+                updateTopicLink();
                 renderFilters();
             });
     }
 
+    function topicPickerItem(topic) {
+        return {
+            url: topic.url || "",
+            name: topic.title || topic.name || topic.url || topic.id || "Untitled",
+            status: topic.status || ""
+        };
+    }
+
+    function topicPickerOptionHtml(item, escape) {
+        return '<div class="d-flex justify-content-between align-items-center gap-2">' +
+            '<span class="text-truncate">' + escape(item.name) + "</span>" +
+            (item.status
+                ? '<span class="flex-shrink-0">' + CadminWorkflow.publicationBadge(item.status) + "</span>"
+                : "") +
+            "</div>";
+    }
+
+    function setTopicSelectValue(url) {
+        const el = document.getElementById("sd-topic");
+        if (el && el.tomselect) {
+            if (url && !el.tomselect.options[url]) {
+                el.tomselect.addOption({ url: url, name: url, status: "" });
+            }
+            el.tomselect.setValue(url || "", true);
+            return;
+        }
+        if ($("#sd-topic option").length > 1) {
+            $("#sd-topic").val(url || "");
+        }
+    }
+
     function fillTopicSelect(preferredUrl) {
         const $select = $("#sd-topic");
+        CadminApi.destroySelect("#sd-topic");
         $select.html('<option value="">Loading topics…</option>');
         CadminApi.fhir("/SubscriptionTopic?_count=200&_sort=title").done(function (bundle) {
-            const topics = CadminApi.bundleResources(bundle, "SubscriptionTopic");
+            const topics = CadminApi.bundleResources(bundle, "SubscriptionTopic").map(topicPickerItem)
+                .filter(function (item) { return item.url; });
             if (!topics.length) {
                 $select.html('<option value="">No topics found</option>');
                 return;
             }
-            $select.html(topics.map(function (topic) {
-                const label = (topic.title || topic.name || topic.url || topic.id) +
-                    (topic.status && topic.status !== "active" ? " (" + topic.status + ")" : "");
-                const selected = topic.url === preferredUrl ? " selected" : "";
-                return '<option value="' + esc(topic.url) + '"' + selected + ">" + esc(label) + "</option>";
-            }).join(""));
-            if (preferredUrl && $select.val() !== preferredUrl) {
-                $select.prepend('<option value="' + esc(preferredUrl) + '" selected>' + esc(preferredUrl) + "</option>");
+            if (preferredUrl && !topics.some(function (item) { return item.url === preferredUrl; })) {
+                topics.unshift({ url: preferredUrl, name: preferredUrl, status: "" });
             }
+            $select.empty();
+            const ts = new TomSelect("#sd-topic", {
+                valueField: "url",
+                labelField: "name",
+                searchField: ["name", "url", "status"],
+                options: topics,
+                items: preferredUrl ? [preferredUrl] : [],
+                maxItems: 1,
+                persist: false,
+                create: false,
+                allowEmptyOption: false,
+                placeholder: "Select topic…",
+                dropdownParent: "body",
+                render: {
+                    option: topicPickerOptionHtml,
+                    item: topicPickerOptionHtml
+                }
+            });
+            ts.on("change", syncUnsavedFlag);
+            syncUnsavedFlag();
         }).fail(function () {
             $select.html('<option value="' + esc(preferredUrl || "") + '">' +
                 esc(preferredUrl || "Unable to load topics") + "</option>");
@@ -890,6 +1079,15 @@ window.CadminSubscriptionDetail = (function () {
         const $root = $(CadminWorkspace.root());
         $root.off(".subdetail");
 
+        $root.on("shown.bs.tab.subdetail", "#sd-pane-graph-btn", function () {
+            if (typeof CadminResourceGraph.resize === "function") {
+                CadminResourceGraph.resize();
+            }
+        });
+
+        $root.on("input.subdetail change.subdetail", "#sd-basic-form :input, #sd-channel-form :input",
+            syncUnsavedFlag);
+
         $root.on("click.subdetail", "#sd-toggle", function () {
             const next = $(this).attr("data-next");
             const starting = next === "requested";
@@ -926,24 +1124,6 @@ window.CadminSubscriptionDetail = (function () {
                     fail("Delete subscription", xhr);
                 });
             });
-        });
-
-        $("#sd-basic-modal").on("show.bs.modal", function () {
-            $("#sd-name").val(subscription.name || "");
-            $("#sd-reason").val(subscription.reason || "");
-            fillTopicSelect(subscription.topic || "");
-            fillOrgSelect(refId(subscription.managingEntity));
-        });
-
-        $("#sd-channel-modal").on("show.bs.modal", function () {
-            $("#sd-channel-type").val((subscription.channelType && subscription.channelType.code) || "rest-hook");
-            $("#sd-endpoint").val(subscription.endpoint || "");
-            $("#sd-content").val(subscription.content || "id-only");
-            $("#sd-content-type").val(subscription.contentType || "application/fhir+json");
-            $("#sd-heartbeat").val(subscription.heartbeatPeriod != null ? subscription.heartbeatPeriod : "");
-            $("#sd-timeout").val(subscription.timeout != null ? subscription.timeout : "");
-            $("#sd-max-count").val(subscription.maxCount != null ? subscription.maxCount : "");
-            $("#sd-end").val(toLocalInput(subscription.end));
         });
 
         $("#sd-filter-modal").on("show.bs.modal", function () {
@@ -986,7 +1166,6 @@ window.CadminSubscriptionDetail = (function () {
                 delete subscription.managingEntity;
             }
             saveSubscription(function () {
-                hideModal("sd-basic-modal");
                 CadminApi.showToast("success", "Subscription updated.");
                 loadTopic();
             });
@@ -1005,7 +1184,6 @@ window.CadminSubscriptionDetail = (function () {
                 end: "#sd-end"
             });
             saveSubscription(function () {
-                hideModal("sd-channel-modal");
                 CadminApi.showToast("success", "Channel updated.");
             });
         });

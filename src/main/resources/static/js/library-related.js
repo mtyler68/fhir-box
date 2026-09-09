@@ -66,18 +66,15 @@ window.CadminLibraryRelated = (function () {
     }
 
     function relatedCard() {
-        return '<div class="card shadow mb-4" id="library-related-card">' +
-            '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                "<div>" +
-                    '<h6 class="m-0"><i class="bi bi-box-arrow-up-right me-1"></i>Related libraries</h6>' +
-                    '<div class="small text-muted mt-1">Libraries this resource lists in relatedArtifact.</div>' +
-                "</div>" +
-                '<div class="d-flex gap-2">' +
-                    '<button class="btn btn-sm btn-outline-secondary" type="button" data-library-related-refresh ' +
+        return '<div class="card mb-3" id="library-related-card">' +
+            '<div class="card-header">' +
+                '<h3 class="card-title">Related libraries</h3>' +
+                '<div class="card-tools">' +
+                    '<button class="btn btn-sm btn-outline-secondary me-1" type="button" data-library-related-refresh ' +
                         'title="Refresh" aria-label="Refresh">' +
                         '<i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button>' +
-                    '<button class="btn btn-sm btn-primary" type="button" data-library-related-add>' +
-                        '<i class="bi bi-plus-lg me-1"></i>Add</button>' +
+                    '<button class="btn btn-sm btn-outline-primary" type="button" data-library-related-add>' +
+                        "Add</button>" +
                 "</div>" +
             "</div>" +
             '<div class="card-body p-0">' +
@@ -95,15 +92,14 @@ window.CadminLibraryRelated = (function () {
     }
 
     function referencedCard() {
-        return '<div class="card shadow mb-4" id="library-referenced-card">' +
-            '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                "<div>" +
-                    '<h6 class="m-0"><i class="bi bi-box-arrow-in-down me-1"></i>Referenced from</h6>' +
-                    '<div class="small text-muted mt-1">Other libraries that list this resource as a related artifact.</div>' +
+        return '<div class="card" id="library-referenced-card">' +
+            '<div class="card-header">' +
+                '<h3 class="card-title">Referenced from</h3>' +
+                '<div class="card-tools">' +
+                    '<button class="btn btn-sm btn-outline-secondary" type="button" data-library-referenced-refresh ' +
+                        'title="Refresh" aria-label="Refresh">' +
+                        '<i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button>' +
                 "</div>" +
-                '<button class="btn btn-sm btn-outline-secondary" type="button" data-library-referenced-refresh ' +
-                    'title="Refresh" aria-label="Refresh">' +
-                    '<i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button>' +
             "</div>" +
             '<div class="card-body p-0">' +
                 '<div class="table-responsive">' +

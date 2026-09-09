@@ -52,13 +52,10 @@ window.CadminCamelRouteDetail = (function () {
     let editor = null;
     let hintRegistered = false;
     let savedYaml = "";
+    let savedBasics = "";
 
     function esc(value) {
         return CadminApi.escapeHtml(value);
-    }
-
-    function field(label, control) {
-        return '<div class="mb-3"><label class="form-label">' + label + "</label>" + control + "</div>";
     }
 
     function optionsHtml(items, selected) {
@@ -79,6 +76,31 @@ window.CadminCamelRouteDetail = (function () {
                 : status === "draft" ? "warning"
                     : "info";
         return '<span class="badge text-bg-' + kind + '">' + esc(statusLabel(status)) + "</span>";
+    }
+
+    function routeLabel() {
+        return library.title || library.name || library.id || "Camel route";
+    }
+
+    function navButton(paneId, icon, label, opts) {
+        opts = opts || {};
+        const classes = ["list-group-item", "list-group-item-action", "text-start"];
+        if (opts.active) {
+            classes.push("active");
+        }
+        if (opts.danger) {
+            classes.push("text-danger");
+        }
+        return '<button type="button" class="' + classes.join(" ") + '" id="' + paneId + '-btn" ' +
+            'data-bs-toggle="pill" data-bs-target="#' + paneId + '" role="tab" aria-controls="' + paneId +
+            '" aria-selected="' + (opts.active ? "true" : "false") + '">' +
+            '<i class="' + icon + ' me-2" aria-hidden="true"></i>' + label +
+            "</button>";
+    }
+
+    function tabPane(id, body, active) {
+        return '<div class="tab-pane fade' + (active ? " show active" : "") + '" id="' + id +
+            '" role="tabpanel" aria-labelledby="' + id + '-btn">' + body + "</div>";
     }
 
     function encodeText(value) {
@@ -211,12 +233,28 @@ window.CadminCamelRouteDetail = (function () {
         return editor ? editor.getValue() : ($("#crd-yaml").val() || "");
     }
 
+    function basicsSnapshot() {
+        return [
+            $("#crd-title-input").val() || "",
+            $("#crd-name").val() || "",
+            $("#crd-status").val() || "",
+            $("#crd-version").val() || "",
+            $("#crd-description").val() || ""
+        ].join("\n");
+    }
+
     function syncUnsavedFlag() {
-        CadminApi.setUnsavedFlag(CadminWorkspace.root(), editorValue() !== savedYaml);
+        CadminApi.setUnsavedFlag(CadminWorkspace.root(),
+            editorValue() !== savedYaml || basicsSnapshot() !== savedBasics);
     }
 
     function markEditorClean() {
         savedYaml = editorValue();
+        syncUnsavedFlag();
+    }
+
+    function markBasicsClean() {
+        savedBasics = basicsSnapshot();
         syncUnsavedFlag();
     }
 
@@ -344,7 +382,10 @@ window.CadminCamelRouteDetail = (function () {
         }
     }
 
-    function saveLibrary(next, withMeta) {
+    function saveLibrary(next, opts) {
+        opts = opts || {};
+        const withMeta = !!opts.withMeta;
+        const withYaml = opts.withYaml !== false;
         if (withMeta) {
             applyMeta();
         } else {
@@ -353,23 +394,33 @@ window.CadminCamelRouteDetail = (function () {
                 text: libraryType
             };
         }
-        const yaml = editorValue();
-        const problem = validateYaml(yaml);
-        if (problem) {
-            CadminApi.showToast("danger", problem);
-            return;
+        if (withYaml) {
+            const yaml = editorValue();
+            const problem = validateYaml(yaml);
+            if (problem) {
+                CadminApi.showToast("danger", problem);
+                return;
+            }
+            upsertYaml(yaml);
         }
-        upsertYaml(yaml);
         CadminApi.fhir("/Library/" + encodeURIComponent(library.id), "PUT", library).done(function (updated) {
             library = updated || library;
-            renderMeta();
+            renderHeader();
+            if (withMeta) {
+                fillBasicsForm();
+                markBasicsClean();
+            }
             CadminResourceSource.mount(function () { return library; });
             CadminResourceGraph.mount(library);
             CadminLibraryRelated.mount(library);
             if (window.CadminCamelRouteGraph) {
                 CadminCamelRouteGraph.refresh();
             }
-            markEditorClean();
+            if (withYaml) {
+                markEditorClean();
+            } else {
+                syncUnsavedFlag();
+            }
             if (next) {
                 next();
             }
@@ -394,91 +445,135 @@ window.CadminCamelRouteDetail = (function () {
         }
         library = resource;
         const $root = $(CadminWorkspace.root());
+        const label = esc(routeLabel());
+        const yamlTools =
+            '<select class="form-select form-select-sm" id="crd-template" style="max-width:14rem">' +
+                '<option value="">Insert template…</option>' +
+                templates.map(function (item) {
+                    return '<option value="' + esc(item.id) + '">' + esc(item.label) + "</option>";
+                }).join("") +
+            "</select>" +
+            '<button class="btn btn-sm btn-outline-secondary" type="button" id="crd-find">' +
+                '<i class="bi bi-search me-1"></i>Find</button>' +
+            '<button class="btn btn-sm btn-outline-secondary" type="button" id="crd-replace">' +
+                "Replace</button>" +
+            '<div class="btn-group btn-group-sm" role="group" aria-label="Fold YAML">' +
+                '<button class="btn btn-outline-secondary" type="button" id="crd-fold" ' +
+                    'title="Fold all" aria-label="Fold all">' +
+                    '<i class="bi bi-arrows-collapse" aria-hidden="true"></i></button>' +
+                '<button class="btn btn-outline-secondary" type="button" id="crd-unfold" ' +
+                    'title="Unfold all" aria-label="Unfold all">' +
+                    '<i class="bi bi-arrows-expand" aria-hidden="true"></i></button>' +
+            "</div>" +
+            '<button class="btn btn-sm btn-primary" type="button" id="crd-save">' +
+                '<i class="bi bi-check2 me-1"></i>Save</button>';
         $root.html(
-            '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
+            '<div class="d-flex align-items-center justify-content-between mb-3">' +
                 "<div>" +
-                    '<a class="small text-decoration-none" href="#/camel-routes">' +
-                        '<i class="bi bi-arrow-left me-1"></i>Camel Routes</a>' +
+                    '<nav aria-label="breadcrumb">' +
+                        '<ol class="breadcrumb mb-1">' +
+                            '<li class="breadcrumb-item"><a href="#/camel-routes">Camel Routes</a></li>' +
+                            '<li class="breadcrumb-item active" aria-current="page" id="crd-crumb">' + label + "</li>" +
+                        "</ol>" +
+                    "</nav>" +
                     '<div class="d-flex align-items-center flex-wrap gap-2">' +
-                        '<h1 class="h3 mb-0 page-title" id="crd-title"></h1>' +
+                        '<h1 class="mb-0 fs-3 page-title" id="crd-title">' + label + "</h1>" +
+                        '<span id="crd-status-badge">' + statusBadge(library.status) + "</span>" +
+                        (library.id
+                            ? '<code class="small" id="crd-fhir-id">' + esc(library.id) + "</code>"
+                            : '<code class="small d-none" id="crd-fhir-id"></code>') +
                         CadminApi.unsavedFlagHtml() +
                     "</div>" +
                 "</div>" +
                 '<div class="d-flex flex-wrap gap-2">' +
-                    '<button class="btn btn-primary" type="button" id="crd-save">' +
-                        '<i class="bi bi-check2 me-1"></i>Save</button>' +
-                    '<button class="btn btn-outline-danger" type="button" id="crd-delete">' +
-                        '<i class="bi bi-trash me-1"></i>Delete</button>' +
                     CadminResourceSource.button() +
                 "</div>" +
             "</div>" +
-            '<div class="card shadow mb-4">' +
-                '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                    '<h6 class="m-0">Identity</h6>' +
-                    '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#crd-meta-modal">Edit</button>' +
-                "</div>" +
-                '<div class="card-body" id="crd-meta"></div>' +
-            "</div>" +
-            '<div class="row camel-route-split">' +
-                '<div class="col-xl-7 mb-4">' +
-                    '<div class="card shadow h-100" id="camel-route-yaml-card">' +
-                        '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
-                            "<div>" +
-                                '<h6 class="m-0">Camel route YAML</h6>' +
-                                '<div class="small text-muted mt-1"><code>' + esc(routeContentType) + "</code>" +
-                                    " · Ctrl-Space complete · Ctrl-F find · Ctrl-/ comment · Ctrl-Q fold</div>" +
-                            "</div>" +
-                            '<div class="d-flex flex-nowrap align-items-center gap-2 camel-route-yaml-tools">' +
-                                '<select class="form-select form-select-sm" id="crd-template" style="max-width:14rem">' +
-                                    '<option value="">Insert template…</option>' +
-                                    templates.map(function (item) {
-                                        return '<option value="' + esc(item.id) + '">' + esc(item.label) + "</option>";
-                                    }).join("") +
-                                "</select>" +
-                                '<button class="btn btn-sm btn-outline-secondary" type="button" id="crd-find">' +
-                                    '<i class="bi bi-search me-1"></i>Find</button>' +
-                                '<button class="btn btn-sm btn-outline-secondary" type="button" id="crd-replace">' +
-                                    "Replace</button>" +
-                                '<div class="btn-group btn-group-sm" role="group" aria-label="Fold YAML">' +
-                                    '<button class="btn btn-outline-secondary" type="button" id="crd-fold" ' +
-                                        'title="Fold all" aria-label="Fold all">' +
-                                        '<i class="bi bi-arrows-collapse" aria-hidden="true"></i></button>' +
-                                    '<button class="btn btn-outline-secondary" type="button" id="crd-unfold" ' +
-                                        'title="Unfold all" aria-label="Unfold all">' +
-                                        '<i class="bi bi-arrows-expand" aria-hidden="true"></i></button>' +
-                                "</div>" +
-                            "</div>" +
-                        "</div>" +
-                        '<div class="card-body p-0">' +
-                            '<textarea id="crd-yaml" class="d-none"></textarea>' +
-                        "</div>" +
+            '<div class="row g-3">' +
+                '<div class="col-md-3">' +
+                    '<div class="list-group list-group-flush nav nav-pills flex-column" id="crd-settings-nav" role="tablist">' +
+                        navButton("crd-pane-basics", "bi bi-info-circle", "Basics", { active: true }) +
+                        navButton("crd-pane-route", "bi bi-file-earmark-code", "Route") +
+                        navButton("crd-pane-route-graph", "bi bi-bezier2", "Route graph") +
+                        navButton("crd-pane-related", "bi bi-link-45deg", "Related") +
+                        navButton("crd-pane-graph", "bi bi-diagram-3", "Reference graph") +
+                        navButton("crd-pane-history", "bi bi-clock-history", "History") +
+                        navButton("crd-pane-danger", "bi bi-exclamation-triangle", "Danger zone", { danger: true }) +
                     "</div>" +
                 "</div>" +
-                '<div class="col-xl-5 mb-4">' +
-                    CadminCamelRouteGraph.card() +
-                "</div>" +
-            "</div>" +
-            CadminLibraryRelated.cards() +
-            CadminResourceHistory.card() +
-            CadminResourceGraph.card() +
-            '<div class="modal fade" id="crd-meta-modal" tabindex="-1">' +
-                '<div class="modal-dialog">' +
-                    '<form class="modal-content" id="crd-meta-form">' +
-                        '<div class="modal-header"><h5 class="modal-title">Edit identity</h5>' +
-                            '<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>' +
-                        '<div class="modal-body">' +
-                            field("Title", '<input class="form-control" id="crd-title-input">') +
-                            field("Name", '<input class="form-control font-monospace" id="crd-name">') +
-                            field("Status", '<select class="form-select" id="crd-status">' +
-                                optionsHtml(statusOptions, "") + "</select>") +
-                            field("Version", '<input class="form-control" id="crd-version">') +
-                            field("Description", '<textarea class="form-control" id="crd-description" rows="3"></textarea>') +
-                        "</div>" +
-                        '<div class="modal-footer">' +
-                            '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>' +
-                            '<button type="submit" class="btn btn-primary">Save</button>' +
-                        "</div>" +
-                    "</form>" +
+                '<div class="col-md-9">' +
+                    '<div class="tab-content">' +
+                        tabPane("crd-pane-basics",
+                            '<div class="card">' +
+                                '<div class="card-header"><h3 class="card-title">Basics</h3></div>' +
+                                '<div class="card-body">' +
+                                    '<form class="row g-3" id="crd-basic-form">' +
+                                        '<div class="col-md-6">' +
+                                            '<label class="form-label" for="crd-title-input">Title</label>' +
+                                            '<input class="form-control" id="crd-title-input">' +
+                                        "</div>" +
+                                        '<div class="col-md-6">' +
+                                            '<label class="form-label" for="crd-name">Name</label>' +
+                                            '<input class="form-control font-monospace" id="crd-name">' +
+                                        "</div>" +
+                                        '<div class="col-md-6">' +
+                                            '<label class="form-label" for="crd-status">Status</label>' +
+                                            '<select class="form-select" id="crd-status">' +
+                                                optionsHtml(statusOptions, library.status || "draft") + "</select>" +
+                                        "</div>" +
+                                        '<div class="col-md-6">' +
+                                            '<label class="form-label" for="crd-version">Version</label>' +
+                                            '<input class="form-control" id="crd-version" autocomplete="off">' +
+                                        "</div>" +
+                                        '<div class="col-12">' +
+                                            '<label class="form-label" for="crd-description">Description</label>' +
+                                            '<textarea class="form-control" id="crd-description" rows="3"></textarea>' +
+                                        "</div>" +
+                                        '<div class="col-12">' +
+                                            '<button type="submit" class="btn btn-primary">Save changes</button>' +
+                                        "</div>" +
+                                    "</form>" +
+                                "</div>" +
+                            "</div>",
+                            true) +
+                        tabPane("crd-pane-route",
+                            '<div class="card" id="camel-route-yaml-card">' +
+                                '<div class="card-header flex-wrap gap-2">' +
+                                    "<div>" +
+                                        '<h3 class="card-title mb-0">Camel route YAML</h3>' +
+                                        '<div class="small text-muted"><code>' + esc(routeContentType) + "</code>" +
+                                            " · Ctrl-Space complete · Ctrl-F find · Ctrl-/ comment · Ctrl-Q fold</div>" +
+                                    "</div>" +
+                                    '<div class="card-tools d-flex flex-nowrap align-items-center gap-2 camel-route-yaml-tools">' +
+                                        yamlTools +
+                                    "</div>" +
+                                "</div>" +
+                                '<div class="card-body p-0">' +
+                                    '<textarea id="crd-yaml" class="d-none"></textarea>' +
+                                "</div>" +
+                            "</div>") +
+                        tabPane("crd-pane-route-graph", CadminCamelRouteGraph.card()) +
+                        tabPane("crd-pane-related", CadminLibraryRelated.cards()) +
+                        tabPane("crd-pane-graph", CadminResourceGraph.card()) +
+                        tabPane("crd-pane-history", CadminResourceHistory.card()) +
+                        tabPane("crd-pane-danger",
+                            '<div class="card border-danger">' +
+                                '<div class="card-header bg-danger-subtle">' +
+                                    '<h3 class="card-title text-danger">Danger zone</h3>' +
+                                "</div>" +
+                                '<div class="card-body">' +
+                                    '<div class="d-flex justify-content-between align-items-start">' +
+                                        "<div>" +
+                                            '<p class="mb-0 fw-semibold text-danger">Delete this Camel route</p>' +
+                                            '<small class="text-secondary">' +
+                                                "This permanently deletes the Library that stores the route YAML." +
+                                            "</small>" +
+                                        "</div>" +
+                                        '<button class="btn btn-danger" type="button" id="crd-delete">Delete</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</div>") +
+                    "</div>" +
                 "</div>" +
             "</div>"
         );
@@ -486,12 +581,12 @@ window.CadminCamelRouteDetail = (function () {
         CadminResourceGraph.mount(library);
         CadminResourceHistory.mount(library);
         CadminLibraryRelated.mount(library);
-        renderMeta();
+        renderHeader();
+        fillBasicsForm();
         mountEditor(readYaml() || templates[0].yaml);
-        CadminCamelRouteGraph.mount(editorValue);
+        mountRouteGraph();
         markEditorClean();
         bind();
-        $("#crd-meta-modal").on("show.bs.modal", populateMetaForm);
     }
 
     function reveal(resource) {
@@ -520,36 +615,99 @@ window.CadminCamelRouteDetail = (function () {
             }
         }
         if (window.CadminCamelRouteGraph) {
-            CadminCamelRouteGraph.mount(editorValue);
+            mountRouteGraph();
         }
         syncUnsavedFlag();
     }
 
-    function renderMeta() {
-        $("#crd-title").text(library.title || library.name || "Camel route");
-        $("#crd-meta").html(
-            '<dl class="row mb-0">' +
-                '<dt class="col-sm-3">Title</dt><dd class="col-sm-9">' + esc(library.title || "—") + "</dd>" +
-                '<dt class="col-sm-3">Status</dt><dd class="col-sm-9">' + statusBadge(library.status) + "</dd>" +
-                '<dt class="col-sm-3">Type</dt><dd class="col-sm-9"><code>' + esc(libraryType) + "</code></dd>" +
-                '<dt class="col-sm-3">Name</dt><dd class="col-sm-9"><code>' + esc(library.name || "—") + "</code></dd>" +
-                '<dt class="col-sm-3">Version</dt><dd class="col-sm-9"><code>' + esc(library.version || "—") + "</code></dd>" +
-                '<dt class="col-sm-3">Description</dt><dd class="col-sm-9">' + esc(library.description || "—") + "</dd>" +
-                '<dt class="col-sm-3">ID</dt><dd class="col-sm-9"><code>' + esc(library.id) + "</code></dd>" +
-            "</dl>"
-        );
+    function renderHeader() {
+        const label = routeLabel();
+        $("#crd-crumb").text(label);
+        $("#crd-title").text(label);
+        $("#crd-status-badge").html(statusBadge(library.status));
+        if (library.id) {
+            $("#crd-fhir-id").text(library.id).removeClass("d-none");
+        } else {
+            $("#crd-fhir-id").text("").addClass("d-none");
+        }
     }
 
-    function populateMetaForm() {
+    function fillBasicsForm() {
         $("#crd-title-input").val(library.title || "");
         $("#crd-name").val(library.name || "");
         $("#crd-status").val(library.status || "draft");
         $("#crd-version").val(library.version || "");
         $("#crd-description").val(library.description || "");
-        CadminApi.fillValueSetSelect("#crd-status", CadminApi.valueSets.publicationStatus, {
-            fallback: statusOptions,
-            selected: library.status || "draft"
+        markBasicsClean();
+    }
+
+    function refreshRoutePane() {
+        if (editor) {
+            editor.setSize("100%", "36rem");
+            editor.refresh();
+        }
+    }
+
+    function refreshRouteGraphPane() {
+        if (window.CadminCamelRouteGraph && typeof CadminCamelRouteGraph.resize === "function") {
+            CadminCamelRouteGraph.resize();
+        }
+    }
+
+    function unfoldEditorToLine(lineNo) {
+        if (!editor || typeof editor.findMarks !== "function") {
+            return;
+        }
+        const to = CodeMirror.Pos(lineNo, (editor.getLine(lineNo) || "").length);
+        editor.findMarks(CodeMirror.Pos(0, 0), to).forEach(function (mark) {
+            if (mark && mark.__isFold) {
+                mark.clear();
+            }
         });
+    }
+
+    function applyYamlLine(line) {
+        if (!editor || typeof line !== "number" || line < 0) {
+            return;
+        }
+        const lineNo = Math.max(0, Math.min(line, editor.lineCount() - 1));
+        unfoldEditorToLine(lineNo);
+        refreshRoutePane();
+        const text = editor.getLine(lineNo) || "";
+        const ch = text.search(/\S/);
+        const from = CodeMirror.Pos(lineNo, 0);
+        const to = CodeMirror.Pos(lineNo, text.length);
+        editor.setCursor({ line: lineNo, ch: ch < 0 ? 0 : ch });
+        editor.scrollIntoView({ from: from, to: to }, 80);
+        editor.focus();
+    }
+
+    function revealYamlLine(line) {
+        if (typeof line !== "number" || line < 0) {
+            return;
+        }
+        const btn = document.getElementById("crd-pane-route-btn");
+        const pane = document.getElementById("crd-pane-route");
+        const already = pane && pane.classList.contains("active") && pane.classList.contains("show");
+        if (already || !btn) {
+            applyYamlLine(line);
+            return;
+        }
+        $(btn).off("shown.bs.tab.crdetail-reveal").one("shown.bs.tab.crdetail-reveal", function () {
+            applyYamlLine(line);
+        });
+        if (window.bootstrap && bootstrap.Tab) {
+            bootstrap.Tab.getOrCreateInstance(btn).show();
+        } else {
+            btn.click();
+        }
+    }
+
+    function mountRouteGraph() {
+        if (!window.CadminCamelRouteGraph) {
+            return;
+        }
+        CadminCamelRouteGraph.mount(editorValue, { onNodeClick: revealYamlLine });
     }
 
     function insertTemplate(id) {
@@ -582,10 +740,31 @@ window.CadminCamelRouteDetail = (function () {
     function bind() {
         const $root = $(CadminWorkspace.root());
         $root.off(".crdetail");
+        $root.on("shown.bs.tab.crdetail", "#crd-pane-route-btn", refreshRoutePane);
+        $root.on("shown.bs.tab.crdetail", "#crd-pane-route-graph-btn", refreshRouteGraphPane);
+        $root.on("shown.bs.tab.crdetail", "#crd-pane-graph-btn", function () {
+            if (typeof CadminResourceGraph.resize === "function") {
+                CadminResourceGraph.resize();
+            }
+        });
+        $root.on("input.crdetail change.crdetail", "#crd-basic-form :input", syncUnsavedFlag);
+        CadminApi.fillValueSetSelect("#crd-status", CadminApi.valueSets.publicationStatus, {
+            fallback: statusOptions,
+            selected: library.status || "draft",
+            onConcepts: function () {
+                syncUnsavedFlag();
+            }
+        });
         $root.on("click.crdetail", "#crd-save", function () {
             saveLibrary(function () {
                 CadminApi.showToast("success", "Camel route saved.");
             });
+        });
+        $("#crd-basic-form").on("submit", function (event) {
+            event.preventDefault();
+            saveLibrary(function () {
+                CadminApi.showToast("success", "Camel route updated.");
+            }, { withMeta: true, withYaml: false });
         });
         $root.on("click.crdetail", "#crd-delete", function () {
             CadminApi.confirm("Delete this Camel route?").done(function () {
@@ -637,17 +816,6 @@ window.CadminCamelRouteDetail = (function () {
                     editor.foldCode(CodeMirror.Pos(i, 0), null, "unfold");
                 }
             });
-        });
-        $("#crd-meta-form").on("submit", function (event) {
-            event.preventDefault();
-            saveLibrary(function () {
-                const el = document.getElementById("crd-meta-modal");
-                const modal = el && bootstrap.Modal.getInstance(el);
-                if (modal) {
-                    modal.hide();
-                }
-                CadminApi.showToast("success", "Identity updated.");
-            }, true);
         });
     }
 
