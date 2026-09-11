@@ -32,6 +32,11 @@ window.CadminIcgRouteDetail = (function () {
             id: "jolt",
             label: "Jolt JSON response",
             yaml: "- id: jolt_ratings\n  uri: https://httpbin.org\n  predicates:\n    - Path=/ratings/**\n  filters:\n    - StripPrefix=1\n    - name: JoltTransform\n      args:\n        name: ratings\n        version: \"^1.0.0\"\n"
+        },
+        {
+            id: "rate-limit",
+            label: "Client rate limit",
+            yaml: "- id: patient_read\n  uri: https://httpbin.org\n  predicates:\n    - Path=/Patient/**\n  filters:\n    - StripPrefix=0\n    - ClientRateLimit=patient_read,30,2000\n"
         }
     ];
     const hintWords = [
@@ -42,19 +47,26 @@ window.CadminIcgRouteDetail = (function () {
         "AddResponseHeader", "RemoveRequestHeader", "RemoveResponseHeader",
         "SetStatus", "Retry", "PreserveHostHeader", "RequestRateLimiter",
         "JoltTransform", "version",
+        "ClientRateLimit", "endpoint", "requestsPerMinute", "requestsPerDay", "requestsPerSecond",
         "name", "args", "pattern", "parts", "regexp", "replacement"
     ];
+    const markdownFields = ["ird-description", "ird-purpose", "ird-usage", "ird-copyright"];
+    const markdownFieldKeys = {
+        "ird-description": "description",
+        "ird-purpose": "purpose",
+        "ird-usage": "usage",
+        "ird-copyright": "copyright"
+    };
     let library = null;
     let editor = null;
+    let markdownEditors = {};
+    let turndown = null;
     let hintRegistered = false;
     let savedYaml = "";
+    let savedBasics = "";
 
     function esc(value) {
         return CadminApi.escapeHtml(value);
-    }
-
-    function field(label, control) {
-        return '<div class="mb-3"><label class="form-label">' + label + "</label>" + control + "</div>";
     }
 
     function optionsHtml(items, selected) {
@@ -75,6 +87,31 @@ window.CadminIcgRouteDetail = (function () {
                 : status === "draft" ? "warning"
                     : "info";
         return '<span class="badge text-bg-' + kind + '">' + esc(statusLabel(status)) + "</span>";
+    }
+
+    function routeLabel() {
+        return library.title || library.name || library.id || "ICG route";
+    }
+
+    function navButton(paneId, icon, label, opts) {
+        opts = opts || {};
+        const classes = ["list-group-item", "list-group-item-action", "text-start"];
+        if (opts.active) {
+            classes.push("active");
+        }
+        if (opts.danger) {
+            classes.push("text-danger");
+        }
+        return '<button type="button" class="' + classes.join(" ") + '" id="' + paneId + '-btn" ' +
+            'data-bs-toggle="pill" data-bs-target="#' + paneId + '" role="tab" aria-controls="' + paneId +
+            '" aria-selected="' + (opts.active ? "true" : "false") + '">' +
+            '<i class="' + icon + ' me-2" aria-hidden="true"></i>' + label +
+            "</button>";
+    }
+
+    function tabPane(id, body, active) {
+        return '<div class="tab-pane fade' + (active ? " show active" : "") + '" id="' + id +
+            '" role="tabpanel" aria-labelledby="' + id + '-btn">' + body + "</div>";
     }
 
     function encodeText(value) {
@@ -196,23 +233,255 @@ window.CadminIcgRouteDetail = (function () {
         });
     }
 
-    function destroyEditor() {
+    function field(label, control, hint) {
+        const idMatch = String(control).match(/\sid="([^"]+)"/);
+        const forAttr = idMatch ? ' for="' + idMatch[1] + '"' : "";
+        return '<div class="mb-3"><label class="form-label"' + forAttr + ">" + label + "</label>" + control +
+            (hint ? '<div class="form-text">' + hint + "</div>" : "") + "</div>";
+    }
+
+    function fieldRow(left, right) {
+        return '<div class="row">' +
+            '<div class="col-md-6">' + left + "</div>" +
+            '<div class="col-md-6">' + right + "</div>" +
+            "</div>";
+    }
+
+    function markdownField(label, id) {
+        return field(label,
+            '<div class="crd-markdown-host">' +
+                '<textarea class="form-control" id="' + id + '" rows="6"></textarea>' +
+            "</div>");
+    }
+
+    function dateInputValue(value) {
+        return String(value || "").slice(0, 10);
+    }
+
+    function setOrDelete(obj, key, value) {
+        const trimmed = String(value == null ? "" : value).trim();
+        if (trimmed) {
+            obj[key] = trimmed;
+        } else {
+            delete obj[key];
+        }
+    }
+
+    function typeCode() {
+        const coding = ((library && library.type && library.type.coding) || []).find(function (item) {
+            return item && item.code;
+        });
+        return (coding && coding.code) || libraryType;
+    }
+
+    function looksLikeHtml(value) {
+        return /^<(p|div|h[1-6]|ul|ol|li|blockquote|pre|span|strong|em|br|a)\b/i.test(String(value || "").trim());
+    }
+
+    function htmlToMarkdown(value) {
+        const text = String(value == null ? "" : value);
+        if (!text.trim()) {
+            return "";
+        }
+        if (!looksLikeHtml(text)) {
+            return text;
+        }
+        if (typeof TurndownService === "undefined") {
+            return text;
+        }
+        if (!turndown) {
+            turndown = new TurndownService({
+                headingStyle: "atx",
+                codeBlockStyle: "fenced",
+                bulletListMarker: "-"
+            });
+        }
+        return String(turndown.turndown(text) || "").trim();
+    }
+
+    function markdownToolbar() {
+        function tool(name, action, icon, title) {
+            return { name: name, action: action, className: icon, title: title };
+        }
+        return [
+            tool("bold", EasyMDE.toggleBold, "bi bi-type-bold", "Bold"),
+            tool("italic", EasyMDE.toggleItalic, "bi bi-type-italic", "Italic"),
+            tool("strikethrough", EasyMDE.toggleStrikethrough, "bi bi-type-strikethrough", "Strikethrough"),
+            tool("heading", EasyMDE.toggleHeadingSmaller, "bi bi-type-h1", "Heading"),
+            "|",
+            tool("quote", EasyMDE.toggleBlockquote, "bi bi-quote", "Quote"),
+            tool("code", EasyMDE.toggleCodeBlock, "bi bi-code-slash", "Code"),
+            tool("unordered-list", EasyMDE.toggleUnorderedList, "bi bi-list-ul", "Bulleted list"),
+            tool("ordered-list", EasyMDE.toggleOrderedList, "bi bi-list-ol", "Numbered list"),
+            "|",
+            tool("link", EasyMDE.drawLink, "bi bi-link-45deg", "Link"),
+            "|",
+            tool("preview", EasyMDE.togglePreview, "bi bi-eye no-disable", "Preview"),
+            tool("guide", "https://www.markdownguide.org/basic-syntax/", "bi bi-question-circle no-disable", "Markdown guide")
+        ];
+    }
+
+    function markdownWrapper(mde) {
+        return mde && mde.codemirror && typeof mde.codemirror.getWrapperElement === "function"
+            ? mde.codemirror.getWrapperElement()
+            : null;
+    }
+
+    function destroyMarkdownEditors() {
+        Object.keys(markdownEditors).forEach(function (id) {
+            const mde = markdownEditors[id];
+            if (mde && typeof mde.toTextArea === "function") {
+                try {
+                    mde.toTextArea();
+                } catch (ignored) {
+                    /* editor already detached */
+                }
+            }
+        });
+        markdownEditors = {};
+    }
+
+    function markdownValue(id) {
+        const mde = markdownEditors[id];
+        if (!mde) {
+            const el = document.getElementById(id);
+            if (el) {
+                return el.value || "";
+            }
+            return (library && library[markdownFieldKeys[id]]) || "";
+        }
+        return mde.value() || "";
+    }
+
+    function setMarkdownValue(id, value) {
+        const next = htmlToMarkdown(value || "");
+        const mde = markdownEditors[id];
+        if (!mde) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.value = next;
+            }
+            return;
+        }
+        if (mde.value() === next) {
+            return;
+        }
+        mde.value(next);
+    }
+
+    function mountMarkdownEditors() {
+        if (typeof EasyMDE === "undefined") {
+            return;
+        }
+        markdownFields.forEach(function (id) {
+            const el = document.getElementById(id);
+            if (!el) {
+                return;
+            }
+            const existing = markdownEditors[id];
+            const wrap = markdownWrapper(existing);
+            if (existing && wrap && document.body.contains(wrap)) {
+                return;
+            }
+            if (existing && typeof existing.toTextArea === "function") {
+                try {
+                    existing.toTextArea();
+                } catch (ignored) {
+                    /* editor already detached */
+                }
+            }
+            const textarea = document.getElementById(id);
+            if (!textarea) {
+                return;
+            }
+            const mde = new EasyMDE({
+                element: textarea,
+                autofocus: false,
+                autoDownloadFontAwesome: false,
+                spellChecker: false,
+                status: false,
+                forceSync: true,
+                minHeight: "12rem",
+                placeholder: "Write markdown…",
+                toolbar: markdownToolbar()
+            });
+            mde.codemirror.on("change", syncUnsavedFlag);
+            markdownEditors[id] = mde;
+        });
+    }
+
+    function fillMarkdownFields() {
+        setMarkdownValue("ird-description", library && library.description);
+        setMarkdownValue("ird-purpose", library && library.purpose);
+        setMarkdownValue("ird-usage", library && library.usage);
+        setMarkdownValue("ird-copyright", library && library.copyright);
+    }
+
+    function refreshMarkdownEditors() {
+        const live = markdownFields.every(function (id) {
+            const wrap = markdownWrapper(markdownEditors[id]);
+            return wrap && document.body.contains(wrap);
+        });
+        if (live) {
+            markdownFields.forEach(function (id) {
+                markdownEditors[id].codemirror.refresh();
+            });
+            return;
+        }
+        destroyMarkdownEditors();
+        mountMarkdownEditors();
+        fillMarkdownFields();
+    }
+
+    function destroyYamlEditor() {
         if (editor) {
             editor.toTextArea();
             editor = null;
         }
     }
 
+    function destroyEditor() {
+        destroyMarkdownEditors();
+        destroyYamlEditor();
+    }
+
     function editorValue() {
         return editor ? editor.getValue() : ($("#ird-yaml").val() || "");
     }
 
+    function basicsSnapshot() {
+        return [
+            $("#ird-title-input").val() || "",
+            $("#ird-status").val() || "",
+            $("#ird-experimental").is(":checked") ? "1" : "0",
+            markdownValue("ird-description"),
+            markdownValue("ird-purpose"),
+            markdownValue("ird-usage"),
+            markdownValue("ird-copyright"),
+            $("#ird-url").val() || "",
+            $("#ird-name").val() || "",
+            $("#ird-version").val() || "",
+            $("#ird-publisher").val() || "",
+            $("#ird-date").val() || "",
+            $("#ird-approval").val() || "",
+            $("#ird-review").val() || "",
+            $("#ird-period-start").val() || "",
+            $("#ird-period-end").val() || ""
+        ].join("\n");
+    }
+
     function syncUnsavedFlag() {
-        CadminApi.setUnsavedFlag(CadminWorkspace.root(), editorValue() !== savedYaml);
+        CadminApi.setUnsavedFlag(CadminWorkspace.root(),
+            editorValue() !== savedYaml || basicsSnapshot() !== savedBasics);
     }
 
     function markEditorClean() {
         savedYaml = editorValue();
+        syncUnsavedFlag();
+    }
+
+    function markBasicsClean() {
+        savedBasics = basicsSnapshot();
         syncUnsavedFlag();
     }
 
@@ -242,7 +511,7 @@ window.CadminIcgRouteDetail = (function () {
     }
 
     function mountEditor(text) {
-        destroyEditor();
+        destroyYamlEditor();
         const textarea = document.getElementById("ird-yaml");
         if (!textarea) {
             return;
@@ -309,33 +578,47 @@ window.CadminIcgRouteDetail = (function () {
     }
 
     function applyMeta() {
-        library.title = $("#ird-title-input").val().trim();
-        const name = $("#ird-name").val().trim();
-        const version = $("#ird-version").val().trim();
-        const description = $("#ird-description").val().trim();
+        setOrDelete(library, "title", $("#ird-title-input").val());
         library.status = $("#ird-status").val() || "draft";
         library.type = {
             coding: [{ code: libraryType, display: "ICG Route" }],
             text: libraryType
         };
-        if (name) {
-            library.name = name;
+        if ($("#ird-experimental").is(":checked")) {
+            library.experimental = true;
         } else {
-            delete library.name;
+            delete library.experimental;
         }
-        if (version) {
-            library.version = version;
+        setOrDelete(library, "description", htmlToMarkdown(markdownValue("ird-description")));
+        setOrDelete(library, "purpose", htmlToMarkdown(markdownValue("ird-purpose")));
+        setOrDelete(library, "usage", htmlToMarkdown(markdownValue("ird-usage")));
+        setOrDelete(library, "copyright", htmlToMarkdown(markdownValue("ird-copyright")));
+        setOrDelete(library, "url", $("#ird-url").val());
+        setOrDelete(library, "name", $("#ird-name").val());
+        setOrDelete(library, "version", $("#ird-version").val());
+        setOrDelete(library, "publisher", $("#ird-publisher").val());
+        setOrDelete(library, "date", $("#ird-date").val());
+        setOrDelete(library, "approvalDate", $("#ird-approval").val());
+        setOrDelete(library, "lastReviewDate", $("#ird-review").val());
+        const start = ($("#ird-period-start").val() || "").trim();
+        const end = ($("#ird-period-end").val() || "").trim();
+        if (start || end) {
+            library.effectivePeriod = {};
+            if (start) {
+                library.effectivePeriod.start = start;
+            }
+            if (end) {
+                library.effectivePeriod.end = end;
+            }
         } else {
-            delete library.version;
-        }
-        if (description) {
-            library.description = description;
-        } else {
-            delete library.description;
+            delete library.effectivePeriod;
         }
     }
 
-    function saveLibrary(next, withMeta) {
+    function saveLibrary(next, opts) {
+        opts = opts || {};
+        const withMeta = !!opts.withMeta;
+        const withYaml = opts.withYaml !== false;
         if (withMeta) {
             applyMeta();
         } else {
@@ -344,20 +627,31 @@ window.CadminIcgRouteDetail = (function () {
                 text: libraryType
             };
         }
-        const yaml = editorValue();
-        const problem = validateYaml(yaml);
-        if (problem) {
-            CadminApi.showToast("danger", problem);
-            return;
+        if (withYaml) {
+            const yaml = editorValue();
+            const problem = validateYaml(yaml);
+            if (problem) {
+                CadminApi.showToast("danger", problem);
+                return;
+            }
+            upsertYaml(yaml);
         }
-        upsertYaml(yaml);
         CadminApi.fhir("/Library/" + encodeURIComponent(library.id), "PUT", library).done(function (updated) {
             library = updated || library;
-            renderMeta();
+            renderHeader();
+            if (withMeta) {
+                fillBasicsForm();
+                fillMarkdownFields();
+                markBasicsClean();
+            }
             CadminResourceSource.mount(function () { return library; });
             CadminResourceGraph.mount(library);
             CadminLibraryRelated.mount(library);
-            markEditorClean();
+            if (withYaml) {
+                markEditorClean();
+            } else {
+                syncUnsavedFlag();
+            }
             if (next) {
                 next();
             }
@@ -380,78 +674,164 @@ window.CadminIcgRouteDetail = (function () {
             window.location.hash = "#/jolts/" + encodeURIComponent(resource.id);
             return;
         }
+        if (CadminApi.isLibraryType(resource, "rate-limit-plan")) {
+            window.location.hash = "#/rate-limit-plans/" + encodeURIComponent(resource.id);
+            return;
+        }
         library = resource;
         const $root = $(CadminWorkspace.root());
+        const label = esc(routeLabel());
+        const yamlTools =
+            '<select class="form-select form-select-sm" id="ird-template" style="max-width:14rem">' +
+                '<option value="">Insert template…</option>' +
+                templates.map(function (item) {
+                    return '<option value="' + esc(item.id) + '">' + esc(item.label) + "</option>";
+                }).join("") +
+            "</select>" +
+            '<button class="btn btn-sm btn-outline-secondary" type="button" id="ird-find">' +
+                '<i class="bi bi-search me-1"></i>Find</button>' +
+            '<button class="btn btn-sm btn-outline-secondary" type="button" id="ird-replace">' +
+                "Replace</button>" +
+            '<div class="btn-group btn-group-sm" role="group" aria-label="Fold YAML">' +
+                '<button class="btn btn-outline-secondary" type="button" id="ird-fold" ' +
+                    'title="Fold all" aria-label="Fold all">' +
+                    '<i class="bi bi-arrows-collapse" aria-hidden="true"></i></button>' +
+                '<button class="btn btn-outline-secondary" type="button" id="ird-unfold" ' +
+                    'title="Unfold all" aria-label="Unfold all">' +
+                    '<i class="bi bi-arrows-expand" aria-hidden="true"></i></button>' +
+            "</div>" +
+            '<button class="btn btn-sm btn-primary" type="button" id="ird-save">' +
+                '<i class="bi bi-check2 me-1"></i>Save</button>';
         $root.html(
-            '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
+            '<div class="d-flex align-items-center justify-content-between mb-3">' +
                 "<div>" +
                     '<a class="small text-decoration-none" href="#/icg-routes">' +
                         '<i class="bi bi-arrow-left me-1"></i>ICG Routes</a>' +
                     '<div class="d-flex align-items-center flex-wrap gap-2">' +
-                        '<h1 class="h3 mb-0 page-title" id="ird-title"></h1>' +
+                        '<h1 class="mb-0 fs-3 page-title" id="ird-title">' + label + "</h1>" +
+                        '<span id="ird-status-badge">' + statusBadge(library.status) + "</span>" +
+                        (library.id
+                            ? '<code class="small" id="ird-fhir-id">' + esc(library.id) + "</code>"
+                            : '<code class="small d-none" id="ird-fhir-id"></code>') +
                         CadminApi.unsavedFlagHtml() +
                     "</div>" +
                 "</div>" +
                 '<div class="d-flex flex-wrap gap-2">' +
                     '<a class="btn btn-outline-secondary" href="#/icg">' +
                         '<i class="bi bi-router me-1"></i>Live ICG</a>' +
-                    '<button class="btn btn-primary" type="button" id="ird-save">' +
-                        '<i class="bi bi-check2 me-1"></i>Save</button>' +
-                    '<button class="btn btn-outline-danger" type="button" id="ird-delete">' +
-                        '<i class="bi bi-trash me-1"></i>Delete</button>' +
                     CadminResourceSource.button() +
                 "</div>" +
             "</div>" +
-            '<div class="card shadow mb-4">' +
-                '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                    '<h6 class="m-0">Identity</h6>' +
-                    '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#ird-meta-modal">Edit</button>' +
-                "</div>" +
-                '<div class="card-body" id="ird-meta"></div>' +
-            "</div>" +
-            '<div class="card shadow mb-4" id="icg-route-yaml-card">' +
-                '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
-                    "<div>" +
-                        '<h6 class="m-0">Gateway route YAML</h6>' +
-                        '<div class="small text-muted mt-1"><code>' + esc(routeContentType) + "</code>" +
-                            " · Active libraries are deployed by Integrator Connect Gateway</div>" +
-                    "</div>" +
-                    '<div class="d-flex flex-nowrap align-items-center gap-2">' +
-                        '<select class="form-select form-select-sm" id="ird-template" style="max-width:16rem">' +
-                            '<option value="">Insert template…</option>' +
-                            templates.map(function (item) {
-                                return '<option value="' + esc(item.id) + '">' + esc(item.label) + "</option>";
-                            }).join("") +
-                        "</select>" +
-                        '<button class="btn btn-sm btn-outline-secondary" type="button" id="ird-find">' +
-                            '<i class="bi bi-search me-1"></i>Find</button>' +
+            '<div class="row g-3">' +
+                '<div class="col-md-3">' +
+                    '<div class="list-group list-group-flush nav nav-pills flex-column" id="ird-settings-nav" role="tablist">' +
+                        navButton("ird-pane-basics", "bi bi-info-circle", "Basics", { active: true }) +
+                        navButton("ird-pane-identity", "bi bi-person-vcard", "Identity and version") +
+                        navButton("ird-pane-route", "bi bi-file-earmark-code", "Route") +
+                        navButton("ird-pane-related", "bi bi-link-45deg", "Related") +
+                        navButton("ird-pane-graph", "bi bi-diagram-3", "Reference graph") +
+                        navButton("ird-pane-history", "bi bi-clock-history", "History") +
+                        navButton("ird-pane-danger", "bi bi-exclamation-triangle", "Danger zone", { danger: true }) +
                     "</div>" +
                 "</div>" +
-                '<div class="card-body p-0">' +
-                    '<textarea id="ird-yaml" class="d-none"></textarea>' +
-                "</div>" +
-            "</div>" +
-            CadminLibraryRelated.cards() +
-            CadminResourceHistory.card() +
-            CadminResourceGraph.card() +
-            '<div class="modal fade" id="ird-meta-modal" tabindex="-1">' +
-                '<div class="modal-dialog">' +
-                    '<form class="modal-content" id="ird-meta-form">' +
-                        '<div class="modal-header"><h5 class="modal-title">Edit identity</h5>' +
-                            '<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>' +
-                        '<div class="modal-body">' +
-                            field("Title", '<input class="form-control" id="ird-title-input">') +
-                            field("Name", '<input class="form-control font-monospace" id="ird-name">') +
-                            field("Status", '<select class="form-select" id="ird-status">' +
-                                optionsHtml(statusOptions, "") + "</select>") +
-                            field("Version", '<input class="form-control" id="ird-version">') +
-                            field("Description", '<textarea class="form-control" id="ird-description" rows="3"></textarea>') +
-                        "</div>" +
-                        '<div class="modal-footer">' +
-                            '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>' +
-                            '<button type="submit" class="btn btn-primary">Save</button>' +
-                        "</div>" +
-                    "</form>" +
+                '<div class="col-md-9">' +
+                    '<div class="tab-content">' +
+                        tabPane("ird-pane-basics",
+                            '<form id="ird-basic-form">' +
+                                '<div class="card">' +
+                                    '<div class="card-header"><h3 class="card-title">Basic details</h3></div>' +
+                                    '<div class="card-body">' +
+                                        field("Title", '<input class="form-control" id="ird-title-input">') +
+                                        fieldRow(
+                                            field("Status", '<select class="form-select" id="ird-status">' +
+                                                optionsHtml(statusOptions, library.status || "draft") + "</select>"),
+                                            field("Type",
+                                                '<input class="form-control font-monospace" id="ird-type" value="' +
+                                                    esc(typeCode()) + '" readonly disabled>')) +
+                                        '<div class="form-check mb-3">' +
+                                            '<input class="form-check-input" type="checkbox" id="ird-experimental">' +
+                                            '<label class="form-check-label" for="ird-experimental">Experimental</label>' +
+                                        "</div>" +
+                                        markdownField("Description", "ird-description") +
+                                        markdownField("Purpose", "ird-purpose") +
+                                        markdownField("Usage", "ird-usage") +
+                                        markdownField("Copyright", "ird-copyright") +
+                                        '<button type="submit" class="btn btn-primary">Save changes</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</form>",
+                            true) +
+                        tabPane("ird-pane-identity",
+                            '<form id="ird-identity-form">' +
+                                '<div class="card">' +
+                                    '<div class="card-header"><h3 class="card-title">Identity and version</h3></div>' +
+                                    '<div class="card-body">' +
+                                        field("URL", '<input class="form-control font-monospace" id="ird-url">') +
+                                        fieldRow(
+                                            field("Name", '<input class="form-control font-monospace" id="ird-name">'),
+                                            field("Version", '<input class="form-control" id="ird-version" autocomplete="off">')) +
+                                        fieldRow(
+                                            field("Publisher", '<input class="form-control" id="ird-publisher">'),
+                                            field("Date", '<input type="date" class="form-control" id="ird-date">')) +
+                                        fieldRow(
+                                            field("Approved date", '<input type="date" class="form-control" id="ird-approval">'),
+                                            field("Last review date", '<input type="date" class="form-control" id="ird-review">')) +
+                                        '<div class="mb-3">' +
+                                            '<label class="form-label">Effective date range</label>' +
+                                            '<div class="row g-2">' +
+                                                '<div class="col">' +
+                                                    '<input type="date" class="form-control" id="ird-period-start" ' +
+                                                        'aria-label="Effective start">' +
+                                                "</div>" +
+                                                '<div class="col">' +
+                                                    '<input type="date" class="form-control" id="ird-period-end" ' +
+                                                        'aria-label="Effective end">' +
+                                                "</div>" +
+                                            "</div>" +
+                                        "</div>" +
+                                        '<button type="submit" class="btn btn-primary">Save changes</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</form>") +
+                        tabPane("ird-pane-route",
+                            '<div class="d-flex flex-column gap-3">' +
+                                '<div class="card" id="icg-route-yaml-card">' +
+                                    '<div class="card-header flex-wrap gap-2">' +
+                                        "<div>" +
+                                            '<h3 class="card-title mb-0">Gateway route YAML</h3>' +
+                                            '<div class="small text-muted"><code>' + esc(routeContentType) + "</code>" +
+                                                " · Ctrl-Space complete · Ctrl-F find · Ctrl-/ comment · Ctrl-Q fold</div>" +
+                                        "</div>" +
+                                        '<div class="card-tools d-flex flex-nowrap align-items-center gap-2 camel-route-yaml-tools">' +
+                                            yamlTools +
+                                        "</div>" +
+                                    "</div>" +
+                                    '<div class="card-body p-0">' +
+                                        '<textarea id="ird-yaml" class="d-none"></textarea>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</div>") +
+                        tabPane("ird-pane-related", CadminLibraryRelated.cards()) +
+                        tabPane("ird-pane-graph", CadminResourceGraph.card()) +
+                        tabPane("ird-pane-history", CadminResourceHistory.card()) +
+                        tabPane("ird-pane-danger",
+                            '<div class="card border-danger">' +
+                                '<div class="card-header bg-danger-subtle">' +
+                                    '<h3 class="card-title text-danger">Danger zone</h3>' +
+                                "</div>" +
+                                '<div class="card-body">' +
+                                    '<div class="d-flex justify-content-between align-items-start">' +
+                                        "<div>" +
+                                            '<p class="mb-0 fw-semibold text-danger">Delete this ICG route</p>' +
+                                            '<small class="text-secondary">' +
+                                                "This permanently deletes the Library that stores the gateway YAML." +
+                                            "</small>" +
+                                        "</div>" +
+                                        '<button class="btn btn-danger" type="button" id="ird-delete">Delete</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</div>") +
+                    "</div>" +
                 "</div>" +
             "</div>"
         );
@@ -459,11 +839,14 @@ window.CadminIcgRouteDetail = (function () {
         CadminResourceGraph.mount(library);
         CadminResourceHistory.mount(library);
         CadminLibraryRelated.mount(library);
-        renderMeta();
+        renderHeader();
+        fillBasicsForm();
+        mountMarkdownEditors();
+        fillMarkdownFields();
         mountEditor(readYaml() || templates[0].yaml);
         markEditorClean();
+        markBasicsClean();
         bind();
-        $("#ird-meta-modal").on("show.bs.modal", populateMetaForm);
     }
 
     function reveal(resource) {
@@ -491,34 +874,43 @@ window.CadminIcgRouteDetail = (function () {
                 mountEditor(textarea.value);
             }
         }
+        refreshMarkdownEditors();
         syncUnsavedFlag();
     }
 
-    function renderMeta() {
-        $("#ird-title").text(library.title || library.name || "ICG route");
-        $("#ird-meta").html(
-            '<dl class="row mb-0">' +
-                '<dt class="col-sm-3">Title</dt><dd class="col-sm-9">' + esc(library.title || "—") + "</dd>" +
-                '<dt class="col-sm-3">Status</dt><dd class="col-sm-9">' + statusBadge(library.status) + "</dd>" +
-                '<dt class="col-sm-3">Type</dt><dd class="col-sm-9"><code>' + esc(libraryType) + "</code></dd>" +
-                '<dt class="col-sm-3">Name</dt><dd class="col-sm-9"><code>' + esc(library.name || "—") + "</code></dd>" +
-                '<dt class="col-sm-3">Version</dt><dd class="col-sm-9"><code>' + esc(library.version || "—") + "</code></dd>" +
-                '<dt class="col-sm-3">Description</dt><dd class="col-sm-9">' + esc(library.description || "—") + "</dd>" +
-                '<dt class="col-sm-3">ID</dt><dd class="col-sm-9"><code>' + esc(library.id) + "</code></dd>" +
-            "</dl>"
-        );
+    function renderHeader() {
+        const label = routeLabel();
+        $("#ird-title").text(label);
+        $("#ird-status-badge").html(statusBadge(library.status));
+        if (library.id) {
+            $("#ird-fhir-id").text(library.id).removeClass("d-none");
+        } else {
+            $("#ird-fhir-id").text("").addClass("d-none");
+        }
     }
 
-    function populateMetaForm() {
+    function fillBasicsForm() {
+        const period = library.effectivePeriod || {};
         $("#ird-title-input").val(library.title || "");
-        $("#ird-name").val(library.name || "");
         $("#ird-status").val(library.status || "draft");
+        $("#ird-type").val(typeCode());
+        $("#ird-experimental").prop("checked", !!library.experimental);
+        $("#ird-url").val(library.url || "");
+        $("#ird-name").val(library.name || "");
         $("#ird-version").val(library.version || "");
-        $("#ird-description").val(library.description || "");
-        CadminApi.fillValueSetSelect("#ird-status", CadminApi.valueSets.publicationStatus, {
-            fallback: statusOptions,
-            selected: library.status || "draft"
-        });
+        $("#ird-publisher").val(library.publisher || "");
+        $("#ird-date").val(dateInputValue(library.date));
+        $("#ird-approval").val(dateInputValue(library.approvalDate));
+        $("#ird-review").val(dateInputValue(library.lastReviewDate));
+        $("#ird-period-start").val(dateInputValue(period.start));
+        $("#ird-period-end").val(dateInputValue(period.end));
+    }
+
+    function refreshRoutePane() {
+        if (editor) {
+            editor.setSize("100%", "36rem");
+            editor.refresh();
+        }
     }
 
     function insertTemplate(id) {
@@ -548,10 +940,32 @@ window.CadminIcgRouteDetail = (function () {
     function bind() {
         const $root = $(CadminWorkspace.root());
         $root.off(".irdetail");
+        $root.on("shown.bs.tab.irdetail", "#ird-pane-basics-btn", refreshMarkdownEditors);
+        $root.on("shown.bs.tab.irdetail", "#ird-pane-route-btn", refreshRoutePane);
+        $root.on("shown.bs.tab.irdetail", "#ird-pane-graph-btn", function () {
+            if (typeof CadminResourceGraph.resize === "function") {
+                CadminResourceGraph.resize();
+            }
+        });
+        $root.on("input.irdetail change.irdetail",
+            "#ird-basic-form :input, #ird-identity-form :input", syncUnsavedFlag);
+        CadminApi.fillValueSetSelect("#ird-status", CadminApi.valueSets.publicationStatus, {
+            fallback: statusOptions,
+            selected: library.status || "draft",
+            onConcepts: function () {
+                syncUnsavedFlag();
+            }
+        });
         $root.on("click.irdetail", "#ird-save", function () {
             saveLibrary(function () {
                 CadminApi.showToast("success", "ICG route saved.");
             });
+        });
+        $("#ird-basic-form, #ird-identity-form").on("submit", function (event) {
+            event.preventDefault();
+            saveLibrary(function () {
+                CadminApi.showToast("success", "ICG route updated.");
+            }, { withMeta: true, withYaml: false });
         });
         $root.on("click.irdetail", "#ird-delete", function () {
             CadminApi.confirm("Delete this ICG route?").done(function () {
@@ -576,16 +990,30 @@ window.CadminIcgRouteDetail = (function () {
                 CodeMirror.commands.find(editor);
             }
         });
-        $("#ird-meta-form").on("submit", function (event) {
-            event.preventDefault();
-            saveLibrary(function () {
-                const el = document.getElementById("ird-meta-modal");
-                const modal = el && bootstrap.Modal.getInstance(el);
-                if (modal) {
-                    modal.hide();
+        $root.on("click.irdetail", "#ird-replace", function () {
+            if (editor && CodeMirror.commands.replace) {
+                CodeMirror.commands.replace(editor);
+            }
+        });
+        $root.on("click.irdetail", "#ird-fold", function () {
+            if (!editor) {
+                return;
+            }
+            editor.operation(function () {
+                for (let i = editor.firstLine(); i <= editor.lastLine(); i += 1) {
+                    editor.foldCode(CodeMirror.Pos(i, 0), null, "fold");
                 }
-                CadminApi.showToast("success", "Identity updated.");
-            }, true);
+            });
+        });
+        $root.on("click.irdetail", "#ird-unfold", function () {
+            if (!editor) {
+                return;
+            }
+            editor.operation(function () {
+                for (let i = editor.firstLine(); i <= editor.lastLine(); i += 1) {
+                    editor.foldCode(CodeMirror.Pos(i, 0), null, "unfold");
+                }
+            });
         });
     }
 

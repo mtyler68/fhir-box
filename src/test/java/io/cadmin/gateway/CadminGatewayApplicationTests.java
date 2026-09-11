@@ -130,6 +130,25 @@ class CadminGatewayApplicationTests {
     }
 
     @Test
+    void documentReferenceFhirRequiresAuthentication() {
+        webTestClient.get()
+                .uri("/fhir/DocumentReference")
+                .header("Accept", "application/fhir+json")
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    @WithMockUser(username = "clinician", roles = {"USER"})
+    void documentReferenceFhirIsForbiddenForNonAdmin() {
+        webTestClient.get()
+                .uri("/fhir/DocumentReference")
+                .header("Accept", "application/fhir+json")
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
     void searchParameterFhirRequiresAuthentication() {
         webTestClient.get()
                 .uri("/fhir/SearchParameter")
@@ -263,6 +282,50 @@ class CadminGatewayApplicationTests {
     }
 
     @Test
+    void communicationFhirRequiresAuthentication() {
+        webTestClient.get()
+                .uri("/fhir/Communication")
+                .header("Accept", "application/fhir+json")
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    @WithMockUser(username = "clinician", roles = {"USER"})
+    void communicationFhirGetIsForbiddenForNonAdmin() {
+        webTestClient.get()
+                .uri("/fhir/Communication")
+                .header("Accept", "application/fhir+json")
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    @WithMockUser(username = "clinician", roles = {"USER"})
+    void communicationFhirPutIsForbiddenForNonAdmin() {
+        webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
+                .put()
+                .uri("/fhir/Communication/example")
+                .contentType(MediaType.parseMediaType("application/fhir+json"))
+                .bodyValue("{\"resourceType\":\"Communication\",\"id\":\"example\",\"status\":\"completed\"}")
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    @WithMockUser(username = "clinician", roles = {"USER"})
+    void communicationCreateIsAllowedForNonAdmin() {
+        webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
+                .post()
+                .uri("/fhir/Communication")
+                .contentType(MediaType.parseMediaType("application/fhir+json"))
+                .bodyValue("{\"resourceType\":\"Communication\",\"status\":\"preparation\"}")
+                .exchange()
+                .expectStatus()
+                .value(status -> org.assertj.core.api.Assertions.assertThat(status).isNotIn(401, 403));
+    }
+
+    @Test
     void geocodeRequiresAuthentication() {
         webTestClient.get()
                 .uri("/api/geocode?q=Portland")
@@ -323,6 +386,7 @@ class CadminGatewayApplicationTests {
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$.username").isEqualTo("admin")
+                .jsonPath("$.oidcId").isEqualTo("")
                 .jsonPath("$.mode").isEqualTo("local");
     }
 

@@ -1,0 +1,23 @@
+name: cadmin-icg-redis
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: cadmin-icg-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 8
+      start_period: 5s
+    networks:
+      - fhir-box-network-link
+
+networks:
+  fhir-box-network-link:
+    external: true
+    name: fhir-box-network

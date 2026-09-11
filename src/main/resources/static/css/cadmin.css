@@ -26,6 +26,20 @@
     padding: 0.175rem;
 }
 
+.app-footer a {
+    color: var(--bs-secondary-color);
+    text-decoration: none;
+}
+
+.app-footer a:hover {
+    color: var(--bs-body-color);
+    text-decoration: underline;
+}
+
+#feedback-modal .crd-markdown-host .editor-preview {
+    z-index: 2;
+}
+
 [data-unsaved-flag] {
     font-weight: 600;
 }
@@ -156,7 +170,9 @@
 
 #td-settings-nav,
 #sd-settings-nav,
-#crd-settings-nav {
+#crd-settings-nav,
+#rlp-settings-nav,
+#rlt-settings-nav {
     position: sticky;
     top: 0.5rem;
     gap: 0.15rem;
@@ -164,15 +180,31 @@
 
 #td-settings-nav .list-group-item,
 #sd-settings-nav .list-group-item,
-#crd-settings-nav .list-group-item {
+#crd-settings-nav .list-group-item,
+#rlp-settings-nav .list-group-item,
+#rlt-settings-nav .list-group-item {
     border: 0;
     border-radius: var(--bs-border-radius);
 }
 
 #td-settings-nav .list-group-item.active,
 #sd-settings-nav .list-group-item.active,
-#crd-settings-nav .list-group-item.active {
+#crd-settings-nav .list-group-item.active,
+#rlp-settings-nav .list-group-item.active,
+#rlt-settings-nav .list-group-item.active {
     font-weight: 600;
+}
+
+.rlp-route-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.rlp-json-host .CodeMirror {
+    height: 28rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
 }
 
 html,
@@ -386,10 +418,152 @@ body.layout-fixed .app-main {
 
 .camel-route-editor.CodeMirror {
     height: 36rem;
+    min-height: 0;
+    padding: 0;
     border: 0;
     border-radius: 0 0 var(--bs-border-radius) var(--bs-border-radius);
     font-size: 0.85rem;
     font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.camel-route-editor .CodeMirror-scroll {
+    min-height: 0;
+}
+
+.crd-markdown-host .EasyMDEContainer .CodeMirror {
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    border-color: var(--bs-border-color);
+    border-bottom-left-radius: var(--bs-border-radius);
+    border-bottom-right-radius: var(--bs-border-radius);
+    min-height: 12rem;
+}
+
+.crd-markdown-host .EasyMDEContainer .CodeMirror-cursor {
+    border-left-color: var(--bs-body-color);
+}
+
+.crd-markdown-host .EasyMDEContainer .CodeMirror-selected,
+.crd-markdown-host .EasyMDEContainer .CodeMirror-focused .CodeMirror-selected {
+    background: var(--bs-tertiary-bg);
+}
+
+.crd-markdown-host .editor-toolbar {
+    background: var(--bs-body-bg);
+    border-color: var(--bs-border-color);
+    border-top-left-radius: var(--bs-border-radius);
+    border-top-right-radius: var(--bs-border-radius);
+}
+
+.crd-markdown-host .editor-toolbar a,
+.crd-markdown-host .editor-toolbar button {
+    color: var(--bs-body-color) !important;
+}
+
+.crd-markdown-host .editor-toolbar a.bi::before,
+.crd-markdown-host .editor-toolbar button.bi::before {
+    font-family: bootstrap-icons !important;
+    font-style: normal;
+    font-weight: normal;
+}
+
+.crd-markdown-host .editor-toolbar a.active,
+.crd-markdown-host .editor-toolbar a:hover,
+.crd-markdown-host .editor-toolbar button.active,
+.crd-markdown-host .editor-toolbar button:hover {
+    background: var(--bs-tertiary-bg);
+    border-color: var(--bs-border-color);
+}
+
+.crd-markdown-host .editor-toolbar i.separator {
+    border-left-color: var(--bs-border-color);
+    border-right-color: var(--bs-border-color);
+}
+
+.crd-markdown-host .editor-preview,
+.crd-markdown-host .editor-preview-side {
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+}
+
+.crd-markdown-host .editor-preview pre,
+.crd-markdown-host .editor-preview-side pre,
+.crd-markdown-host .editor-preview code,
+.crd-markdown-host .editor-preview-side code {
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
+}
+
+.crd-markdown-host .editor-preview pre,
+.crd-markdown-host .editor-preview-side pre {
+    padding: 0.75rem;
+    border-radius: var(--bs-border-radius);
+    overflow: auto;
+}
+
+.crd-markdown-host .editor-preview pre code,
+.crd-markdown-host .editor-preview-side pre code {
+    background: transparent;
+    padding: 0;
+}
+
+.crd-markdown-host .editor-preview code,
+.crd-markdown-host .editor-preview-side code {
+    padding: 0.1em 0.35em;
+    border-radius: 0.25rem;
+}
+
+.crd-markdown-host .EasyMDEContainer .cm-s-easymde .cm-comment {
+    color: var(--bs-body-color);
+    background: var(--bs-tertiary-bg);
+}
+
+[data-bs-theme="dark"] .crd-markdown-host .EasyMDEContainer .cm-s-easymde .cm-string {
+    color: #75b798;
+}
+
+[data-bs-theme="dark"] .crd-markdown-host .EasyMDEContainer .cm-s-easymde .cm-url,
+[data-bs-theme="dark"] .crd-markdown-host .EasyMDEContainer .cm-s-easymde .cm-link {
+    color: #6ea8fe;
+}
+
+[data-bs-theme="dark"] .crd-markdown-host .EasyMDEContainer .cm-s-easymde .cm-attribute {
+    color: #c4b5fd;
+}
+
+.fbd-note-markdown {
+    overflow-wrap: anywhere;
+}
+
+.fbd-note-markdown > :last-child {
+    margin-bottom: 0;
+}
+
+.fbd-note-markdown pre,
+.fbd-note-markdown code {
+    background: var(--bs-tertiary-bg);
+}
+
+.fbd-note-markdown pre {
+    padding: 0.75rem;
+    border-radius: var(--bs-border-radius);
+    overflow: auto;
+}
+
+.fbd-note-markdown pre code {
+    background: transparent;
+    padding: 0;
+}
+
+.fbd-note-markdown code {
+    padding: 0.1em 0.35em;
+    border-radius: 0.25rem;
+}
+
+.fbd-note-markdown blockquote {
+    border-left: 0.25rem solid var(--bs-border-color);
+    padding-left: 0.75rem;
+    color: var(--bs-secondary-color);
 }
 
 .camel-route-split > [class*="col-"] {
@@ -1524,6 +1698,40 @@ body:not(.cadmin-has-fhir-resource) [data-target-list-add] {
 
 #ld-entry-rows tr.drop-after td {
     box-shadow: inset 0 -2px 0 var(--bs-primary);
+}
+
+#wmd-header-rows tr[data-header-index],
+#wmd-query-rows tr[data-query-index] {
+    cursor: grab;
+}
+
+#wmd-header-rows tr.is-dragging,
+#wmd-query-rows tr.is-dragging {
+    opacity: 0.45;
+}
+
+#wmd-header-rows tr.drop-before td,
+#wmd-query-rows tr.drop-before td {
+    box-shadow: inset 0 2px 0 var(--bs-primary);
+}
+
+#wmd-header-rows tr.drop-after td,
+#wmd-query-rows tr.drop-after td {
+    box-shadow: inset 0 -2px 0 var(--bs-primary);
+}
+
+#wmd-header-table .cadmin-list-grip-col,
+#wmd-query-table .cadmin-list-grip-col {
+    width: 1.5rem;
+}
+
+#wmd-query-table .wmd-query-case-col {
+    width: 3.5rem;
+    text-align: center;
+}
+
+#wmd-query-table [data-query-matcher] {
+    min-width: 10rem;
 }
 
 .cadmin-target-list-entry-main {

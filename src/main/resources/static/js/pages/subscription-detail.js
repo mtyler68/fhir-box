@@ -350,12 +350,8 @@ window.CadminSubscriptionDetail = (function () {
         $root.html(
             '<div class="d-flex align-items-center justify-content-between mb-3">' +
                 "<div>" +
-                    '<nav aria-label="breadcrumb">' +
-                        '<ol class="breadcrumb mb-1">' +
-                            '<li class="breadcrumb-item"><a href="#/subscriptions">Subscriptions</a></li>' +
-                            '<li class="breadcrumb-item active" aria-current="page" id="sd-crumb">' + label + "</li>" +
-                        "</ol>" +
-                    "</nav>" +
+                    '<a class="small text-decoration-none" href="#/subscriptions">' +
+                        '<i class="bi bi-arrow-left me-1"></i>Subscriptions</a>' +
                     '<div class="d-flex align-items-center flex-wrap gap-2">' +
                         '<h1 class="mb-0 fs-3 page-title" id="sd-title">' + label + "</h1>" +
                         '<span id="sd-status-badge">' + statusDisplay() + "</span>" +
@@ -711,7 +707,6 @@ window.CadminSubscriptionDetail = (function () {
     function renderHeader() {
         const label = subscriptionName();
         $("#sd-title").text(label);
-        $("#sd-crumb").text(label);
         $("#sd-status-badge").html(statusDisplay());
         if (subscription.id) {
             $("#sd-fhir-id").text(subscription.id).removeClass("d-none");

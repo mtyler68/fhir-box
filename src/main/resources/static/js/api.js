@@ -80,8 +80,11 @@ window.CadminApi = (function ($) {
             },
             headers: $.extend({
                 "X-Requested-With": "XMLHttpRequest",
-                Accept: "application/fhir+json"
-            }, data ? { Prefer: "return=representation" } : {}, csrfHeaders())
+                Accept: "application/fhir+json",
+                "Cache-Control": "no-cache",
+                Pragma: "no-cache"
+            }, data ? { Prefer: "return=representation" } : {}, csrfHeaders()),
+            cache: verb === "GET" || verb === "HEAD" ? false : undefined
         });
         if (verb !== "GET" && verb !== "HEAD" && String(path || "").indexOf("$") < 0) {
             request.done(function (body) {
@@ -440,6 +443,7 @@ window.CadminApi = (function ($) {
         Location: "#/locations/",
         HealthcareService: "#/healthcare-services/",
         Consent: "#/consents/",
+        Communication: "#/feedback/",
         Subscription: "#/subscriptions/",
         SubscriptionTopic: "#/subscription-topics/",
         Endpoint: "#/endpoints/",
@@ -487,6 +491,15 @@ window.CadminApi = (function ($) {
         }
         if (type === "Library" && isLibraryType(resource, "jolt")) {
             return "#/jolts/" + encodeURIComponent(id);
+        }
+        if (type === "Library" && isLibraryType(resource, "rate-limit-plan")) {
+            return "#/rate-limit-plans/" + encodeURIComponent(id);
+        }
+        if (type === "DocumentReference"
+                && window.CadminRateLimitPlan
+                && typeof CadminRateLimitPlan.isRateLimitTier === "function"
+                && CadminRateLimitPlan.isRateLimitTier(resource)) {
+            return "#/rate-limit-tiers/" + encodeURIComponent(id);
         }
         const prefix = DETAIL_PREFIX[type];
         if (prefix) {
@@ -1937,6 +1950,7 @@ window.CadminApi = (function ($) {
     }
 
     const OIDC_SUBJECT_SYSTEM = "https://insulet.com/fhir/identifier/oidc/subject";
+    const OIDC_CLIENT_ID_SYSTEM = "https://insulet.com/fhir/identifier/oidc/client-id";
 
     function oidcSubjectSystem() {
         const configured = ((window.CadminApp && CadminApp.config()) || {}).oidcSubjectSystem;
@@ -2113,7 +2127,9 @@ window.CadminApi = (function ($) {
         terminologyLabel: terminologyLabel,
         conceptCode: conceptCode,
         OIDC_SUBJECT_SYSTEM: OIDC_SUBJECT_SYSTEM,
+        OIDC_CLIENT_ID_SYSTEM: OIDC_CLIENT_ID_SYSTEM,
         oidcSubjectSystem: oidcSubjectSystem,
+        oidcClientIdSystem: function () { return OIDC_CLIENT_ID_SYSTEM; },
         oidcIssuer: oidcIssuer,
         isOidcSubjectSystem: isOidcSubjectSystem,
         oidcSubjectIdentifier: oidcSubjectIdentifier,

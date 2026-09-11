@@ -4,6 +4,7 @@ window.CadminLibraryRelated = (function () {
         "camel-route": "Camel Route",
         "icg-route": "ICG Route",
         "jolt": "Jolt",
+        "rate-limit-plan": "Rate-limit plan",
         "pds-policies": "PDS Policies"
     };
     const RELATIONSHIP_LABELS = {

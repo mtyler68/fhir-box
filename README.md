@@ -299,3 +299,5 @@ Another approach is to create a single subscription for the event and to create
 a single route that relays that event to all the interested consumers. This
 keeps the number of artifacts down, but incurs additional complexity in the
 routes and does not allow for isolation of consumers.
+
+Lookup SSE (server-sent events) lightweight alernative to websockets

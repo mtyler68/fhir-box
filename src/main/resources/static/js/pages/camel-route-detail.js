@@ -48,8 +48,17 @@ window.CadminCamelRouteDetail = (function () {
         "id", "description", "autoStartup", "startupOrder", "streamCache", "message", "name",
         "expression", "simple", "constant", "datasonnet", "groovy", "javascript", "unpackArray"
     ];
+    const markdownFields = ["crd-description", "crd-purpose", "crd-usage", "crd-copyright"];
+    const markdownFieldKeys = {
+        "crd-description": "description",
+        "crd-purpose": "purpose",
+        "crd-usage": "usage",
+        "crd-copyright": "copyright"
+    };
     let library = null;
     let editor = null;
+    let markdownEditors = {};
+    let turndown = null;
     let hintRegistered = false;
     let savedYaml = "";
     let savedBasics = "";
@@ -222,11 +231,216 @@ window.CadminCamelRouteDetail = (function () {
         });
     }
 
-    function destroyEditor() {
+    function field(label, control, hint) {
+        const idMatch = String(control).match(/\sid="([^"]+)"/);
+        const forAttr = idMatch ? ' for="' + idMatch[1] + '"' : "";
+        return '<div class="mb-3"><label class="form-label"' + forAttr + ">" + label + "</label>" + control +
+            (hint ? '<div class="form-text">' + hint + "</div>" : "") + "</div>";
+    }
+
+    function fieldRow(left, right) {
+        return '<div class="row">' +
+            '<div class="col-md-6">' + left + "</div>" +
+            '<div class="col-md-6">' + right + "</div>" +
+            "</div>";
+    }
+
+    function markdownField(label, id) {
+        return field(label,
+            '<div class="crd-markdown-host">' +
+                '<textarea class="form-control" id="' + id + '" rows="6"></textarea>' +
+            "</div>");
+    }
+
+    function dateInputValue(value) {
+        return String(value || "").slice(0, 10);
+    }
+
+    function setOrDelete(obj, key, value) {
+        const trimmed = String(value == null ? "" : value).trim();
+        if (trimmed) {
+            obj[key] = trimmed;
+        } else {
+            delete obj[key];
+        }
+    }
+
+    function typeCode() {
+        const coding = ((library && library.type && library.type.coding) || []).find(function (item) {
+            return item && item.code;
+        });
+        return (coding && coding.code) || libraryType;
+    }
+
+    function looksLikeHtml(value) {
+        return /^<(p|div|h[1-6]|ul|ol|li|blockquote|pre|span|strong|em|br|a)\b/i.test(String(value || "").trim());
+    }
+
+    function htmlToMarkdown(value) {
+        const text = String(value == null ? "" : value);
+        if (!text.trim()) {
+            return "";
+        }
+        if (!looksLikeHtml(text)) {
+            return text;
+        }
+        if (typeof TurndownService === "undefined") {
+            return text;
+        }
+        if (!turndown) {
+            turndown = new TurndownService({
+                headingStyle: "atx",
+                codeBlockStyle: "fenced",
+                bulletListMarker: "-"
+            });
+        }
+        return String(turndown.turndown(text) || "").trim();
+    }
+
+    function markdownToolbar() {
+        function tool(name, action, icon, title) {
+            return { name: name, action: action, className: icon, title: title };
+        }
+        return [
+            tool("bold", EasyMDE.toggleBold, "bi bi-type-bold", "Bold"),
+            tool("italic", EasyMDE.toggleItalic, "bi bi-type-italic", "Italic"),
+            tool("strikethrough", EasyMDE.toggleStrikethrough, "bi bi-type-strikethrough", "Strikethrough"),
+            tool("heading", EasyMDE.toggleHeadingSmaller, "bi bi-type-h1", "Heading"),
+            "|",
+            tool("quote", EasyMDE.toggleBlockquote, "bi bi-quote", "Quote"),
+            tool("code", EasyMDE.toggleCodeBlock, "bi bi-code-slash", "Code"),
+            tool("unordered-list", EasyMDE.toggleUnorderedList, "bi bi-list-ul", "Bulleted list"),
+            tool("ordered-list", EasyMDE.toggleOrderedList, "bi bi-list-ol", "Numbered list"),
+            "|",
+            tool("link", EasyMDE.drawLink, "bi bi-link-45deg", "Link"),
+            "|",
+            tool("preview", EasyMDE.togglePreview, "bi bi-eye no-disable", "Preview"),
+            tool("guide", "https://www.markdownguide.org/basic-syntax/", "bi bi-question-circle no-disable", "Markdown guide")
+        ];
+    }
+
+    function markdownWrapper(mde) {
+        return mde && mde.codemirror && typeof mde.codemirror.getWrapperElement === "function"
+            ? mde.codemirror.getWrapperElement()
+            : null;
+    }
+
+    function destroyMarkdownEditors() {
+        Object.keys(markdownEditors).forEach(function (id) {
+            const mde = markdownEditors[id];
+            if (mde && typeof mde.toTextArea === "function") {
+                try {
+                    mde.toTextArea();
+                } catch (ignored) {
+                    /* editor already detached */
+                }
+            }
+        });
+        markdownEditors = {};
+    }
+
+    function markdownValue(id) {
+        const mde = markdownEditors[id];
+        if (!mde) {
+            const el = document.getElementById(id);
+            if (el) {
+                return el.value || "";
+            }
+            return (library && library[markdownFieldKeys[id]]) || "";
+        }
+        return mde.value() || "";
+    }
+
+    function setMarkdownValue(id, value) {
+        const next = htmlToMarkdown(value || "");
+        const mde = markdownEditors[id];
+        if (!mde) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.value = next;
+            }
+            return;
+        }
+        if (mde.value() === next) {
+            return;
+        }
+        mde.value(next);
+    }
+
+    function mountMarkdownEditors() {
+        if (typeof EasyMDE === "undefined") {
+            return;
+        }
+        markdownFields.forEach(function (id) {
+            const el = document.getElementById(id);
+            if (!el) {
+                return;
+            }
+            const existing = markdownEditors[id];
+            const wrap = markdownWrapper(existing);
+            if (existing && wrap && document.body.contains(wrap)) {
+                return;
+            }
+            if (existing && typeof existing.toTextArea === "function") {
+                try {
+                    existing.toTextArea();
+                } catch (ignored) {
+                    /* editor already detached */
+                }
+            }
+            const textarea = document.getElementById(id);
+            if (!textarea) {
+                return;
+            }
+            const mde = new EasyMDE({
+                element: textarea,
+                autofocus: false,
+                autoDownloadFontAwesome: false,
+                spellChecker: false,
+                status: false,
+                forceSync: true,
+                minHeight: "12rem",
+                placeholder: "Write markdown…",
+                toolbar: markdownToolbar()
+            });
+            mde.codemirror.on("change", syncUnsavedFlag);
+            markdownEditors[id] = mde;
+        });
+    }
+
+    function fillMarkdownFields() {
+        setMarkdownValue("crd-description", library && library.description);
+        setMarkdownValue("crd-purpose", library && library.purpose);
+        setMarkdownValue("crd-usage", library && library.usage);
+        setMarkdownValue("crd-copyright", library && library.copyright);
+    }
+
+    function refreshMarkdownEditors() {
+        const live = markdownFields.every(function (id) {
+            const wrap = markdownWrapper(markdownEditors[id]);
+            return wrap && document.body.contains(wrap);
+        });
+        if (live) {
+            markdownFields.forEach(function (id) {
+                markdownEditors[id].codemirror.refresh();
+            });
+            return;
+        }
+        destroyMarkdownEditors();
+        mountMarkdownEditors();
+        fillMarkdownFields();
+    }
+
+    function destroyYamlEditor() {
         if (editor) {
             editor.toTextArea();
             editor = null;
         }
+    }
+
+    function destroyEditor() {
+        destroyMarkdownEditors();
+        destroyYamlEditor();
     }
 
     function editorValue() {
@@ -236,10 +450,21 @@ window.CadminCamelRouteDetail = (function () {
     function basicsSnapshot() {
         return [
             $("#crd-title-input").val() || "",
-            $("#crd-name").val() || "",
             $("#crd-status").val() || "",
+            $("#crd-experimental").is(":checked") ? "1" : "0",
+            markdownValue("crd-description"),
+            markdownValue("crd-purpose"),
+            markdownValue("crd-usage"),
+            markdownValue("crd-copyright"),
+            $("#crd-url").val() || "",
+            $("#crd-name").val() || "",
             $("#crd-version").val() || "",
-            $("#crd-description").val() || ""
+            $("#crd-publisher").val() || "",
+            $("#crd-date").val() || "",
+            $("#crd-approval").val() || "",
+            $("#crd-review").val() || "",
+            $("#crd-period-start").val() || "",
+            $("#crd-period-end").val() || ""
         ].join("\n");
     }
 
@@ -284,7 +509,7 @@ window.CadminCamelRouteDetail = (function () {
     }
 
     function mountEditor(text) {
-        destroyEditor();
+        destroyYamlEditor();
         const textarea = document.getElementById("crd-yaml");
         if (!textarea) {
             return;
@@ -356,29 +581,40 @@ window.CadminCamelRouteDetail = (function () {
     }
 
     function applyMeta() {
-        library.title = $("#crd-title-input").val().trim();
-        const name = $("#crd-name").val().trim();
-        const version = $("#crd-version").val().trim();
-        const description = $("#crd-description").val().trim();
+        setOrDelete(library, "title", $("#crd-title-input").val());
         library.status = $("#crd-status").val() || "draft";
         library.type = {
             coding: [{ code: libraryType, display: "Camel Route" }],
             text: libraryType
         };
-        if (name) {
-            library.name = name;
+        if ($("#crd-experimental").is(":checked")) {
+            library.experimental = true;
         } else {
-            delete library.name;
+            delete library.experimental;
         }
-        if (version) {
-            library.version = version;
+        setOrDelete(library, "description", htmlToMarkdown(markdownValue("crd-description")));
+        setOrDelete(library, "purpose", htmlToMarkdown(markdownValue("crd-purpose")));
+        setOrDelete(library, "usage", htmlToMarkdown(markdownValue("crd-usage")));
+        setOrDelete(library, "copyright", htmlToMarkdown(markdownValue("crd-copyright")));
+        setOrDelete(library, "url", $("#crd-url").val());
+        setOrDelete(library, "name", $("#crd-name").val());
+        setOrDelete(library, "version", $("#crd-version").val());
+        setOrDelete(library, "publisher", $("#crd-publisher").val());
+        setOrDelete(library, "date", $("#crd-date").val());
+        setOrDelete(library, "approvalDate", $("#crd-approval").val());
+        setOrDelete(library, "lastReviewDate", $("#crd-review").val());
+        const start = ($("#crd-period-start").val() || "").trim();
+        const end = ($("#crd-period-end").val() || "").trim();
+        if (start || end) {
+            library.effectivePeriod = {};
+            if (start) {
+                library.effectivePeriod.start = start;
+            }
+            if (end) {
+                library.effectivePeriod.end = end;
+            }
         } else {
-            delete library.version;
-        }
-        if (description) {
-            library.description = description;
-        } else {
-            delete library.description;
+            delete library.effectivePeriod;
         }
     }
 
@@ -408,6 +644,7 @@ window.CadminCamelRouteDetail = (function () {
             renderHeader();
             if (withMeta) {
                 fillBasicsForm();
+                fillMarkdownFields();
                 markBasicsClean();
             }
             CadminResourceSource.mount(function () { return library; });
@@ -443,6 +680,10 @@ window.CadminCamelRouteDetail = (function () {
             window.location.hash = "#/jolts/" + encodeURIComponent(resource.id);
             return;
         }
+        if (CadminApi.isLibraryType(resource, "rate-limit-plan")) {
+            window.location.hash = "#/rate-limit-plans/" + encodeURIComponent(resource.id);
+            return;
+        }
         library = resource;
         const $root = $(CadminWorkspace.root());
         const label = esc(routeLabel());
@@ -470,12 +711,8 @@ window.CadminCamelRouteDetail = (function () {
         $root.html(
             '<div class="d-flex align-items-center justify-content-between mb-3">' +
                 "<div>" +
-                    '<nav aria-label="breadcrumb">' +
-                        '<ol class="breadcrumb mb-1">' +
-                            '<li class="breadcrumb-item"><a href="#/camel-routes">Camel Routes</a></li>' +
-                            '<li class="breadcrumb-item active" aria-current="page" id="crd-crumb">' + label + "</li>" +
-                        "</ol>" +
-                    "</nav>" +
+                    '<a class="small text-decoration-none" href="#/camel-routes">' +
+                        '<i class="bi bi-arrow-left me-1"></i>Camel Routes</a>' +
                     '<div class="d-flex align-items-center flex-wrap gap-2">' +
                         '<h1 class="mb-0 fs-3 page-title" id="crd-title">' + label + "</h1>" +
                         '<span id="crd-status-badge">' + statusBadge(library.status) + "</span>" +
@@ -493,8 +730,8 @@ window.CadminCamelRouteDetail = (function () {
                 '<div class="col-md-3">' +
                     '<div class="list-group list-group-flush nav nav-pills flex-column" id="crd-settings-nav" role="tablist">' +
                         navButton("crd-pane-basics", "bi bi-info-circle", "Basics", { active: true }) +
+                        navButton("crd-pane-identity", "bi bi-person-vcard", "Identity and version") +
                         navButton("crd-pane-route", "bi bi-file-earmark-code", "Route") +
-                        navButton("crd-pane-route-graph", "bi bi-bezier2", "Route graph") +
                         navButton("crd-pane-related", "bi bi-link-45deg", "Related") +
                         navButton("crd-pane-graph", "bi bi-diagram-3", "Reference graph") +
                         navButton("crd-pane-history", "bi bi-clock-history", "History") +
@@ -504,55 +741,81 @@ window.CadminCamelRouteDetail = (function () {
                 '<div class="col-md-9">' +
                     '<div class="tab-content">' +
                         tabPane("crd-pane-basics",
-                            '<div class="card">' +
-                                '<div class="card-header"><h3 class="card-title">Basics</h3></div>' +
-                                '<div class="card-body">' +
-                                    '<form class="row g-3" id="crd-basic-form">' +
-                                        '<div class="col-md-6">' +
-                                            '<label class="form-label" for="crd-title-input">Title</label>' +
-                                            '<input class="form-control" id="crd-title-input">' +
+                            '<form id="crd-basic-form">' +
+                                '<div class="card">' +
+                                    '<div class="card-header"><h3 class="card-title">Basic details</h3></div>' +
+                                    '<div class="card-body">' +
+                                        field("Title", '<input class="form-control" id="crd-title-input">') +
+                                        fieldRow(
+                                            field("Status", '<select class="form-select" id="crd-status">' +
+                                                optionsHtml(statusOptions, library.status || "draft") + "</select>"),
+                                            field("Type",
+                                                '<input class="form-control font-monospace" id="crd-type" value="' +
+                                                    esc(typeCode()) + '" readonly disabled>')) +
+                                        '<div class="form-check mb-3">' +
+                                            '<input class="form-check-input" type="checkbox" id="crd-experimental">' +
+                                            '<label class="form-check-label" for="crd-experimental">Experimental</label>' +
                                         "</div>" +
-                                        '<div class="col-md-6">' +
-                                            '<label class="form-label" for="crd-name">Name</label>' +
-                                            '<input class="form-control font-monospace" id="crd-name">' +
-                                        "</div>" +
-                                        '<div class="col-md-6">' +
-                                            '<label class="form-label" for="crd-status">Status</label>' +
-                                            '<select class="form-select" id="crd-status">' +
-                                                optionsHtml(statusOptions, library.status || "draft") + "</select>" +
-                                        "</div>" +
-                                        '<div class="col-md-6">' +
-                                            '<label class="form-label" for="crd-version">Version</label>' +
-                                            '<input class="form-control" id="crd-version" autocomplete="off">' +
-                                        "</div>" +
-                                        '<div class="col-12">' +
-                                            '<label class="form-label" for="crd-description">Description</label>' +
-                                            '<textarea class="form-control" id="crd-description" rows="3"></textarea>' +
-                                        "</div>" +
-                                        '<div class="col-12">' +
-                                            '<button type="submit" class="btn btn-primary">Save changes</button>' +
-                                        "</div>" +
-                                    "</form>" +
+                                        markdownField("Description", "crd-description") +
+                                        markdownField("Purpose", "crd-purpose") +
+                                        markdownField("Usage", "crd-usage") +
+                                        markdownField("Copyright", "crd-copyright") +
+                                        '<button type="submit" class="btn btn-primary">Save changes</button>' +
+                                    "</div>" +
                                 "</div>" +
-                            "</div>",
+                            "</form>",
                             true) +
+                        tabPane("crd-pane-identity",
+                            '<form id="crd-identity-form">' +
+                                '<div class="card">' +
+                                    '<div class="card-header"><h3 class="card-title">Identity and version</h3></div>' +
+                                    '<div class="card-body">' +
+                                        field("URL", '<input class="form-control font-monospace" id="crd-url">') +
+                                        fieldRow(
+                                            field("Name", '<input class="form-control font-monospace" id="crd-name">'),
+                                            field("Version", '<input class="form-control" id="crd-version" autocomplete="off">')) +
+                                        fieldRow(
+                                            field("Publisher", '<input class="form-control" id="crd-publisher">'),
+                                            field("Date", '<input type="date" class="form-control" id="crd-date">')) +
+                                        fieldRow(
+                                            field("Approved date", '<input type="date" class="form-control" id="crd-approval">'),
+                                            field("Last review date", '<input type="date" class="form-control" id="crd-review">')) +
+                                        '<div class="mb-3">' +
+                                            '<label class="form-label">Effective date range</label>' +
+                                            '<div class="row g-2">' +
+                                                '<div class="col">' +
+                                                    '<input type="date" class="form-control" id="crd-period-start" ' +
+                                                        'aria-label="Effective start">' +
+                                                "</div>" +
+                                                '<div class="col">' +
+                                                    '<input type="date" class="form-control" id="crd-period-end" ' +
+                                                        'aria-label="Effective end">' +
+                                                "</div>" +
+                                            "</div>" +
+                                        "</div>" +
+                                        '<button type="submit" class="btn btn-primary">Save changes</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</form>") +
                         tabPane("crd-pane-route",
-                            '<div class="card" id="camel-route-yaml-card">' +
-                                '<div class="card-header flex-wrap gap-2">' +
-                                    "<div>" +
-                                        '<h3 class="card-title mb-0">Camel route YAML</h3>' +
-                                        '<div class="small text-muted"><code>' + esc(routeContentType) + "</code>" +
-                                            " · Ctrl-Space complete · Ctrl-F find · Ctrl-/ comment · Ctrl-Q fold</div>" +
+                            '<div class="d-flex flex-column gap-3">' +
+                                '<div class="card" id="camel-route-yaml-card">' +
+                                    '<div class="card-header flex-wrap gap-2">' +
+                                        "<div>" +
+                                            '<h3 class="card-title mb-0">Camel route YAML</h3>' +
+                                            '<div class="small text-muted"><code>' + esc(routeContentType) + "</code>" +
+                                                " · Ctrl-Space complete · Ctrl-F find · Ctrl-/ comment · Ctrl-Q fold</div>" +
+                                        "</div>" +
+                                        '<div class="card-tools d-flex flex-nowrap align-items-center gap-2 camel-route-yaml-tools">' +
+                                            yamlTools +
+                                        "</div>" +
                                     "</div>" +
-                                    '<div class="card-tools d-flex flex-nowrap align-items-center gap-2 camel-route-yaml-tools">' +
-                                        yamlTools +
+                                    '<div class="card-body p-0">' +
+                                        '<textarea id="crd-yaml" class="d-none"></textarea>' +
                                     "</div>" +
                                 "</div>" +
-                                '<div class="card-body p-0">' +
-                                    '<textarea id="crd-yaml" class="d-none"></textarea>' +
-                                "</div>" +
+                                CadminCamelRouteGraph.card() +
                             "</div>") +
-                        tabPane("crd-pane-route-graph", CadminCamelRouteGraph.card()) +
                         tabPane("crd-pane-related", CadminLibraryRelated.cards()) +
                         tabPane("crd-pane-graph", CadminResourceGraph.card()) +
                         tabPane("crd-pane-history", CadminResourceHistory.card()) +
@@ -583,9 +846,12 @@ window.CadminCamelRouteDetail = (function () {
         CadminLibraryRelated.mount(library);
         renderHeader();
         fillBasicsForm();
+        mountMarkdownEditors();
+        fillMarkdownFields();
         mountEditor(readYaml() || templates[0].yaml);
         mountRouteGraph();
         markEditorClean();
+        markBasicsClean();
         bind();
     }
 
@@ -617,12 +883,12 @@ window.CadminCamelRouteDetail = (function () {
         if (window.CadminCamelRouteGraph) {
             mountRouteGraph();
         }
+        refreshMarkdownEditors();
         syncUnsavedFlag();
     }
 
     function renderHeader() {
         const label = routeLabel();
-        $("#crd-crumb").text(label);
         $("#crd-title").text(label);
         $("#crd-status-badge").html(statusBadge(library.status));
         if (library.id) {
@@ -633,12 +899,20 @@ window.CadminCamelRouteDetail = (function () {
     }
 
     function fillBasicsForm() {
+        const period = library.effectivePeriod || {};
         $("#crd-title-input").val(library.title || "");
-        $("#crd-name").val(library.name || "");
         $("#crd-status").val(library.status || "draft");
+        $("#crd-type").val(typeCode());
+        $("#crd-experimental").prop("checked", !!library.experimental);
+        $("#crd-url").val(library.url || "");
+        $("#crd-name").val(library.name || "");
         $("#crd-version").val(library.version || "");
-        $("#crd-description").val(library.description || "");
-        markBasicsClean();
+        $("#crd-publisher").val(library.publisher || "");
+        $("#crd-date").val(dateInputValue(library.date));
+        $("#crd-approval").val(dateInputValue(library.approvalDate));
+        $("#crd-review").val(dateInputValue(library.lastReviewDate));
+        $("#crd-period-start").val(dateInputValue(period.start));
+        $("#crd-period-end").val(dateInputValue(period.end));
     }
 
     function refreshRoutePane() {
@@ -646,9 +920,6 @@ window.CadminCamelRouteDetail = (function () {
             editor.setSize("100%", "36rem");
             editor.refresh();
         }
-    }
-
-    function refreshRouteGraphPane() {
         if (window.CadminCamelRouteGraph && typeof CadminCamelRouteGraph.resize === "function") {
             CadminCamelRouteGraph.resize();
         }
@@ -740,14 +1011,15 @@ window.CadminCamelRouteDetail = (function () {
     function bind() {
         const $root = $(CadminWorkspace.root());
         $root.off(".crdetail");
+        $root.on("shown.bs.tab.crdetail", "#crd-pane-basics-btn", refreshMarkdownEditors);
         $root.on("shown.bs.tab.crdetail", "#crd-pane-route-btn", refreshRoutePane);
-        $root.on("shown.bs.tab.crdetail", "#crd-pane-route-graph-btn", refreshRouteGraphPane);
         $root.on("shown.bs.tab.crdetail", "#crd-pane-graph-btn", function () {
             if (typeof CadminResourceGraph.resize === "function") {
                 CadminResourceGraph.resize();
             }
         });
-        $root.on("input.crdetail change.crdetail", "#crd-basic-form :input", syncUnsavedFlag);
+        $root.on("input.crdetail change.crdetail",
+            "#crd-basic-form :input, #crd-identity-form :input", syncUnsavedFlag);
         CadminApi.fillValueSetSelect("#crd-status", CadminApi.valueSets.publicationStatus, {
             fallback: statusOptions,
             selected: library.status || "draft",
@@ -760,7 +1032,7 @@ window.CadminCamelRouteDetail = (function () {
                 CadminApi.showToast("success", "Camel route saved.");
             });
         });
-        $("#crd-basic-form").on("submit", function (event) {
+        $("#crd-basic-form, #crd-identity-form").on("submit", function (event) {
             event.preventDefault();
             saveLibrary(function () {
                 CadminApi.showToast("success", "Camel route updated.");

@@ -17,6 +17,10 @@ window.CadminWorkspace = (function ($) {
         "camel-routes": { type: "Library", path: "/Library/", icon: "hugeicons:camel", listLabel: "Camel Routes" },
         "icg-routes": { type: "Library", path: "/Library/", icon: "mdi:routes", listLabel: "ICG Routes" },
         jolts: { type: "Library", path: "/Library/", icon: "mdi:code-json", listLabel: "Jolt" },
+        "rate-limit-plans": { type: "Library", path: "/Library/", icon: "bi-speedometer2",
+            listLabel: "Rate-limit plans" },
+        "rate-limit-tiers": { type: "DocumentReference", path: "/DocumentReference/", icon: "bi-speedometer2",
+            listLabel: "Rate-limit tiers" },
         questionnaires: { type: "Questionnaire", path: "/Questionnaire/", icon: "bi-ui-checks", listLabel: "Questionnaires" },
         "search-parameters": { type: "SearchParameter", path: "/SearchParameter/", icon: "bi-search",
             listLabel: "Search parameters" },
@@ -26,6 +30,7 @@ window.CadminWorkspace = (function ($) {
         "subscription-topics": { type: "SubscriptionTopic", path: "/SubscriptionTopic/", icon: "bi-bookmark-star", listLabel: "Subscription topics" },
         endpoints: { type: "Endpoint", path: "/Endpoint/", icon: "bi-hdd-network", listLabel: "Endpoints" },
         consents: { type: "Consent", path: "/Consent/", icon: "bi-shield-check", listLabel: "Consents" },
+        feedback: { type: "Communication", path: "/Communication/", icon: "bi-chat-left-text", listLabel: "Feedback" },
         "practitioner-roles": { type: "PractitionerRole", path: "/PractitionerRole/", icon: "bi-person-vcard",
             listLabel: "Practitioner roles" },
         "organization-affiliations": { type: "OrganizationAffiliation", path: "/OrganizationAffiliation/",
@@ -52,12 +57,15 @@ window.CadminWorkspace = (function ($) {
         settings: "Settings",
         "oidc-token": "OIDC token",
         "oidc-clients": "OIDC clients",
+        feedback: "Feedback",
         "search-parameters": "Search parameters",
         "code-systems": "Code systems",
         "value-sets": "Value sets",
         "camel-routes": "Camel Routes",
         "icg-routes": "ICG Routes",
         jolts: "Jolt",
+        "rate-limit-plans": "Rate-limit plans",
+        "rate-limit-tiers": "Rate-limit tiers",
         icg: "Integrator Connect Gateway",
         "core-admin-bridge": "Core Admin Bridge",
         schedules: "Schedules",
@@ -255,6 +263,19 @@ window.CadminWorkspace = (function ($) {
             const categoryLabel = (category && category.text) || coding.display || coding.code || "—";
             return subject + " · " + categoryLabel;
         }
+        if (resource.resourceType === "Communication") {
+            const attachment = (((resource.payload || [])[0] || {}).contentAttachment) || {};
+            return attachment.title
+                || (resource.topic && resource.topic.text)
+                || resource.id
+                || "Feedback";
+        }
+        if (resource.resourceType === "DocumentReference") {
+            if (window.CadminRateLimitPlan && typeof CadminRateLimitPlan.documentTitle === "function") {
+                return CadminRateLimitPlan.documentTitle(resource);
+            }
+            return resource.description || resource.id || "Document";
+        }
         const named = humanName(resource);
         if (named) {
             return named;
@@ -306,6 +327,8 @@ window.CadminWorkspace = (function ($) {
         "camel-routes": true,
         "icg-routes": true,
         jolts: true,
+        "rate-limit-plans": true,
+        "rate-limit-tiers": true,
         icg: true,
         "search-parameters": true,
         questionnaires: true,
@@ -316,6 +339,7 @@ window.CadminWorkspace = (function ($) {
         subscriptions: true,
         endpoints: true,
         consents: true,
+        feedback: true,
         "practitioner-roles": true,
         "organization-affiliations": true,
         "core-admin-bridge": true,
@@ -1279,6 +1303,14 @@ window.CadminWorkspace = (function ($) {
         if (window.CadminJoltDetail && typeof CadminJoltDetail.reveal === "function"
                 && pane.querySelector("#bjd-spec-form")) {
             CadminJoltDetail.reveal(tab && tab.resource);
+        }
+        if (window.CadminRateLimitPlanDetail && typeof CadminRateLimitPlanDetail.reveal === "function"
+                && pane.querySelector("#rlp-plan-form")) {
+            CadminRateLimitPlanDetail.reveal(tab && tab.resource);
+        }
+        if (window.CadminRateLimitTierDetail && typeof CadminRateLimitTierDetail.reveal === "function"
+                && pane.querySelector("#rlt-plan-form")) {
+            CadminRateLimitTierDetail.reveal(tab && tab.resource);
         }
         if (window.CadminSubscriptionDetail && typeof CadminSubscriptionDetail.reveal === "function"
                 && pane.querySelector("#sd-title")) {

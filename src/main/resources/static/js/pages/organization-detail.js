@@ -47,6 +47,7 @@ window.CadminOrganizationDetail = (function () {
     ];
 
     let org = null;
+    let $page = $();
     let editingRole = null;
     let rolesById = {};
     let oidcClients = [];
@@ -272,9 +273,10 @@ window.CadminOrganizationDetail = (function () {
         return '<div class="mb-3"><label class="form-label">' + label + "</label>" + control + "</div>";
     }
 
-    function render(resource) {
+    function render(resource, $el) {
         org = resource;
-        const $root = $(CadminWorkspace.root());
+        $page = $el && $el.length ? $el : $(CadminWorkspace.root());
+        const $root = $page;
         $root.html(
             '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
                 "<div>" +
@@ -318,6 +320,8 @@ window.CadminOrganizationDetail = (function () {
                 '<div class="col-lg-6">' + card("Healthcare services", "org-service-rows",
                     ["Name", "Type", "Status", ""], "#od-service-modal", "Add") + "</div>" +
             "</div>" +
+            card("Rate-limit tiers", "org-tier-rows",
+                ["Title", "Tier", "Status", "OIDC client", "Source", ""], "#od-tier-modal", "Add") +
             CadminResourceHistory.card() +
             CadminResourceGraph.card() +
             modal("od-basic-modal", "Edit basic details",
@@ -400,6 +404,42 @@ window.CadminOrganizationDetail = (function () {
                 field("Name", '<input class="form-control" id="od-svc-name" required>') +
                 field("Type", '<input class="form-control" id="od-svc-type" placeholder="Clinic / Center">'),
                 "od-service-form") +
+            '<div class="modal fade" id="od-tier-modal" tabindex="-1">' +
+                '<div class="modal-dialog">' +
+                    '<form class="modal-content" id="od-tier-form">' +
+                        '<div class="modal-header"><h5 class="modal-title">Add rate-limit tier</h5>' +
+                            '<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>' +
+                        '<div class="modal-body">' +
+                            '<p class="text-muted">Assign a DocumentReference plan to this organization. Only one assigned tier can be active.</p>' +
+                            '<div class="mb-3">' +
+                                '<div class="form-label">Source</div>' +
+                                '<div class="form-check">' +
+                                    '<input class="form-check-input" type="radio" name="od-tier-source" id="od-tier-source-template" value="template" checked>' +
+                                    '<label class="form-check-label" for="od-tier-source-template">Rate-limit plan template</label>' +
+                                "</div>" +
+                                '<div class="form-check">' +
+                                    '<input class="form-check-input" type="radio" name="od-tier-source" id="od-tier-source-custom" value="custom">' +
+                                    '<label class="form-check-label" for="od-tier-source-custom">Custom (not derived)</label>' +
+                                "</div>" +
+                            "</div>" +
+                            '<div class="mb-3" id="od-tier-template-wrap">' +
+                                '<label class="form-label" for="od-tier-template">Plan library</label>' +
+                                '<select class="form-select" id="od-tier-template">' +
+                                    '<option value="">Loading…</option></select>' +
+                            "</div>" +
+                            field("Title", '<input class="form-control" id="od-tier-title" required placeholder="Gold">') +
+                            '<div class="form-check mb-0">' +
+                                '<input class="form-check-input" type="checkbox" id="od-tier-active" checked>' +
+                                '<label class="form-check-label" for="od-tier-active">Make this the active tier</label>' +
+                            "</div>" +
+                        "</div>" +
+                        '<div class="modal-footer">' +
+                            '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>' +
+                            '<button type="submit" class="btn btn-primary">Add</button>' +
+                        "</div>" +
+                    "</form>" +
+                "</div>" +
+            "</div>" +
             '<div class="modal fade" id="od-delete-modal" tabindex="-1" aria-labelledby="od-delete-title">' +
                 '<div class="modal-dialog">' +
                     '<div class="modal-content">' +
@@ -441,6 +481,7 @@ window.CadminOrganizationDetail = (function () {
         renderContacts();
         loadRoles();
         loadServices();
+        loadTiers();
         bindForms();
 
         $("#od-basic-modal").on("show.bs.modal", function () {
@@ -966,6 +1007,8 @@ window.CadminOrganizationDetail = (function () {
             loadRoles();
         } else if (which === "services") {
             loadServices();
+        } else if (which === "tiers") {
+            loadTiers();
         }
     }
 
@@ -990,6 +1033,187 @@ window.CadminOrganizationDetail = (function () {
         }).fail(function (xhr) {
             $("#org-service-rows").html(emptyRow(4, "Unable to load healthcare services."));
             fail("Load healthcare services", xhr);
+        });
+    }
+
+    function tierHref(id) {
+        return "#/rate-limit-tiers/" + encodeURIComponent(id);
+    }
+
+    function syncTierSourceFields() {
+        const useTemplate = $("input[name='od-tier-source']:checked").val() !== "custom";
+        $("#od-tier-template-wrap").toggleClass("d-none", !useTemplate);
+        $("#od-tier-template").prop("required", useTemplate);
+    }
+
+    function applyTierTemplateTitle() {
+        const selected = $("#od-tier-template option:selected");
+        const title = selected.attr("data-title") || selected.text();
+        if (title && title !== "Select a plan…") {
+            $("#od-tier-title").val(title);
+        }
+    }
+
+    function fillTierForm() {
+        $("#od-tier-source-template").prop("checked", true);
+        $("#od-tier-title").val("");
+        $("#od-tier-active").prop("checked", true);
+        $("#od-tier-template").html('<option value="">Loading…</option>');
+        syncTierSourceFields();
+        CadminRateLimitPlan.loadPlanLibraries({ status: "active" }).done(function (libraries) {
+            const options = ['<option value="">Select a plan…</option>'].concat((libraries || []).map(function (library) {
+                const label = library.title || library.name || library.id;
+                return '<option value="' + esc(library.id) + '" data-title="' + esc(label) + '">' +
+                    esc(label) + "</option>";
+            }));
+            $("#od-tier-template").html(options.join(""));
+            if (!(libraries || []).length) {
+                $("#od-tier-template").html('<option value="">No active rate-limit plan libraries</option>');
+            }
+        }).fail(function () {
+            $("#od-tier-template").html('<option value="">Unable to load plan libraries</option>');
+        });
+    }
+
+    function paintTiers(docs, librariesById) {
+        const $rows = $page.find("#org-tier-rows");
+        if (!docs.length) {
+            $rows.html(emptyRow(6, "No rate-limit tiers assigned."));
+            return;
+        }
+        $rows.html(docs.map(function (doc) {
+            const title = CadminRateLimitPlan.documentTitle(doc);
+            const plan = CadminRateLimitPlan.parsePlanText(CadminRateLimitPlan.readDocumentPlanText(doc), doc)
+                || CadminRateLimitPlan.emptyPlan(null);
+            const source = CadminRateLimitPlan.sourceLibraryRef(doc);
+            const library = source ? librariesById[source.id] : null;
+            const active = CadminRateLimitPlan.isActiveTier(doc);
+            const clientId = CadminRateLimitPlan.oidcClientIdOf(doc);
+            return "<tr>" +
+                "<td>" + CadminApi.resourceLink(tierHref(doc.id), title) + "</td>" +
+                "<td><code>" + esc(plan.tier || "—") + "</code></td>" +
+                "<td>" + (active
+                    ? '<span class="badge text-bg-success">Active</span>'
+                    : '<span class="badge text-bg-secondary">Inactive</span>') + "</td>" +
+                "<td>" + (clientId ? "<code>" + esc(clientId) + "</code>" : '<span class="text-muted">—</span>') + "</td>" +
+                "<td>" + CadminRateLimitPlan.originLabelHtml(doc, library) + "</td>" +
+                '<td class="text-end text-nowrap">' +
+                    '<a class="btn btn-sm btn-outline-primary me-1" href="' + tierHref(doc.id) +
+                        '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a>' +
+                    (active
+                        ? ""
+                        : '<button class="btn btn-sm btn-outline-success me-1" type="button" data-activate-tier="' +
+                            esc(doc.id) + '" title="Make active" aria-label="Make active">' +
+                            '<i class="bi bi-check2-circle"></i></button>') +
+                    '<button class="btn btn-sm btn-outline-danger" type="button" data-delete="/DocumentReference/' +
+                        encodeURIComponent(doc.id) + '" data-reload="tiers" title="Remove" aria-label="Remove">' +
+                        '<i class="bi bi-trash"></i></button>' +
+                "</td>" +
+            "</tr>";
+        }).join(""));
+    }
+
+    function loadTiers(extraDoc) {
+        CadminRateLimitPlan.searchOrgTiers(org.id).done(function (docs) {
+            docs = Array.isArray(docs) ? docs.slice() : [];
+            if (extraDoc && extraDoc.id && !docs.some(function (doc) { return doc.id === extraDoc.id; })) {
+                docs.unshift(extraDoc);
+            }
+            const ids = {};
+            docs.forEach(function (doc) {
+                const source = CadminRateLimitPlan.sourceLibraryRef(doc);
+                if (source && source.id) {
+                    ids[source.id] = true;
+                }
+            });
+            const idList = Object.keys(ids);
+            if (!idList.length) {
+                paintTiers(docs, {});
+                return;
+            }
+            CadminApi.fhir("/Library?_id=" + idList.map(encodeURIComponent).join(",") +
+                "&_count=" + idList.length, "GET", null, { silent: true }).done(function (bundle) {
+                const byId = {};
+                CadminApi.bundleResources(bundle, "Library").forEach(function (library) {
+                    byId[library.id] = library;
+                });
+                paintTiers(docs, byId);
+            }).fail(function () {
+                paintTiers(docs, {});
+            });
+        }).fail(function (xhr) {
+            $page.find("#org-tier-rows").html(emptyRow(6, "Unable to load rate-limit tiers."));
+            fail("Load rate-limit tiers", xhr);
+        });
+    }
+
+    function resolveOidcClientId() {
+        if (linkedOidcClient && linkedOidcClient.clientId) {
+            return $.Deferred().resolve(linkedOidcClient.clientId).promise();
+        }
+        if (!isOidcMode()) {
+            return $.Deferred().resolve("").promise();
+        }
+        const subjects = oidcSubjectValues();
+        if (!subjects.length) {
+            return $.Deferred().resolve("").promise();
+        }
+        return CadminApi.get("/api/auth/clients").then(function (clients) {
+            const match = (clients || []).find(function (client) {
+                return client && subjects.indexOf(client.subject) >= 0;
+            });
+            if (match) {
+                linkedOidcClient = match;
+            }
+            return (match && match.clientId) || "";
+        }, function () {
+            return "";
+        });
+    }
+
+    function createTierFromLibrary(library, title, activate) {
+        const planText = library
+            ? (CadminRateLimitPlan.readLibraryPlanText(library) || CadminRateLimitPlan.prettyPlan(
+                CadminRateLimitPlan.emptyPlan(library)))
+            : CadminRateLimitPlan.prettyPlan(CadminRateLimitPlan.emptyPlan({ name: title }));
+        const resource = {
+            resourceType: "DocumentReference",
+            status: activate ? "current" : "superseded",
+            type: CadminRateLimitPlan.tierTypeConcept(),
+            category: [CadminRateLimitPlan.tierTypeConcept()],
+            date: new Date().toISOString(),
+            description: title,
+            content: [{
+                attachment: {
+                    contentType: CadminRateLimitPlan.CONTENT_TYPE,
+                    title: title,
+                    data: CadminRateLimitPlan.encodeText(planText)
+                }
+            }]
+        };
+        CadminRateLimitPlan.setOrganization(resource, org);
+        if (library) {
+            CadminRateLimitPlan.setSourceLibrary(resource, library);
+        }
+        return resolveOidcClientId().then(function (clientId) {
+            CadminRateLimitPlan.setOidcClientId(resource, clientId);
+            const request = CadminApi.fhir("/DocumentReference", "POST", resource);
+            return request.then(function (created) {
+                const id = (created && created.id)
+                    || CadminApi.createdResourceId(created, request, "DocumentReference");
+                const doc = created && created.resourceType === "DocumentReference"
+                    ? created
+                    : Object.assign({}, resource, { id: id });
+                if (!doc.id && id) {
+                    doc.id = id;
+                }
+                if (!activate || !doc.id) {
+                    return doc;
+                }
+                return CadminRateLimitPlan.searchOrgTiers(org.id).then(function (siblings) {
+                    return CadminRateLimitPlan.activateTier(doc, siblings);
+                });
+            });
         });
     }
 
@@ -1086,12 +1310,19 @@ window.CadminOrganizationDetail = (function () {
         $root.on("click.orgdetail", "[data-delete]", function () {
             const path = $(this).attr("data-delete");
             const which = $(this).attr("data-reload");
-            CadminApi.fhir(path, "DELETE").done(function () {
-                alertMsg("success", "Removed.");
-                reload(which);
-            }).fail(function (xhr) {
-                fail("Remove", xhr);
-            });
+            const remove = function () {
+                CadminApi.fhir(path, "DELETE").done(function () {
+                    alertMsg("success", "Removed.");
+                    reload(which);
+                }).fail(function (xhr) {
+                    fail("Remove", xhr);
+                });
+            };
+            if (which === "tiers") {
+                CadminApi.confirm("Delete this rate-limit tier?").done(remove);
+                return;
+            }
+            remove();
         });
 
         $root.on("click.orgdetail", "[data-unlink-endpoint]", function () {
@@ -1566,6 +1797,56 @@ window.CadminOrganizationDetail = (function () {
                 loadServices();
             }).fail(function (xhr) {
                 fail("Create healthcare service", xhr);
+            });
+        });
+
+        $("#od-tier-modal").off("show.bs.modal").on("show.bs.modal", fillTierForm);
+        $root.on("change.orgdetail", "input[name='od-tier-source']", syncTierSourceFields);
+        $root.on("change.orgdetail", "#od-tier-template", applyTierTemplateTitle);
+        $root.on("click.orgdetail", "[data-activate-tier]", function () {
+            const id = $(this).attr("data-activate-tier");
+            CadminApi.fhir("/DocumentReference/" + encodeURIComponent(id)).done(function (doc) {
+                CadminRateLimitPlan.searchOrgTiers(org.id).then(function (siblings) {
+                    return CadminRateLimitPlan.activateTier(doc, siblings);
+                }).done(function () {
+                    alertMsg("success", "Active rate-limit tier updated.");
+                    loadTiers();
+                }).fail(function (xhr) {
+                    fail("Activate tier", xhr);
+                });
+            }).fail(function (xhr) {
+                fail("Load tier", xhr);
+            });
+        });
+        $("#od-tier-form").on("submit", function (event) {
+            event.preventDefault();
+            const custom = $("input[name='od-tier-source']:checked").val() === "custom";
+            const title = $("#od-tier-title").val().trim();
+            const activate = $("#od-tier-active").is(":checked");
+            if (!title) {
+                alertMsg("danger", "Enter a title.");
+                return;
+            }
+            const libraryId = $("#od-tier-template").val();
+            if (!custom && !libraryId) {
+                alertMsg("danger", "Select a rate-limit plan template, or choose custom.");
+                return;
+            }
+            const submit = function (library) {
+                createTierFromLibrary(library, title, activate).done(function (doc) {
+                    hideModal("od-tier-modal");
+                    alertMsg("success", "Rate-limit tier assigned.");
+                    loadTiers(doc);
+                }).fail(function (xhr) {
+                    fail("Add rate-limit tier", xhr);
+                });
+            };
+            if (custom) {
+                submit(null);
+                return;
+            }
+            CadminApi.fhir("/Library/" + encodeURIComponent(libraryId)).done(submit).fail(function (xhr) {
+                fail("Load plan template", xhr);
             });
         });
     }

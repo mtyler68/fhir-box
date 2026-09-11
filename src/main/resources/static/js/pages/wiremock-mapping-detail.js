@@ -40,6 +40,12 @@ window.CadminWiremockMappingDetail = (function () {
     let syncing = false;
     let editingPatternIndex = -1;
     let savedJson = "";
+    let headerRows = [];
+    let headerDragFrom = -1;
+    let headerDropBefore = -1;
+    let queryRows = [];
+    let queryDragFrom = -1;
+    let queryDropBefore = -1;
 
     function esc(value) {
         return CadminApi.escapeHtml(value);
@@ -116,7 +122,10 @@ window.CadminWiremockMappingDetail = (function () {
         $("#wmd-status").val(response.status != null ? response.status : 200);
         $("#wmd-body-kind").val(bodyKind);
         $("#wmd-body").val(wm().responseBodyText(response));
-        $("#wmd-headers").val(wm().formatHeaders(response.headers));
+        headerRows = wm().headerEntries(response.headers);
+        renderHeaderList();
+        queryRows = wm().queryParamEntries(request.queryParameters);
+        renderQueryList();
         $("#wmd-scenario-name").val(resource.scenarioName || "");
         $("#wmd-scenario-required").val(resource.requiredScenarioState || "");
         $("#wmd-scenario-new").val(resource.newScenarioState || "");
@@ -135,6 +144,288 @@ window.CadminWiremockMappingDetail = (function () {
         };
         $("#wmd-body").prop("disabled", kind === "empty")
             .attr("placeholder", placeholders[kind] || "");
+    }
+
+    function flushHeaderRows() {
+        const rows = [];
+        $("#wmd-header-rows tr[data-header-index]").each(function () {
+            rows.push({
+                name: ($(this).find("[data-header-name]").val() || "").trim(),
+                value: $(this).find("[data-header-value]").val() || ""
+            });
+        });
+        if (rows.length || !$("#wmd-header-rows").length) {
+            headerRows = rows.length ? rows : headerRows;
+        }
+        return headerRows;
+    }
+
+    function isContentTypeHeader(name) {
+        return String(name || "").trim().toLowerCase() === "content-type";
+    }
+
+    function headerValueListAttr(name) {
+        return isContentTypeHeader(name) ? ' list="wmd-header-content-types"' : "";
+    }
+
+    function datalistHtml(id, values) {
+        return '<datalist id="' + esc(id) + '">' +
+            (values || []).map(function (item) {
+                return '<option value="' + esc(item) + '">';
+            }).join("") +
+            "</datalist>";
+    }
+
+    function syncHeaderValueSuggest(nameInput) {
+        const $name = $(nameInput);
+        const $value = $name.closest("tr").find("[data-header-value]");
+        if (!$value.length) {
+            return;
+        }
+        if (isContentTypeHeader($name.val())) {
+            $value.attr("list", "wmd-header-content-types");
+        } else {
+            $value.removeAttr("list");
+        }
+    }
+
+    function renderHeaderList() {
+        const $rows = $("#wmd-header-rows");
+        if (!$rows.length) {
+            return;
+        }
+        if (!headerRows.length) {
+            $rows.html(
+                '<tr class="wmd-header-empty"><td colspan="4" class="text-muted">No response headers.</td></tr>'
+            );
+            return;
+        }
+        $rows.html(headerRows.map(function (row, index) {
+            return '<tr draggable="true" data-header-index="' + index + '">' +
+                '<td class="cadmin-list-grip-col">' +
+                    '<span class="cadmin-list-grip" title="Drag to reorder" aria-hidden="true">' +
+                        '<i class="bi bi-grip-vertical"></i></span></td>' +
+                '<td><input class="form-control form-control-sm font-monospace" data-header-name ' +
+                    'list="wmd-header-names" value="' + esc(row.name) +
+                    '" placeholder="Content-Type" autocomplete="off" spellcheck="false"></td>' +
+                '<td><input class="form-control form-control-sm font-monospace" data-header-value ' +
+                    headerValueListAttr(row.name) + ' value="' + esc(row.value) +
+                    '" placeholder="application/json" autocomplete="off" spellcheck="false"></td>' +
+                '<td class="text-end text-nowrap">' +
+                    '<button class="btn btn-sm btn-outline-danger" type="button" data-remove-header="' +
+                        index + '" title="Remove" aria-label="Remove">' +
+                        '<i class="bi bi-trash"></i></button></td></tr>';
+        }).join(""));
+    }
+
+    function addHeaderRow() {
+        flushHeaderRows();
+        headerRows.push({ name: "", value: "" });
+        renderHeaderList();
+        const el = document.querySelector("#wmd-header-rows tr:last-child [data-header-name]");
+        if (el) {
+            el.focus();
+        }
+        lastEdited = "form";
+        refreshJsonFromForm();
+        syncUnsavedFlag();
+    }
+
+    function removeHeaderRow(index) {
+        flushHeaderRows();
+        if (index < 0 || index >= headerRows.length) {
+            return;
+        }
+        headerRows.splice(index, 1);
+        renderHeaderList();
+        lastEdited = "form";
+        refreshJsonFromForm();
+        syncUnsavedFlag();
+    }
+
+    function moveHeaderRow(from, to) {
+        flushHeaderRows();
+        if (from < 0 || to < 0 || from >= headerRows.length) {
+            return;
+        }
+        if (from === to || from + 1 === to) {
+            return;
+        }
+        const item = headerRows.splice(from, 1)[0];
+        const dest = to > from ? to - 1 : to;
+        headerRows.splice(dest, 0, item);
+        renderHeaderList();
+        lastEdited = "form";
+        refreshJsonFromForm();
+        syncUnsavedFlag();
+    }
+
+    function clearHeaderDrag() {
+        headerDragFrom = -1;
+        headerDropBefore = -1;
+        $("#wmd-header-rows tr").removeClass("is-dragging drop-before drop-after");
+    }
+
+    function flushQueryRows() {
+        const rows = [];
+        $("#wmd-query-rows tr[data-query-index]").each(function () {
+            rows.push({
+                name: ($(this).find("[data-query-name]").val() || "").trim(),
+                matcher: $(this).find("[data-query-matcher]").val() || "equalTo",
+                value: $(this).find("[data-query-value]").val() || "",
+                caseInsensitive: $(this).find("[data-query-case]").prop("checked")
+            });
+        });
+        if (rows.length || !$("#wmd-query-rows").length) {
+            queryRows = rows.length ? rows : queryRows;
+        }
+        return queryRows;
+    }
+
+    function queryValueListAttr(name) {
+        const listId = wm().queryParamValueListId(name);
+        return listId ? ' list="' + esc(listId) + '"' : "";
+    }
+
+    function queryValuePlaceholder(matcher) {
+        if (matcher === "absent") {
+            return "";
+        }
+        if (matcher === "custom") {
+            return '{ "or": [{ "equalTo": "value" }, { "absent": true }] }';
+        }
+        if (matcher === "matches" || matcher === "doesNotMatch") {
+            return ".*pattern.*";
+        }
+        if (matcher === "contains" || matcher === "doesNotContain") {
+            return "substring";
+        }
+        return "value";
+    }
+
+    function syncQueryValueSuggest(nameInput) {
+        const $name = $(nameInput);
+        const $value = $name.closest("tr").find("[data-query-value]");
+        if (!$value.length) {
+            return;
+        }
+        const listId = wm().queryParamValueListId($name.val());
+        if (listId) {
+            $value.attr("list", listId);
+        } else {
+            $value.removeAttr("list");
+        }
+    }
+
+    function syncQueryRowControls(rowEl) {
+        const $row = $(rowEl);
+        const matcher = $row.find("[data-query-matcher]").val() || "equalTo";
+        const $value = $row.find("[data-query-value]");
+        const $case = $row.find("[data-query-case]").closest(".form-check");
+        const absent = matcher === "absent";
+        $value.prop("disabled", absent)
+            .attr("placeholder", queryValuePlaceholder(matcher));
+        if (absent) {
+            $value.val("");
+        }
+        $case.toggleClass("d-none", !wm().queryParamSupportsCase(matcher));
+    }
+
+    function queryValueDatalistsHtml() {
+        const suggest = wm().QUERY_PARAM_VALUE_SUGGEST || {};
+        return Object.keys(suggest).map(function (name) {
+            return datalistHtml(wm().queryParamValueListId(name), suggest[name]);
+        }).join("");
+    }
+
+    function renderQueryList() {
+        const $rows = $("#wmd-query-rows");
+        if (!$rows.length) {
+            return;
+        }
+        if (!queryRows.length) {
+            $rows.html(
+                '<tr class="wmd-query-empty"><td colspan="6" class="text-muted">' +
+                    "No query parameter matchers. The stub matches any query string.</td></tr>"
+            );
+            return;
+        }
+        $rows.html(queryRows.map(function (row, index) {
+            const matcher = row.matcher || "equalTo";
+            const absent = matcher === "absent";
+            const caseClass = wm().queryParamSupportsCase(matcher) ? "" : " d-none";
+            return '<tr draggable="true" data-query-index="' + index + '">' +
+                '<td class="cadmin-list-grip-col">' +
+                    '<span class="cadmin-list-grip" title="Drag to reorder" aria-hidden="true">' +
+                        '<i class="bi bi-grip-vertical"></i></span></td>' +
+                '<td><input class="form-control form-control-sm font-monospace" data-query-name ' +
+                    'list="wmd-query-names" value="' + esc(row.name) +
+                    '" placeholder="_count" autocomplete="off" spellcheck="false"></td>' +
+                '<td><select class="form-select form-select-sm" data-query-matcher>' +
+                    optionsHtml(wm().QUERY_PARAM_MATCHERS, matcher) + "</select></td>" +
+                '<td><input class="form-control form-control-sm font-monospace" data-query-value ' +
+                    queryValueListAttr(row.name) + ' value="' + esc(absent ? "" : row.value) +
+                    '" placeholder="' + esc(queryValuePlaceholder(matcher)) +
+                    '"' + (absent ? " disabled" : "") +
+                    ' autocomplete="off" spellcheck="false"></td>' +
+                '<td class="wmd-query-case-col">' +
+                    '<div class="form-check mb-0 d-flex justify-content-center' + caseClass + '">' +
+                        '<input class="form-check-input" type="checkbox" data-query-case' +
+                            (row.caseInsensitive ? " checked" : "") +
+                            ' title="Case insensitive" aria-label="Case insensitive"></div></td>' +
+                '<td class="text-end text-nowrap">' +
+                    '<button class="btn btn-sm btn-outline-danger" type="button" data-remove-query="' +
+                        index + '" title="Remove" aria-label="Remove">' +
+                        '<i class="bi bi-trash"></i></button></td></tr>';
+        }).join(""));
+    }
+
+    function addQueryRow() {
+        flushQueryRows();
+        queryRows.push({ name: "", matcher: "equalTo", value: "", caseInsensitive: false });
+        renderQueryList();
+        const el = document.querySelector("#wmd-query-rows tr:last-child [data-query-name]");
+        if (el) {
+            el.focus();
+        }
+        lastEdited = "form";
+        refreshJsonFromForm();
+        syncUnsavedFlag();
+    }
+
+    function removeQueryRow(index) {
+        flushQueryRows();
+        if (index < 0 || index >= queryRows.length) {
+            return;
+        }
+        queryRows.splice(index, 1);
+        renderQueryList();
+        lastEdited = "form";
+        refreshJsonFromForm();
+        syncUnsavedFlag();
+    }
+
+    function moveQueryRow(from, to) {
+        flushQueryRows();
+        if (from < 0 || to < 0 || from >= queryRows.length) {
+            return;
+        }
+        if (from === to || from + 1 === to) {
+            return;
+        }
+        const item = queryRows.splice(from, 1)[0];
+        const dest = to > from ? to - 1 : to;
+        queryRows.splice(dest, 0, item);
+        renderQueryList();
+        lastEdited = "form";
+        refreshJsonFromForm();
+        syncUnsavedFlag();
+    }
+
+    function clearQueryDrag() {
+        queryDragFrom = -1;
+        queryDropBefore = -1;
+        $("#wmd-query-rows tr").removeClass("is-dragging drop-before drop-after");
     }
 
     function applyForm(resource) {
@@ -188,11 +479,17 @@ window.CadminWiremockMappingDetail = (function () {
         } else if (bodyKind === "proxy") {
             next.response.proxyBaseUrl = bodyText.trim();
         }
-        const headers = wm().parseHeaders($("#wmd-headers").val());
+        const headers = wm().headersFromEntries(flushHeaderRows());
         if (Object.keys(headers).length) {
             next.response.headers = headers;
         } else {
             delete next.response.headers;
+        }
+        const queryParameters = wm().queryParamsFromEntries(flushQueryRows());
+        if (Object.keys(queryParameters).length) {
+            next.request.queryParameters = queryParameters;
+        } else {
+            delete next.request.queryParameters;
         }
         const scenario = $("#wmd-scenario-name").val().trim();
         const required = $("#wmd-scenario-required").val().trim();
@@ -516,6 +813,9 @@ window.CadminWiremockMappingDetail = (function () {
     function bind() {
         const $root = $("#app-content");
         $root.off(".wmdetail");
+        $root.on("submit.wmdetail", "#wmd-form", function (event) {
+            event.preventDefault();
+        });
         $root.on("input.wmdetail change.wmdetail", "#wmd-form :input", function () {
             if (syncing) {
                 return;
@@ -524,8 +824,111 @@ window.CadminWiremockMappingDetail = (function () {
             if (this.id === "wmd-body-kind") {
                 syncBodyPlaceholder();
             }
+            if ($(this).is("[data-query-matcher]")) {
+                syncQueryRowControls($(this).closest("tr"));
+            }
             refreshJsonFromForm();
             syncUnsavedFlag();
+        });
+        $root.on("input.wmdetail", "[data-header-name]", function () {
+            syncHeaderValueSuggest(this);
+        });
+        $root.on("click.wmdetail", "#wmd-header-add", function () {
+            addHeaderRow();
+        });
+        $root.on("click.wmdetail", "[data-remove-header]", function () {
+            removeHeaderRow(Number($(this).attr("data-remove-header")));
+        });
+        $root.on("dragstart.wmdetail", "#wmd-header-rows tr[data-header-index]", function (event) {
+            if ($(event.target).closest("button, input, textarea, a").length) {
+                event.preventDefault();
+                return;
+            }
+            headerDragFrom = Number($(this).attr("data-header-index"));
+            const native = event.originalEvent && event.originalEvent.dataTransfer;
+            if (native) {
+                native.effectAllowed = "move";
+                native.setData("text/plain", String(headerDragFrom));
+            }
+            $(this).addClass("is-dragging");
+        });
+        $root.on("dragover.wmdetail", "#wmd-header-rows tr[data-header-index]", function (event) {
+            if (headerDragFrom < 0) {
+                return;
+            }
+            event.preventDefault();
+            const native = event.originalEvent;
+            if (native && native.dataTransfer) {
+                native.dataTransfer.dropEffect = "move";
+            }
+            const rect = this.getBoundingClientRect();
+            const before = native && (native.clientY - rect.top) < rect.height / 2;
+            $("#wmd-header-rows tr").removeClass("drop-before drop-after");
+            $(this).addClass(before ? "drop-before" : "drop-after");
+            headerDropBefore = Number($(this).attr("data-header-index")) + (before ? 0 : 1);
+        });
+        $root.on("drop.wmdetail", "#wmd-header-rows tr[data-header-index]", function (event) {
+            if (headerDragFrom < 0) {
+                return;
+            }
+            event.preventDefault();
+            const from = headerDragFrom;
+            const to = headerDropBefore;
+            clearHeaderDrag();
+            moveHeaderRow(from, to);
+        });
+        $root.on("dragend.wmdetail", "#wmd-header-rows tr[data-header-index]", function () {
+            clearHeaderDrag();
+        });
+        $root.on("input.wmdetail", "[data-query-name]", function () {
+            syncQueryValueSuggest(this);
+        });
+        $root.on("click.wmdetail", "#wmd-query-add", function () {
+            addQueryRow();
+        });
+        $root.on("click.wmdetail", "[data-remove-query]", function () {
+            removeQueryRow(Number($(this).attr("data-remove-query")));
+        });
+        $root.on("dragstart.wmdetail", "#wmd-query-rows tr[data-query-index]", function (event) {
+            if ($(event.target).closest("button, input, textarea, select, a").length) {
+                event.preventDefault();
+                return;
+            }
+            queryDragFrom = Number($(this).attr("data-query-index"));
+            const native = event.originalEvent && event.originalEvent.dataTransfer;
+            if (native) {
+                native.effectAllowed = "move";
+                native.setData("text/plain", String(queryDragFrom));
+            }
+            $(this).addClass("is-dragging");
+        });
+        $root.on("dragover.wmdetail", "#wmd-query-rows tr[data-query-index]", function (event) {
+            if (queryDragFrom < 0) {
+                return;
+            }
+            event.preventDefault();
+            const native = event.originalEvent;
+            if (native && native.dataTransfer) {
+                native.dataTransfer.dropEffect = "move";
+            }
+            const rect = this.getBoundingClientRect();
+            const before = native && (native.clientY - rect.top) < rect.height / 2;
+            $("#wmd-query-rows tr").removeClass("drop-before drop-after");
+            $(this).addClass(before ? "drop-before" : "drop-after");
+            queryDropBefore = Number($(this).attr("data-query-index")) + (before ? 0 : 1);
+        });
+        $root.on("drop.wmdetail", "#wmd-query-rows tr[data-query-index]", function (event) {
+            if (queryDragFrom < 0) {
+                return;
+            }
+            event.preventDefault();
+            const from = queryDragFrom;
+            const to = queryDropBefore;
+            clearQueryDrag();
+            moveQueryRow(from, to);
+        });
+        $root.on("dragend.wmdetail", "#wmd-query-rows tr[data-query-index]", function () {
+            clearQueryDrag();
         });
         $root.on("click.wmdetail", "#wmd-save", save);
         $root.on("click.wmdetail", "#wmd-delete", remove);
@@ -672,10 +1075,44 @@ window.CadminWiremockMappingDetail = (function () {
                                 "</div>" +
                                 field("Body content",
                                     '<textarea class="form-control font-monospace" id="wmd-body" rows="8"></textarea>') +
-                                field("Headers",
-                                    '<textarea class="form-control font-monospace" id="wmd-headers" rows="4" ' +
-                                    'placeholder="Content-Type: application/json"></textarea>') +
+                                '<div class="mb-0">' +
+                                    '<div class="d-flex justify-content-between align-items-center mb-2">' +
+                                        '<label class="form-label mb-0">Headers</label>' +
+                                        '<button class="btn btn-sm btn-outline-primary" type="button" id="wmd-header-add">' +
+                                            "Add</button>" +
+                                    "</div>" +
+                                    '<div class="table-responsive">' +
+                                        '<table class="table table-sm align-middle mb-0" id="wmd-header-table">' +
+                                            '<thead><tr><th class="cadmin-list-grip-col"></th><th>Name</th>' +
+                                                "<th>Value</th><th></th></tr></thead>" +
+                                            '<tbody id="wmd-header-rows"></tbody>' +
+                                        "</table>" +
+                                        datalistHtml("wmd-header-names", wm().RESPONSE_HEADER_NAMES) +
+                                        datalistHtml("wmd-header-content-types", wm().CONTENT_TYPE_VALUES) +
+                                    "</div>" +
+                                "</div>" +
                             "</div>" +
+                        "</div>" +
+                    "</div>" +
+                "</div>" +
+                '<div class="card shadow mb-4">' +
+                    '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
+                        '<h6 class="m-0">Query parameters</h6>' +
+                        '<button class="btn btn-sm btn-outline-primary" type="button" id="wmd-query-add">' +
+                            "Add</button>" +
+                    "</div>" +
+                    '<div class="card-body">' +
+                        '<p class="text-muted small mb-3">Match individual query string fields. Prefer Path URL match when these constraints should apply independently of a full URL.</p>' +
+                        '<div class="table-responsive">' +
+                            '<table class="table table-sm align-middle mb-0" id="wmd-query-table">' +
+                                '<thead><tr><th class="cadmin-list-grip-col"></th><th>Name</th>' +
+                                    "<th>Matcher</th><th>Value</th>" +
+                                    '<th class="wmd-query-case-col" title="Case insensitive">Case</th>' +
+                                    "<th></th></tr></thead>" +
+                                '<tbody id="wmd-query-rows"></tbody>' +
+                            "</table>" +
+                            datalistHtml("wmd-query-names", wm().QUERY_PARAM_NAMES) +
+                            queryValueDatalistsHtml() +
                         "</div>" +
                     "</div>" +
                 "</div>" +
@@ -779,6 +1216,31 @@ window.CadminWiremockMappingDetail = (function () {
         }
     }
 
+    function sanitizeMappingResponseHeaders(resource) {
+        const next = resource || {};
+        next.response = next.response || {};
+        next.request = next.request || {};
+        const headers = wm().headersFromEntries(wm().headerEntries(next.response.headers));
+        if (Object.keys(headers).length) {
+            next.response.headers = headers;
+        } else {
+            delete next.response.headers;
+        }
+        try {
+            const queryParameters = wm().queryParamsFromEntries(
+                wm().queryParamEntries(next.request.queryParameters)
+            );
+            if (Object.keys(queryParameters).length) {
+                next.request.queryParameters = queryParameters;
+            } else {
+                delete next.request.queryParameters;
+            }
+        } catch (error) {
+            /* keep recorded queryParameters when they cannot be normalized */
+        }
+        return next;
+    }
+
     function render(id) {
         destroyEditor();
         mapping = null;
@@ -786,7 +1248,7 @@ window.CadminWiremockMappingDetail = (function () {
         const $root = $("#app-content");
         $root.html('<div class="text-muted py-5 text-center">Loading…</div>');
         CadminApi.wiremock("/__admin/mappings/" + encodeURIComponent(id)).done(function (resource) {
-            mapping = resource || {};
+            mapping = sanitizeMappingResponseHeaders(resource || {});
             renderShell();
             fillForm(mapping);
             setEditorText(pretty(mapping));

@@ -72,6 +72,7 @@ CadminApp.register("dashboard", function () {
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/camel-routes">Camel routes</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/icg-routes">ICG routes</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/jolts">Jolt</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/rate-limit-plans">Rate-limit plans</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/core-admin-bridge">Core Admin Bridge</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/icg">Integrator Connect Gateway</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/schedules">Schedules</a>' +
@@ -85,6 +86,7 @@ CadminApp.register("dashboard", function () {
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/code-systems">Code systems</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/value-sets">Value sets</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/consents">Consents</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/feedback">Feedback</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/oidc-token">OIDC token</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/oidc-clients">OIDC clients</a>'
                             : "") +
@@ -137,6 +139,7 @@ CadminApp.register("dashboard", function () {
         { type: "ActivityDefinition", label: "Activity definitions", href: "#/activity-definitions", icon: "bi-lightning-charge", border: "warning", admin: true },
         { type: "RequestOrchestration", label: "Orchestrations", href: "#/request-orchestrations", icon: "bi-kanban", border: "success", admin: true },
         { type: "Consent", label: "Consents", href: "#/consents", icon: "bi-shield-check", border: "warning", admin: true },
+        { type: "Communication", label: "Feedback", href: "#/feedback", icon: "bi-chat-left-text", border: "info", admin: true },
         { type: "Subscription", label: "Subscriptions", href: "#/subscriptions", icon: "bi-broadcast", border: "info", admin: true },
         { type: "Endpoint", label: "Endpoints", href: "#/endpoints", icon: "bi-hdd-network", border: "secondary", admin: true },
         { type: "SubscriptionTopic", label: "Topics", href: "#/subscription-topics", icon: "bi-bookmark-star", border: "primary", admin: true },
@@ -144,6 +147,8 @@ CadminApp.register("dashboard", function () {
         { key: "camel-routes", type: "Library", search: "type=camel-route", label: "Camel routes", href: "#/camel-routes", iconify: "hugeicons:camel", border: "warning", admin: true },
         { key: "icg-routes", type: "Library", search: "type=icg-route", label: "ICG routes", href: "#/icg-routes", iconify: "mdi:routes", border: "info", admin: true },
         { key: "jolts", type: "Library", search: "type=jolt", label: "Jolt", href: "#/jolts", iconify: "mdi:code-json", border: "secondary", admin: true },
+        { key: "rate-limit-plans", type: "Library", search: "type=rate-limit-plan", label: "Rate-limit plans",
+            href: "#/rate-limit-plans", icon: "bi-speedometer2", border: "danger", admin: true },
         { type: "SearchParameter", label: "Search params", href: "#/search-parameters", icon: "bi-search", border: "warning", admin: true },
         { type: "Questionnaire", label: "Questionnaires", href: "#/questionnaires", icon: "bi-ui-checks", border: "info", admin: true },
         { type: "CodeSystem", label: "Code systems", href: "#/code-systems", icon: "bi-braces", border: "primary", admin: true },

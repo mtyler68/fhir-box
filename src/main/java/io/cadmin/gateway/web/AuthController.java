@@ -159,14 +159,17 @@ public class AuthController {
     private Map<String, Object> toUser(Authentication authentication) {
         String username = authentication.getName();
         String displayName = username;
+        String oidcId = "";
         if (authentication instanceof OAuth2AuthenticationToken oauth
                 && oauth.getPrincipal() instanceof OidcUser oidcUser) {
             username = firstNonBlank(oidcUser.getPreferredUsername(), oidcUser.getName(), username);
             displayName = firstNonBlank(oidcUser.getFullName(), oidcUser.getGivenName(), username);
+            oidcId = firstNonBlank(oidcUser.getSubject());
         }
         return Map.of(
                 "username", username,
                 "displayName", displayName,
+                "oidcId", oidcId,
                 "roles", authorities(authentication.getAuthorities()),
                 "mode", properties.security().mode()
         );

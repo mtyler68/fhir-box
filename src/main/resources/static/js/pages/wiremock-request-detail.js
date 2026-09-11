@@ -239,11 +239,7 @@ window.CadminWiremockRequestDetail = (function () {
             },
             persist: false,
             repeatsAsScenarios: false,
-            outputFormat: "FULL",
-            captureHeaders: {
-                Accept: {},
-                "Content-Type": { caseInsensitive: true }
-            }
+            outputFormat: "FULL"
         }).done(function (body) {
             const created = ((body && body.mappings) || [])[0];
             if (openCreated(created)) {

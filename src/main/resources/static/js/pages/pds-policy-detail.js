@@ -1314,6 +1314,10 @@ window.CadminPdsPolicyDetail = (function () {
             window.location.hash = "#/jolts/" + encodeURIComponent(resource.id);
             return;
         }
+        if (CadminApi.isLibraryType(resource, "rate-limit-plan")) {
+            window.location.hash = "#/rate-limit-plans/" + encodeURIComponent(resource.id);
+            return;
+        }
         library = resource;
         const $root = $(CadminWorkspace.root());
         $root.html(

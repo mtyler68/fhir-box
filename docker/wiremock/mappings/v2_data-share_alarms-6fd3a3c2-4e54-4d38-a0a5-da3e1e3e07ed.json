@@ -1,0 +1,45 @@
+{
+  "id" : "6fd3a3c2-4e54-4d38-a0a5-da3e1e3e07ed",
+  "name" : "v2_data-share_alarms",
+  "request" : {
+    "urlPath" : "/v2/data-share/alarms",
+    "method" : "GET",
+    "headers" : {
+      "Accept" : {
+        "equalTo" : "application/json"
+      }
+    },
+    "queryParameters" : {
+      "customerId" : {
+        "equalTo" : "123456789"
+      }
+    }
+  },
+  "response" : {
+    "status" : 200,
+    "jsonBody" : {
+      "alarms" : [ {
+        "serialNumber" : "010000-02152",
+        "recordId" : 213,
+        "name" : "POD_ALARM",
+        "referenceCode" : "string",
+        "timestamp" : "2016-08-29T09:12:33.001Z",
+        "syncTimestamp" : "2016-08-29T09:12:33.001Z",
+        "utcOffset" : "-07:00",
+        "type" : "HAZARD_ALARM"
+      } ],
+      "paging" : {
+        "value" : {
+          "previous" : "/api/v2/data-share/alarms?after=2020-02-04T00:00:00.000Z&limit=500&page=1",
+          "next" : "/api/v2/data-share/alarms?after=2020-02-04T00:00:00.000Z&limit=500&page=3"
+        }
+      }
+    },
+    "headers" : {
+      "Content-Type" : "application/json"
+    }
+  },
+  "uuid" : "6fd3a3c2-4e54-4d38-a0a5-da3e1e3e07ed",
+  "persistent" : true,
+  "insertionIndex" : 6
+}

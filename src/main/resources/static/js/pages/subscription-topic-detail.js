@@ -269,12 +269,8 @@ window.CadminSubscriptionTopicDetail = (function () {
         $root.html(
             '<div class="d-flex align-items-center justify-content-between mb-3">' +
                 "<div>" +
-                    '<nav aria-label="breadcrumb">' +
-                        '<ol class="breadcrumb mb-1">' +
-                            '<li class="breadcrumb-item"><a href="#/subscription-topics">Subscription topics</a></li>' +
-                            '<li class="breadcrumb-item active" aria-current="page" id="td-crumb">' + label + "</li>" +
-                        "</ol>" +
-                    "</nav>" +
+                    '<a class="small text-decoration-none" href="#/subscription-topics">' +
+                        '<i class="bi bi-arrow-left me-1"></i>Subscription topics</a>' +
                     '<div class="d-flex align-items-center flex-wrap gap-2">' +
                         '<h1 class="mb-0 fs-3 page-title" id="td-page-title">' + label + "</h1>" +
                         '<span id="td-status-badge">' + statusBadge(topic.status) + "</span>" +
@@ -482,7 +478,6 @@ window.CadminSubscriptionTopicDetail = (function () {
 
     function renderHeader() {
         const label = topicLabel();
-        $("#td-crumb").text(label);
         $("#td-page-title").text(label);
         $("#td-status-badge").html(statusBadge(topic.status));
         if (topic.id) {

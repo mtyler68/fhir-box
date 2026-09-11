@@ -1,4 +1,8 @@
 window.CadminIcg = (function () {
+    const POLL_MS = 2000;
+    const polls = {};
+    const pollBusy = {};
+
     function esc(value) {
         return CadminApi.escapeHtml(value);
     }
@@ -10,6 +14,15 @@ window.CadminIcg = (function () {
 
     function routeHref(id) {
         return "#/icg/" + encodeURIComponent(id || "");
+    }
+
+    function clientHref(clientId) {
+        return "#/icg/clients/" + encodeURIComponent(clientId || "");
+    }
+
+    function documentHref(documentId) {
+        const id = String(documentId || "").replace(/^DocumentReference\//, "");
+        return id ? "#/rate-limit-tiers/" + encodeURIComponent(id) : "#/rate-limit-plans";
     }
 
     function libraryHref(libraryId) {
@@ -77,6 +90,21 @@ window.CadminIcg = (function () {
         return (Math.round((part / total) * 1000) / 10) + "%";
     }
 
+    function formatWindow(window) {
+        if (!window || window.limit == null) {
+            return "—";
+        }
+        if (window.remaining == null) {
+            return String(window.limit);
+        }
+        return window.remaining + " / " + window.limit;
+    }
+
+    function formatUsage(usage, name) {
+        const window = usage && usage[name];
+        return formatWindow(window);
+    }
+
     function successRate(metrics) {
         const requests = metrics && metrics.requests;
         const errors = metrics && metrics.errors;
@@ -114,10 +142,46 @@ window.CadminIcg = (function () {
         }) || null;
     }
 
+    function stopPoll(name) {
+        if (polls[name]) {
+            window.clearInterval(polls[name]);
+            delete polls[name];
+        }
+        delete pollBusy[name];
+    }
+
+    function startPoll(name, tick) {
+        stopPoll(name);
+        polls[name] = window.setInterval(function () {
+            if (document.hidden || pollBusy[name]) {
+                return;
+            }
+            const result = tick();
+            if (result && typeof result.always === "function") {
+                pollBusy[name] = true;
+                result.always(function () {
+                    pollBusy[name] = false;
+                });
+            }
+        }, POLL_MS);
+    }
+
+    $(window).on("hashchange.icgPoll", function () {
+        const path = (window.location.hash || "").replace(/^#\/?/, "").split("?")[0];
+        const parts = path.split("/").filter(Boolean);
+        if (parts[0] !== "icg") {
+            stopPoll("list");
+            stopPoll("client");
+        }
+    });
+
     return {
+        POLL_MS: POLL_MS,
         esc: esc,
         fail: fail,
         routeHref: routeHref,
+        clientHref: clientHref,
+        documentHref: documentHref,
         libraryHref: libraryHref,
         matchesQuery: matchesQuery,
         emptyRow: emptyRow,
@@ -125,9 +189,13 @@ window.CadminIcg = (function () {
         formatNumber: formatNumber,
         formatMs: formatMs,
         formatPercent: formatPercent,
+        formatWindow: formatWindow,
+        formatUsage: formatUsage,
         successRate: successRate,
         metricsOf: metricsOf,
         statCard: statCard,
-        findRoute: findRoute
+        findRoute: findRoute,
+        startPoll: startPoll,
+        stopPoll: stopPoll
     };
 }());

@@ -1,4 +1,4 @@
-# Starts Keycloak, HAPI FHIR, and WireMock backing stacks together.
+# Starts Keycloak, HAPI FHIR, WireMock, and Redis backing stacks together.
 # Run the gateway on the host: ./mvnw spring-boot:run
 # OIDC mode: ./mvnw spring-boot:run -Dspring-boot.run.profiles=oidc
 
@@ -6,3 +6,4 @@ include:
   - path: docker/fhir/compose.yml
   - path: docker/keycloak/compose.yml
   - path: docker/wiremock/compose.yml
+  - path: docker/redis/compose.yml

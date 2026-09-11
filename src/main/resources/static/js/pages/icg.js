@@ -1,11 +1,32 @@
 CadminApp.register("icg", function (params) {
-    const token = CadminApi.routeParamId(params);
-    if (token) {
-        CadminIcgDetail.render(token);
-        return;
+    const parts = params || [];
+    if (parts[0] === "clients") {
+        CadminIcg.stopPoll("list");
+        if (window.CadminIcgDetail) {
+            CadminIcgDetail.destroy();
+        }
+        const clientId = CadminApi.routeParamId(parts.slice(1));
+        if (clientId && window.CadminIcgRateLimitDetail) {
+            CadminIcgRateLimitDetail.render(clientId);
+            return;
+        }
+    }
+    else {
+        if (window.CadminIcgRateLimitDetail) {
+            CadminIcgRateLimitDetail.destroy();
+        }
+        const token = CadminApi.routeParamId(params);
+        if (token) {
+            CadminIcg.stopPoll("list");
+            CadminIcgDetail.render(token);
+            return;
+        }
     }
     if (window.CadminIcgDetail) {
         CadminIcgDetail.destroy();
+    }
+    if (window.CadminIcgRateLimitDetail) {
+        CadminIcgRateLimitDetail.destroy();
     }
     renderIcg();
 });
@@ -17,7 +38,7 @@ function renderIcg() {
         '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
             "<div>" +
                 '<h1 class="h3 mb-1 page-title">Integrator Connect Gateway</h1>' +
-                '<p class="text-muted mb-0">Live Spring Cloud Gateway routes deployed from <code>icg-route</code> libraries.</p>' +
+                '<p class="text-muted mb-0">Live Spring Cloud Gateway routes deployed from <code>icg-route</code> libraries. Updates every 2 seconds.</p>' +
             "</div>" +
             '<div class="d-flex flex-wrap gap-2">' +
                 '<a class="btn btn-outline-primary" href="#/icg-routes">' +
@@ -52,12 +73,34 @@ function renderIcg() {
                 "</div>" +
                 '<div class="list-pager" id="icg-pager"></div>' +
             "</div>" +
+        "</div>" +
+        '<div class="card shadow mb-4">' +
+            '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
+                '<h6 class="m-0">OIDC rate-limit clients</h6>' +
+                '<form class="d-flex" id="icg-client-search-form">' +
+                    '<input class="form-control form-control-sm me-2" id="icg-client-query" placeholder="Client, tier, or document">' +
+                    '<button class="btn btn-sm btn-primary" type="submit">Search</button>' +
+                "</form>" +
+            "</div>" +
+            '<div class="card-body">' +
+                '<div class="table-responsive">' +
+                    '<table class="table table-hover align-middle">' +
+                        "<thead><tr><th>Client</th><th>Tier</th><th>Version</th><th>Groups</th>" +
+                        "<th>Dedicated</th><th>Document</th><th></th></tr></thead>" +
+                        '<tbody id="icg-client-rows">' + icg.emptyRow(7, "Loading…") + "</tbody>" +
+                    "</table>" +
+                "</div>" +
+                '<div class="list-pager" id="icg-client-pager"></div>' +
+            "</div>" +
         "</div>"
     );
 
     let listPage = 0;
     let query = "";
     let routes = [];
+    let clients = [];
+    let clientPage = 0;
+    let clientQuery = "";
 
     function renderStats(body, health) {
         const healthUp = health && (health.status === "UP" || health.up === true);
@@ -101,6 +144,8 @@ function renderIcg() {
                     icg.esc(String(((body && body.libraries) || []).length)) + "</dd>" +
                 '<dt class="col-sm-3">Routes</dt><dd class="col-sm-9">' +
                     icg.esc(String(((body && body.routes) || []).length)) + "</dd>" +
+                '<dt class="col-sm-3">Rate-limit clients</dt><dd class="col-sm-9">' +
+                    icg.esc(String(((body && body.rateLimitPolicies) || []).length)) + "</dd>" +
                 (infoJvm
                     ? '<dt class="col-sm-3">JVM</dt><dd class="col-sm-9">' + icg.esc(infoJvm) + "</dd>"
                     : "") +
@@ -163,9 +208,65 @@ function renderIcg() {
         }).join(""));
     }
 
-    function load() {
-        $("#icg-rows").html(icg.emptyRow(8, "Loading…"));
-        $.when(
+    function paintClientRows() {
+        const pageSize = CadminApi.listPageSize("icg-clients");
+        const filtered = clientQuery
+            ? clients.filter(function (client) {
+                return icg.matchesQuery([
+                    client.clientId,
+                    client.tier,
+                    client.policyVersion,
+                    client.documentId
+                ].join(" "), clientQuery);
+            })
+            : clients.slice();
+        const page = clientQuery ? 0 : clientPage;
+        const start = page * pageSize;
+        const slice = clientQuery ? filtered : filtered.slice(start, start + pageSize);
+        CadminApi.renderPager("#icg-client-pager", {
+            page: page,
+            size: pageSize,
+            pageSizeKey: "icg-clients",
+            returned: slice.length,
+            total: filtered.length,
+            onPage: function (nextPage) {
+                clientPage = nextPage;
+                paintClientRows();
+            }
+        });
+        if (!slice.length) {
+            $("#icg-client-rows").html(icg.emptyRow(7, clientQuery
+                ? "No rate-limit clients match this search."
+                : "No OIDC rate-limit policies cached. Assign a current rate-limit tier."));
+            return;
+        }
+        $("#icg-client-rows").html(slice.map(function (client) {
+            const id = client.clientId || "";
+            const href = id ? icg.clientHref(id) : "#/icg";
+            const documentId = client.documentId || "";
+            return "<tr>" +
+                "<td>" + (id ? CadminApi.resourceLink(href, id) : icg.esc("—")) + "</td>" +
+                "<td>" + icg.esc(client.tier || "—") + "</td>" +
+                "<td><code>" + icg.esc(client.policyVersion || "—") + "</code></td>" +
+                "<td>" + icg.esc(icg.formatNumber(client.groupCount != null ? client.groupCount : 0)) + "</td>" +
+                "<td>" + icg.esc(icg.formatNumber(client.endpointCount != null ? client.endpointCount : 0)) + "</td>" +
+                "<td>" + (documentId
+                    ? CadminApi.resourceLink(icg.documentHref(documentId), documentId)
+                    : icg.esc("—")) + "</td>" +
+                '<td class="text-end text-nowrap">' +
+                    '<a class="btn btn-sm btn-outline-primary" href="' + icg.esc(href) +
+                        '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a>' +
+                "</td></tr>";
+        }).join(""));
+    }
+
+    function load(options) {
+        const silent = !!(options && options.silent);
+        if (!silent) {
+            $("#icg-rows").html(icg.emptyRow(8, "Loading…"));
+            $("#icg-client-rows").html(icg.emptyRow(7, "Loading…"));
+        }
+        return $.when(
             CadminApi.icg("/status"),
             CadminApi.icg("/actuator/info"),
             CadminApi.icg("/actuator/health")
@@ -174,14 +275,22 @@ function renderIcg() {
             const info = infoXhr[0] || {};
             const health = healthXhr[0] || {};
             routes = status.routes || [];
+            clients = status.rateLimitPolicies || [];
+            CadminApi.showAlert("#icg-alert");
             renderStats(status, health);
             renderContext(status, info, health);
             paintRows();
+            paintClientRows();
         }).fail(function (xhr) {
+            if (silent && (routes.length || clients.length)) {
+                return;
+            }
             $("#icg-stats").empty();
             $("#icg-pager").empty();
+            $("#icg-client-pager").empty();
             $("#icg-context").html('<p class="text-danger mb-0">' + icg.esc(icg.fail("Load ICG status", xhr)) + "</p>");
             $("#icg-rows").html(icg.emptyRow(8, "Unable to load routes from Integrator Connect Gateway."));
+            $("#icg-client-rows").html(icg.emptyRow(7, "Unable to load rate-limit clients."));
             CadminApi.showAlert("#icg-alert", "danger", icg.fail("Load Integrator Connect Gateway", xhr));
         });
     }
@@ -193,9 +302,18 @@ function renderIcg() {
         listPage = 0;
         paintRows();
     });
+    $root.on("submit.icg", "#icg-client-search-form", function (event) {
+        event.preventDefault();
+        clientQuery = $("#icg-client-query").val();
+        clientPage = 0;
+        paintClientRows();
+    });
     $root.on("click.icg", "#icg-refresh", function () {
         load();
     });
 
     load();
+    icg.startPoll("list", function () {
+        return load({ silent: true });
+    });
 }

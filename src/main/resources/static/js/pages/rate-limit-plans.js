@@ -1,19 +1,19 @@
-CadminApp.register("icg-routes", function (params) {
+CadminApp.register("rate-limit-plans", function (params) {
     const token = CadminApi.routeParamId(params);
     if (token) {
-        CadminWorkspace.openRoute("icg-routes", token, function (resource, $root) {
-            CadminIcgRouteDetail.render(resource, $root);
+        CadminWorkspace.openRoute("rate-limit-plans", token, function (resource, $root) {
+            CadminRateLimitPlanDetail.render(resource, $root);
         }, function () {
-            renderIcgRouteList(token);
+            renderRateLimitPlanList(token);
         });
         return;
     }
-    renderIcgRouteList("");
+    renderRateLimitPlanList("");
 });
 
-function renderIcgRouteList(initialQuery) {
-    const libraryType = "icg-route";
-    const routeContentType = "application/gateway+yaml";
+function renderRateLimitPlanList(initialQuery) {
+    const libraryType = "rate-limit-plan";
+    const planContentType = "application/icg-rate-limit+json";
     const statusOptions = [
         { code: "draft", display: "Draft" },
         { code: "active", display: "Active" },
@@ -24,20 +24,20 @@ function renderIcgRouteList(initialQuery) {
     const $root = $("#app-content");
     $root.html(
         '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
-            '<h1 class="h3 mb-0 page-title">ICG Routes</h1>' +
+            '<h1 class="h3 mb-0 page-title">Rate-limit plans</h1>' +
             CadminResourceDocument.splitButton({
-                label: "New ICG route",
-                modalTarget: "#create-icg-route-modal",
+                label: "New rate-limit plan",
+                modalTarget: "#create-rate-limit-plan-modal",
                 resourceType: "Library"
             }) +
         "</div>" +
-        '<div id="icg-route-alert" class="alert d-none"></div>' +
+        '<div id="rate-limit-plan-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
             '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
-                '<h6 class="m-0">Route search</h6>' +
+                '<h6 class="m-0">Plan search</h6>' +
                 '<div class="d-flex flex-wrap align-items-center gap-2">' +
-                '<form class="d-flex" id="icg-route-search-form">' +
-                    '<input class="form-control form-control-sm me-2" id="icg-route-query" placeholder="Title" value="' +
+                '<form class="d-flex" id="rate-limit-plan-search-form">' +
+                    '<input class="form-control form-control-sm me-2" id="rate-limit-plan-query" placeholder="Title" value="' +
                         CadminApi.escapeHtml(initialQuery) + '">' +
                     '<button class="btn btn-sm btn-primary" type="submit">Search</button>' +
                 "</form>" +
@@ -47,29 +47,32 @@ function renderIcgRouteList(initialQuery) {
             '<div class="card-body">' +
                 '<div class="table-responsive">' +
                     '<table class="table table-hover align-middle">' +
-                        "<thead><tr><th>Title</th><th>Description</th><th>Version</th><th>Status</th><th>Name</th><th>ID</th><th></th></tr></thead>" +
-                        '<tbody id="icg-route-rows"><tr><td colspan="7" class="text-muted">Loading…</td></tr></tbody>' +
+                        "<thead><tr><th>Title</th><th>Description</th><th>Tier</th><th>Version</th>" +
+                        "<th>Status</th><th>ID</th><th></th></tr></thead>" +
+                        '<tbody id="rate-limit-plan-rows"><tr><td colspan="7" class="text-muted">Loading…</td></tr></tbody>' +
                     "</table>" +
                 "</div>" +
-                '<div class="list-pager" id="icg-route-pager"></div>' +
+                '<div class="list-pager" id="rate-limit-plan-pager"></div>' +
             "</div>" +
         "</div>" +
-        '<div class="modal fade" id="create-icg-route-modal" tabindex="-1">' +
+        '<div class="modal fade" id="create-rate-limit-plan-modal" tabindex="-1">' +
             '<div class="modal-dialog">' +
-                '<form class="modal-content" id="create-icg-route-form">' +
-                    '<div class="modal-header"><h5 class="modal-title">Create ICG route</h5>' +
+                '<form class="modal-content" id="create-rate-limit-plan-form">' +
+                    '<div class="modal-header"><h5 class="modal-title">Create rate-limit plan</h5>' +
                         '<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>' +
                     '<div class="modal-body">' +
-                        '<div class="mb-3"><label class="form-label" for="ir-title">Title</label>' +
-                            '<input class="form-control" id="ir-title" required></div>' +
-                        '<div class="mb-3"><label class="form-label" for="ir-id">ID</label>' +
-                            '<input class="form-control font-monospace" id="ir-id" autocomplete="off" maxlength="64">' +
+                        '<p class="text-muted">A plan is a tier template. It can later be copied onto an ' +
+                            "integrator organization DocumentReference.</p>" +
+                        '<div class="mb-3"><label class="form-label" for="rlp-create-title">Title</label>' +
+                            '<input class="form-control" id="rlp-create-title" required placeholder="Gold"></div>' +
+                        '<div class="mb-3"><label class="form-label" for="rlp-create-id">ID</label>' +
+                            '<input class="form-control font-monospace" id="rlp-create-id" autocomplete="off" maxlength="64">' +
                             '<div class="form-text">Optional. Leave blank for a server-assigned ID.</div>' +
-                            '<div class="invalid-feedback" id="ir-id-feedback">A library with this ID already exists.</div></div>' +
-                        '<div class="mb-3"><label class="form-label" for="ir-description">Description</label>' +
-                            '<textarea class="form-control" id="ir-description" rows="3"></textarea></div>' +
-                        '<div class="mb-0"><label class="form-label" for="ir-status">Status</label>' +
-                            '<select class="form-select" id="ir-status">' +
+                            '<div class="invalid-feedback" id="rlp-create-id-feedback">A library with this ID already exists.</div></div>' +
+                        '<div class="mb-3"><label class="form-label" for="rlp-create-description">Description</label>' +
+                            '<textarea class="form-control" id="rlp-create-description" rows="3"></textarea></div>' +
+                        '<div class="mb-0"><label class="form-label" for="rlp-create-status">Status</label>' +
+                            '<select class="form-select" id="rlp-create-status">' +
                                 statusOptions.map(function (option) {
                                     return '<option value="' + option.code + '">' + CadminApi.escapeHtml(option.display) + "</option>";
                                 }).join("") +
@@ -82,19 +85,19 @@ function renderIcgRouteList(initialQuery) {
                 "</form>" +
             "</div>" +
         "</div>" +
-        '<div class="modal fade" id="duplicate-icg-route-modal" tabindex="-1">' +
+        '<div class="modal fade" id="duplicate-rate-limit-plan-modal" tabindex="-1">' +
             '<div class="modal-dialog">' +
-                '<form class="modal-content" id="duplicate-icg-route-form">' +
-                    '<div class="modal-header"><h5 class="modal-title">Duplicate ICG route</h5>' +
+                '<form class="modal-content" id="duplicate-rate-limit-plan-form">' +
+                    '<div class="modal-header"><h5 class="modal-title">Duplicate rate-limit plan</h5>' +
                         '<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>' +
                     '<div class="modal-body">' +
-                        '<p class="mb-3">Create a new draft from <strong id="ir-dup-title"></strong>.</p>' +
-                        '<div class="mb-3"><label class="form-label" for="ir-dup-id">ID</label>' +
-                            '<input class="form-control font-monospace" id="ir-dup-id" autocomplete="off" maxlength="64">' +
+                        '<p class="mb-3">Create a new draft from <strong id="rlp-dup-title"></strong>.</p>' +
+                        '<div class="mb-3"><label class="form-label" for="rlp-dup-id">ID</label>' +
+                            '<input class="form-control font-monospace" id="rlp-dup-id" autocomplete="off" maxlength="64">' +
                             '<div class="form-text">Optional. Leave blank for a server-assigned ID.</div>' +
                             '<div class="invalid-feedback">A library with this ID already exists.</div></div>' +
-                        '<div class="mb-0"><label class="form-label" for="ir-dup-version">Version</label>' +
-                            '<input class="form-control" id="ir-dup-version" placeholder="1.0.1"></div>' +
+                        '<div class="mb-0"><label class="form-label" for="rlp-dup-version">Version</label>' +
+                            '<input class="form-control" id="rlp-dup-version" placeholder="1.0.1"></div>' +
                     "</div>" +
                     '<div class="modal-footer">' +
                         '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>' +
@@ -130,11 +133,26 @@ function renderIcgRouteList(initialQuery) {
         }
     }
 
+    function decodeText(value) {
+        if (!value) {
+            return "";
+        }
+        try {
+            return decodeURIComponent(escape(atob(value)));
+        } catch (err) {
+            try {
+                return atob(value);
+            } catch (ignored) {
+                return "";
+            }
+        }
+    }
+
     function slugName(title) {
-        return String(title || "icg-route").toLowerCase()
+        return String(title || "gold").toLowerCase()
             .replace(/[^a-z0-9]+/g, "-")
             .replace(/^-|-$/g, "")
-            .slice(0, 64) || "icg-route";
+            .slice(0, 64) || "gold";
     }
 
     function bumpVersion(value) {
@@ -149,27 +167,42 @@ function renderIcgRouteList(initialQuery) {
         return text ? text + "-copy" : "1.0.0";
     }
 
-    function defaultYaml(title) {
-        const id = slugName(title).replace(/-/g, "_") || "example";
-        return "- id: " + id + "\n" +
-            "  uri: https://httpbin.org\n" +
-            "  predicates:\n" +
-            "    - Path=/" + id + "/**\n" +
-            "  filters:\n" +
-            "    - StripPrefix=1\n";
+    function defaultPlanJson(title) {
+        const tier = slugName(title);
+        return JSON.stringify({
+            tier: tier,
+            policyVersion: "1.0.0",
+            defaults: {
+                requestsPerMinute: 60,
+                requestsPerDay: 10000
+            }
+        }, null, 2);
+    }
+
+    function planTier(library) {
+        const attachment = ((library && library.content) || [])[0] || {};
+        if (!attachment.data) {
+            return library.name || "—";
+        }
+        try {
+            const json = JSON.parse(decodeText(attachment.data));
+            return (json && json.tier) || library.name || "—";
+        } catch (ignored) {
+            return library.name || "—";
+        }
     }
 
     function libraryTypeConcept() {
         return {
             coding: [{
                 code: libraryType,
-                display: "ICG Route"
+                display: "Rate-limit plan"
             }],
             text: libraryType
         };
     }
 
-    function isIcgType(library) {
+    function isPlanType(library) {
         return CadminApi.isLibraryType(library, libraryType);
     }
 
@@ -217,191 +250,152 @@ function renderIcgRouteList(initialQuery) {
 
     let listPage = 0;
 
-    function matchesListQuery(library, query) {
-        const q = String(query || "").trim().toLowerCase();
-        if (!q) {
-            return true;
-        }
-        return [library.title, library.name, library.id, library.description, library.version]
-            .join(" ").toLowerCase().indexOf(q) >= 0;
-    }
-
-    function load(query, page, extra) {
+    function load(query, page) {
         listPage = typeof page === "number" ? page : 0;
         let path = "/Library?type=" + encodeURIComponent(libraryType) + "&_sort=-_lastUpdated";
         if (query) {
             path += "&title=" + encodeURIComponent(query);
         }
-        const pageSize = CadminApi.listPageSize("icg-routes");
+        const pageSize = CadminApi.listPageSize("rate-limit-plans");
         CadminDeletedList.query({
             type: "Library",
             path: path,
             page: listPage,
             size: pageSize,
             filter: function (library) {
-                return !library.type || isIcgType(library);
+                return !library.type || isPlanType(library);
             }
         }).done(function (bundle) {
-            let entries = CadminApi.bundleResources(bundle, "Library");
-            if (extra && extra.id && (!extra.type || isIcgType(extra)) && matchesListQuery(extra, query)
-                    && !entries.some(function (item) { return item.id === extra.id; })) {
-                if (listPage === 0) {
-                    entries = [extra].concat(entries);
-                }
-                if (typeof bundle.total === "number") {
-                    bundle.total += 1;
-                }
-            }
-            CadminApi.renderPager("#icg-route-pager", {
+            const entries = CadminApi.bundleResources(bundle, "Library");
+            CadminApi.renderPager("#rate-limit-plan-pager", {
                 page: listPage,
                 size: pageSize,
-                pageSizeKey: "icg-routes",
+                pageSizeKey: "rate-limit-plans",
                 returned: entries.length,
                 total: bundle.total,
                 bundle: bundle,
                 onPage: function (nextPage) { load(query, nextPage); }
             });
             if (!entries.length) {
-                $root.find("#icg-route-rows").html(CadminDeletedList.emptyRow(7, "ICG route",
-                    "No ICG routes found. Create one or start HAPI FHIR."));
+                $("#rate-limit-plan-rows").html(CadminDeletedList.emptyRow(7, "Rate-limit plan",
+                    "No rate-limit plans found. Create one or start HAPI FHIR."));
                 return;
             }
             const rows = entries.map(function (library) {
                 return "<tr>" +
-                    "<td>" + CadminApi.resourceLink("#/icg-routes/" + encodeURIComponent(library.id),
+                    "<td>" + CadminApi.resourceLink("#/rate-limit-plans/" + encodeURIComponent(library.id),
                         library.title || library.name || "Untitled") + "</td>" +
                     "<td>" + esc(library.description || "—") + "</td>" +
+                    "<td><code>" + esc(planTier(library)) + "</code></td>" +
                     "<td><code>" + esc(library.version || "—") + "</code></td>" +
                     "<td>" + statusBadge(library.status) + "</td>" +
-                    "<td><code>" + esc(library.name || "—") + "</code></td>" +
                     "<td><code>" + esc(library.id) + "</code></td>" +
                     '<td class="text-end text-nowrap">' +
-                        '<a class="btn btn-sm btn-outline-primary me-1" href="#/icg-routes/' +
+                        '<a class="btn btn-sm btn-outline-primary me-1" href="#/rate-limit-plans/' +
                             encodeURIComponent(library.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a>' +
                         '<button class="btn btn-sm btn-outline-secondary" type="button" data-duplicate="' +
                             esc(library.id) + '">Duplicate</button>' +
                     "</td>" +
                     "</tr>";
             });
-            $root.find("#icg-route-rows").html(rows.join(""));
+            $("#rate-limit-plan-rows").html(rows.join(""));
         }).fail(function (xhr) {
-            $root.find("#icg-route-pager").empty();
-            $root.find("#icg-route-rows").html('<tr><td colspan="7" class="text-danger">Unable to load libraries from /fhir.</td></tr>');
-            CadminApi.showAlert("#icg-route-alert", "danger",
+            $("#rate-limit-plan-pager").empty();
+            $("#rate-limit-plan-rows").html(
+                '<tr><td colspan="7" class="text-danger">Unable to load libraries from /fhir.</td></tr>');
+            CadminApi.showAlert("#rate-limit-plan-alert", "danger",
                 "FHIR request failed (" + xhr.status + "). Is the HAPI FHIR stack running?");
         });
     }
 
-    $root.off(".irlist");
-    $root.on("submit.irlist", "#icg-route-search-form", function (event) {
+    $("#rate-limit-plan-search-form").on("submit", function (event) {
         event.preventDefault();
-        load($("#icg-route-query").val());
+        load($("#rate-limit-plan-query").val());
     });
 
-    $root.on("show.bs.modal.irlist", "#create-icg-route-modal", function () {
-        $("#ir-title").val("");
-        $("#ir-id").val("").removeClass("is-invalid");
-        $("#ir-description").val("");
-        $("#ir-status").val("draft");
+    $("#create-rate-limit-plan-modal").on("show.bs.modal", function () {
+        $("#rlp-create-title").val("");
+        $("#rlp-create-id").val("").removeClass("is-invalid");
+        $("#rlp-create-description").val("");
+        $("#rlp-create-status").val("draft");
     });
-    $root.on("input.irlist", "#ir-id, #ir-dup-id", function () {
+    $("#rlp-create-id").on("input", function () {
         $(this).removeClass("is-invalid");
     });
 
-    $root.on("submit.irlist", "#create-icg-route-form", function (event) {
+    $("#create-rate-limit-plan-form").on("submit", function (event) {
         event.preventDefault();
-        const assignedId = $("#ir-id").val().trim();
-        const title = $("#ir-title").val().trim();
+        const assignedId = $("#rlp-create-id").val().trim();
+        const title = $("#rlp-create-title").val().trim();
         const resource = {
             resourceType: "Library",
-            status: $("#ir-status").val() || "draft",
+            status: $("#rlp-create-status").val() || "draft",
             title: title,
             name: slugName(title),
             version: "1.0.0",
             type: libraryTypeConcept(),
             content: [{
-                contentType: routeContentType,
-                title: "ICG route",
-                data: encodeText(defaultYaml(title))
+                contentType: planContentType,
+                title: "Rate-limit plan",
+                data: encodeText(defaultPlanJson(title))
             }]
         };
-        const description = $("#ir-description").val().trim();
+        const description = $("#rlp-create-description").val().trim();
         if (description) {
             resource.description = description;
         }
-        ensureNewId(assignedId, $("#ir-id")).done(function () {
+        ensureNewId(assignedId, $("#rlp-create-id")).done(function () {
             saveLibrary(resource, assignedId).done(function (created, _status, xhr) {
-                const modal = bootstrap.Modal.getInstance(document.getElementById("create-icg-route-modal"));
+                const modal = bootstrap.Modal.getInstance(document.getElementById("create-rate-limit-plan-modal"));
                 if (modal) {
                     modal.hide();
                 }
                 const id = CadminApi.createdResourceId(created, xhr, "Library") || assignedId;
-                CadminApi.showToast("success", "ICG route created.");
+                CadminApi.showToast("success", "Rate-limit plan created.");
                 if (id) {
-                    window.location.hash = "#/icg-routes/" + encodeURIComponent(id);
+                    window.location.hash = "#/rate-limit-plans/" + encodeURIComponent(id);
                     return;
                 }
-                load($("#icg-route-query").val());
+                load($("#rate-limit-plan-query").val());
             }).fail(function (xhr) {
                 CadminApi.showToast("danger", "Create failed (" + xhr.status + ").");
             });
         });
     });
 
-    $root.on("click.irlist", "[data-duplicate]", function () {
+    $root.on("click", "[data-duplicate]", function () {
         const id = $(this).attr("data-duplicate");
         CadminApi.fhir("/Library/" + encodeURIComponent(id)).done(function (library) {
             duplicateSource = library;
-            $("#ir-dup-title").text(library.title || library.name || library.id);
-            $("#ir-dup-id").val("").removeClass("is-invalid");
-            $("#ir-dup-version").val(bumpVersion(library.version));
-            bootstrap.Modal.getOrCreateInstance(document.getElementById("duplicate-icg-route-modal")).show();
+            $("#rlp-dup-title").text(library.title || library.name || library.id);
+            $("#rlp-dup-id").val("").removeClass("is-invalid");
+            $("#rlp-dup-version").val(bumpVersion(library.version));
+            bootstrap.Modal.getOrCreateInstance(document.getElementById("duplicate-rate-limit-plan-modal")).show();
         }).fail(function (xhr) {
-            CadminApi.showAlert("#icg-route-alert", "danger", "Unable to load route (" + xhr.status + ").");
+            CadminApi.showAlert("#rate-limit-plan-alert", "danger", "Unable to load plan (" + xhr.status + ").");
         });
     });
 
-    function refreshList(created) {
-        const query = $("#icg-route-query").val();
-        if (created && created.id) {
-            load(query, 0, created);
-            return;
-        }
-        load(query, 0);
-    }
-
-    $root.on("submit.irlist", "#duplicate-icg-route-form", function (event) {
+    $("#duplicate-rate-limit-plan-form").on("submit", function (event) {
         event.preventDefault();
         if (!duplicateSource) {
             return;
         }
-        const assignedId = ($("#ir-dup-id").val() || "").trim();
-        const newVersion = ($("#ir-dup-version").val() || "").trim() || bumpVersion(duplicateSource.version);
+        const assignedId = ($("#rlp-dup-id").val() || "").trim();
+        const newVersion = ($("#rlp-dup-version").val() || "").trim() || bumpVersion(duplicateSource.version);
         const copy = cloneLibrary(duplicateSource, newVersion);
         if (copy.title) {
             copy.title = copy.title + " copy";
         }
-        ensureNewId(assignedId, $("#ir-dup-id")).done(function () {
-            saveLibrary(copy, assignedId).done(function (created, _status, xhr) {
-                const modal = bootstrap.Modal.getInstance(document.getElementById("duplicate-icg-route-modal"));
+        ensureNewId(assignedId, $("#rlp-dup-id")).done(function () {
+            saveLibrary(copy, assignedId).done(function () {
+                const modal = bootstrap.Modal.getInstance(document.getElementById("duplicate-rate-limit-plan-modal"));
                 if (modal) {
                     modal.hide();
                 }
                 duplicateSource = null;
-                CadminApi.showToast("success", "ICG route duplicated.");
-                const id = (created && created.id) || CadminApi.createdResourceId(created, xhr, "Library")
-                    || assignedId;
-                if (created && created.id) {
-                    refreshList(created);
-                    return;
-                }
-                if (!id) {
-                    refreshList();
-                    return;
-                }
-                CadminApi.fhir("/Library/" + encodeURIComponent(id)).done(refreshList).fail(function () {
-                    refreshList();
-                });
+                CadminApi.showToast("success", "Rate-limit plan duplicated.");
+                load($("#rate-limit-plan-query").val());
             }).fail(function (xhr) {
                 CadminApi.showToast("danger", "Duplicate failed (" + xhr.status + ").");
             });
@@ -410,7 +404,7 @@ function renderIcgRouteList(initialQuery) {
 
     CadminDeletedList.bind({
         type: "Library",
-        reload: function () { load($("#icg-route-query").val(), 0); }
+        reload: function () { load($("#rate-limit-plan-query").val(), 0); }
     });
 
     load(initialQuery);

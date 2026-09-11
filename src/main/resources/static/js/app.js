@@ -39,12 +39,15 @@ window.CadminApp = (function ($) {
                 || route.name === "camel-routes"
                 || route.name === "icg-routes"
                 || route.name === "jolts"
+                || route.name === "rate-limit-plans"
+                || route.name === "rate-limit-tiers"
                 || route.name === "icg"
                 || route.name === "search-parameters" || route.name === "questionnaires"
                 || route.name === "code-systems" || route.name === "value-sets"
                 || route.name === "demo-data"
                 || route.name === "subscription-topics" || route.name === "subscriptions"
                 || route.name === "endpoints" || route.name === "consents"
+                || route.name === "feedback"
                 || route.name === "practitioner-roles" || route.name === "organization-affiliations"
                 || route.name === "healthcare-services"
                 || route.name === "core-admin-bridge"
@@ -130,6 +133,9 @@ window.CadminApp = (function ($) {
             .done(function (configRes, meRes) {
                 config = configRes[0];
                 applyUser(meRes[0]);
+                if (window.CadminFeedback && typeof CadminFeedback.init === "function") {
+                    CadminFeedback.init();
+                }
                 if (window.CadminTargetList) {
                     CadminTargetList.init();
                 }

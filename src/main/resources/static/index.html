@@ -49,6 +49,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vis-network@9.1.13/styles/vis-network.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11.23.0/dist/sweetalert2.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde@2.21.0/dist/easymde.min.css">
     <link href="/css/cadmin.css" rel="stylesheet">
 </head>
 <body class="layout-fixed fixed-header fixed-footer sidebar-expand-lg sidebar-mini bg-body-tertiary">
@@ -240,6 +241,9 @@
                     <li class="nav-item admin-only" data-route="oidc-clients">
                         <a class="nav-link" href="#/oidc-clients"><i class="nav-icon bi bi-app"></i><p>OIDC clients</p></a>
                     </li>
+                    <li class="nav-item admin-only" data-route="feedback">
+                        <a class="nav-link" href="#/feedback"><i class="nav-icon bi bi-chat-left-text"></i><p>Feedback</p></a>
+                    </li>
                     <li class="nav-header admin-only">Libraries</li>
                     <li class="nav-item admin-only" data-route="pds-policies">
                         <a class="nav-link" href="#/pds-policies"><i class="nav-icon bi bi-journal-text"></i><p>PDS Policies</p></a>
@@ -252,6 +256,9 @@
                     </li>
                     <li class="nav-item admin-only" data-route="jolts">
                         <a class="nav-link" href="#/jolts"><iconify-icon class="nav-icon" icon="mdi:code-json" aria-hidden="true"></iconify-icon><p>Jolt</p></a>
+                    </li>
+                    <li class="nav-item admin-only" data-route="rate-limit-plans">
+                        <a class="nav-link" href="#/rate-limit-plans"><i class="nav-icon bi bi-speedometer2"></i><p>Rate-limit plans</p></a>
                     </li>
                     <li class="nav-item admin-only" data-route="search-parameters">
                         <a class="nav-link" href="#/search-parameters"><i class="nav-icon bi bi-search"></i><p>Search Parameters</p></a>
@@ -317,7 +324,11 @@
     </main>
 
     <footer class="app-footer">
-        <div class="float-end d-none d-sm-inline">Explore FHIR capabilities</div>
+        <div class="float-end">
+            <a class="text-decoration-none" href="#" id="feedback-open">
+                <i class="bi bi-chat-left-text me-1" aria-hidden="true"></i>Feedback</a>
+            <span class="d-none d-sm-inline text-muted ms-3">Explore FHIR capabilities</span>
+        </div>
         <strong>FHIR Box</strong>
     </footer>
 </div>
@@ -350,6 +361,8 @@
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.13/standalone/umd/vis-network.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.1/dist/js-yaml.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/turndown@7.2.1/dist/turndown.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/easymde@2.21.0/dist/easymde.min.js"></script>
 <script src="/js/api.js"></script>
 <script src="/js/resource-source.js"></script>
 <script src="/js/target-list.js"></script>
@@ -362,6 +375,7 @@
 <script src="/js/camel-route-graph.js"></script>
 <script src="/js/resource-history.js"></script>
 <script src="/js/library-related.js"></script>
+<script src="/js/rate-limit-plan.js"></script>
 <script src="/js/deleted-list.js"></script>
 <script src="/js/spel-completion-policy.js"></script>
 <script src="/js/app.js"></script>
@@ -420,6 +434,10 @@
 <script src="/js/pages/icg-routes.js"></script>
 <script src="/js/pages/jolt-detail.js"></script>
 <script src="/js/pages/jolts.js"></script>
+<script src="/js/pages/rate-limit-plan-detail.js"></script>
+<script src="/js/pages/rate-limit-plans.js"></script>
+<script src="/js/pages/rate-limit-tier-detail.js"></script>
+<script src="/js/pages/rate-limit-tiers.js"></script>
 <script src="/js/pages/search-parameter-detail.js"></script>
 <script src="/js/pages/search-parameters.js"></script>
 <script src="/js/pages/questionnaire-detail.js"></script>
@@ -434,8 +452,11 @@
 <script src="/js/pages/subscriptions.js"></script>
 <script src="/js/pages/endpoint-detail.js"></script>
 <script src="/js/pages/endpoints.js"></script>
+<script src="/js/feedback.js"></script>
 <script src="/js/pages/consent-detail.js"></script>
 <script src="/js/pages/consents.js"></script>
+<script src="/js/pages/feedback-detail.js"></script>
+<script src="/js/pages/feedback.js"></script>
 <script src="/js/pages/resources.js"></script>
 <script src="/js/pages/capabilities.js"></script>
 <script src="/js/demo-data-generators.js"></script>
@@ -450,6 +471,7 @@
 <script src="/js/pages/core-admin-bridge.js"></script>
 <script src="/js/icg.js"></script>
 <script src="/js/pages/icg-detail.js"></script>
+<script src="/js/pages/icg-rate-limit-detail.js"></script>
 <script src="/js/pages/icg.js"></script>
 <script src="/js/wiremock.js"></script>
 <script src="/js/pages/wiremock-mapping-detail.js"></script>

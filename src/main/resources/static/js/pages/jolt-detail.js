@@ -1456,6 +1456,10 @@ window.CadminJoltDetail = (function () {
             window.location.hash = "#/icg-routes/" + encodeURIComponent(resource.id);
             return;
         }
+        if (CadminApi.isLibraryType(resource, "rate-limit-plan")) {
+            window.location.hash = "#/rate-limit-plans/" + encodeURIComponent(resource.id);
+            return;
+        }
         const newId = sessionKey(resource);
         if (sessionId && sessionId !== newId) {
             teardownJsonPreview();
