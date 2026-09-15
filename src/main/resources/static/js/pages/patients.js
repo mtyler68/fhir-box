@@ -158,6 +158,129 @@ function renderPatientList(initialQuery) {
         return [given, name.family].filter(Boolean).join(" ") || (resource && resource.id) || "Unnamed";
     }
 
+    function conceptLabel(cc) {
+        const item = Array.isArray(cc) ? cc[0] : cc;
+        if (!item) {
+            return "";
+        }
+        const coding = (item.coding && item.coding[0]) || item;
+        return item.text || coding.display || coding.code || "";
+    }
+
+    function activeFlagsByPatient(flags) {
+        const byPatient = {};
+        (flags || []).forEach(function (flag) {
+            if (!flag || flag.status !== "active") {
+                return;
+            }
+            const patientId = CadminApi.referenceId(flag.subject);
+            if (!patientId) {
+                return;
+            }
+            if (!byPatient[patientId]) {
+                byPatient[patientId] = [];
+            }
+            byPatient[patientId].push(flag);
+        });
+        return byPatient;
+    }
+
+    function flagLabels(flags) {
+        return (flags || []).map(function (flag) {
+            return conceptLabel(flag.code) || "Active flag";
+        });
+    }
+
+    function flagIconHtml(flags) {
+        if (!flags || !flags.length) {
+            return "";
+        }
+        const labels = flagLabels(flags);
+        const title = labels.join("\n");
+        const aria = "Active flags: " + labels.join(", ");
+        return '<span class="cadmin-patient-flag text-warning" tabindex="0" role="img" ' +
+            'data-bs-toggle="tooltip" data-bs-placement="right" title="' +
+            CadminApi.escapeHtml(title).replace(/"/g, "&quot;") + '" aria-label="' +
+            CadminApi.escapeHtml(aria) + '">' +
+            '<i class="bi bi-flag-fill" aria-hidden="true"></i></span>';
+    }
+
+    function disposePatientFlagTooltips() {
+        const root = document.getElementById("patient-rows");
+        if (!root || typeof bootstrap === "undefined" || !bootstrap.Tooltip) {
+            return;
+        }
+        root.querySelectorAll(".cadmin-patient-flag").forEach(function (node) {
+            const inst = bootstrap.Tooltip.getInstance(node);
+            if (inst) {
+                inst.dispose();
+            }
+        });
+    }
+
+    function bindPatientFlagTooltips() {
+        const root = document.getElementById("patient-rows");
+        if (!root || typeof bootstrap === "undefined" || !bootstrap.Tooltip) {
+            return;
+        }
+        root.querySelectorAll(".cadmin-patient-flag").forEach(function (node) {
+            const labels = (node.getAttribute("title") || node.getAttribute("data-bs-original-title") || "")
+                .split("\n").filter(Boolean);
+            bootstrap.Tooltip.getOrCreateInstance(node, {
+                placement: "right",
+                trigger: "hover focus",
+                container: "body",
+                html: true,
+                customClass: "cadmin-patient-flag-tooltip",
+                title: labels.map(function (label) {
+                    return CadminApi.escapeHtml(label);
+                }).join("<br>")
+            });
+        });
+    }
+
+    function renderPatientRows(entries, flagsByPatient) {
+        disposePatientFlagTooltips();
+        const rows = entries.map(function (p) {
+            const active = p.active !== false;
+            return "<tr>" +
+                '<td><div class="d-flex align-items-center gap-1">' +
+                    CadminApi.resourceLink("#/patients/" + encodeURIComponent(p.id), patientName(p)) +
+                    flagIconHtml((flagsByPatient || {})[p.id]) +
+                    "</div></td>" +
+                "<td>" + CadminApi.escapeHtml(p.gender || "—") + "</td>" +
+                "<td>" + CadminApi.escapeHtml(p.birthDate || "—") + "</td>" +
+                "<td>" + (active
+                    ? '<span class="badge text-bg-success">Active</span>'
+                    : '<span class="badge text-bg-secondary">Inactive</span>') + "</td>" +
+                "<td><code>" + CadminApi.escapeHtml(p.id) + "</code></td>" +
+                '<td class="text-end text-nowrap">' + CadminWorkspace.listBookmarkButton(p) +
+                '<a class="btn btn-sm btn-outline-primary" href="#/patients/' +
+                    encodeURIComponent(p.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a></td>' +
+                "</tr>";
+        });
+        $("#patient-rows").html(rows.join(""));
+        bindPatientFlagTooltips();
+    }
+
+    function loadFlagsForPatients(patients) {
+        const ids = (patients || []).map(function (patient) { return patient.id; }).filter(Boolean);
+        if (!ids.length) {
+            return $.Deferred().resolve({}).promise();
+        }
+        const deferred = $.Deferred();
+        const path = "/Flag?status=active&patient=" + ids.map(encodeURIComponent).join(",") +
+            "&_count=" + Math.max(50, ids.length * 10);
+        CadminApi.fhir(path, "GET", null, { silent: true })
+            .done(function (bundle) {
+                deferred.resolve(activeFlagsByPatient(CadminApi.bundleResources(bundle, "Flag")));
+            })
+            .fail(function () {
+                deferred.resolve({});
+            });
+        return deferred.promise();
+    }
+
     function createdId(body, xhr, resourceType) {
         return CadminApi.createdResourceId(body, xhr, resourceType);
     }
@@ -206,9 +329,11 @@ function renderPatientList(initialQuery) {
     }
 
     let listPage = 0;
+    let flagLoadToken = 0;
 
     function load(query, page) {
         listPage = typeof page === "number" ? page : 0;
+        const token = ++flagLoadToken;
         let path = "/Patient?_sort=-_lastUpdated";
         if (query) {
             path += "&name=" + encodeURIComponent(query);
@@ -226,27 +351,20 @@ function renderPatientList(initialQuery) {
                 onPage: function (nextPage) { load(query, nextPage); }
             });
             if (!entries.length) {
+                disposePatientFlagTooltips();
                 $("#patient-rows").html(CadminDeletedList.emptyRow(6, "Patient", "No patients found. Create one or start HAPI FHIR."));
                 return;
             }
-            const rows = entries.map(function (p) {
-                const active = p.active !== false;
-                return "<tr>" +
-                    "<td>" + CadminApi.resourceLink("#/patients/" + encodeURIComponent(p.id), patientName(p)) + "</td>" +
-                    "<td>" + CadminApi.escapeHtml(p.gender || "—") + "</td>" +
-                    "<td>" + CadminApi.escapeHtml(p.birthDate || "—") + "</td>" +
-                    "<td>" + (active
-                        ? '<span class="badge text-bg-success">Active</span>'
-                        : '<span class="badge text-bg-secondary">Inactive</span>') + "</td>" +
-                    "<td><code>" + CadminApi.escapeHtml(p.id) + "</code></td>" +
-                    '<td class="text-end text-nowrap">' + CadminWorkspace.listBookmarkButton(p) +
-                    '<a class="btn btn-sm btn-outline-primary" href="#/patients/' +
-                        encodeURIComponent(p.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a></td>' +
-                    "</tr>";
+            renderPatientRows(entries, {});
+            loadFlagsForPatients(entries).done(function (flagsByPatient) {
+                if (token !== flagLoadToken) {
+                    return;
+                }
+                renderPatientRows(entries, flagsByPatient);
             });
-            $("#patient-rows").html(rows.join(""));
         }).fail(function (xhr) {
             $("#patient-pager").empty();
+            disposePatientFlagTooltips();
             $("#patient-rows").html('<tr><td colspan="6" class="text-danger">Unable to load patients from /fhir.</td></tr>');
             CadminApi.showAlert("#patient-alert", "danger",
                 "FHIR request failed (" + xhr.status + "). Is the HAPI FHIR stack running?");

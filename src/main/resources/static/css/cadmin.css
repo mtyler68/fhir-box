@@ -1865,3 +1865,13 @@ body:not(.cadmin-has-fhir-resource) [data-target-list-add] {
     color: var(--bs-body-color);
 }
 
+.cadmin-patient-flag {
+    cursor: default;
+    line-height: 1;
+}
+
+.cadmin-patient-flag-tooltip .tooltip-inner {
+    text-align: left;
+    max-width: 20rem;
+}
+
