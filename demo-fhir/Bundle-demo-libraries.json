@@ -1,0 +1,477 @@
+{
+  "resourceType": "Bundle",
+  "type": "transaction",
+  "timestamp": "2026-09-15T04:38:20.541Z",
+  "entry": [
+    {
+      "fullUrl": "List/5bd9a84a-312f-4d95-a5c3-e3531b9ee7fe",
+      "resource": {
+        "resourceType": "List",
+        "id": "5bd9a84a-312f-4d95-a5c3-e3531b9ee7fe",
+        "meta": {
+          "versionId": "12",
+          "lastUpdated": "2026-09-15T04:35:02.921+00:00"
+        },
+        "status": "current",
+        "mode": "working",
+        "title": "Demo Libraries",
+        "date": "2026-09-15T04:25:38.908Z",
+        "orderedBy": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/list-order",
+              "code": "user",
+              "display": "Sorted by User"
+            }
+          ]
+        },
+        "entry": [
+          {
+            "date": "2026-09-15T04:29:16.610Z",
+            "item": {
+              "reference": "Library/jolt-fhir-patient-to-datashare-patient",
+              "display": "FHIR Patient to Datashare Patient"
+            }
+          },
+          {
+            "date": "2026-09-15T04:25:57.926Z",
+            "item": {
+              "reference": "Library/camel-patient-created-to-salesforce",
+              "display": "Patient Created to Salesforce"
+            }
+          },
+          {
+            "date": "2026-09-15T04:26:10.692Z",
+            "item": {
+              "reference": "Library/cab-practitioner-created-in-fhir",
+              "display": "Practitioner Created in FHIR"
+            }
+          },
+          {
+            "date": "2026-09-15T04:26:30.096Z",
+            "item": {
+              "reference": "Library/pds-policy-jwt-required",
+              "display": "JWT Required"
+            }
+          },
+          {
+            "date": "2026-09-15T04:27:46.670Z",
+            "item": {
+              "reference": "Library/6b72c61f-274e-45b0-9a26-1abb999ea794",
+              "display": "Patient Details (API)"
+            }
+          },
+          {
+            "date": "2026-09-15T04:28:24.093Z",
+            "item": {
+              "reference": "Library/fhir-patient-to-sf-patient",
+              "display": "FHIR Patient to SF Patient"
+            }
+          },
+          {
+            "date": "2026-09-15T04:29:55.832Z",
+            "item": {
+              "reference": "SubscriptionTopic/stp-patient-created",
+              "display": "Patient Created"
+            }
+          },
+          {
+            "date": "2026-09-15T04:30:07.476Z",
+            "item": {
+              "reference": "SubscriptionTopic/stp-practitioner-created",
+              "display": "Practitioner Created"
+            }
+          },
+          {
+            "date": "2026-09-15T04:30:21.177Z",
+            "item": {
+              "reference": "Subscription/sub-patient-created-to-salesforce",
+              "display": "Patient Created to Salesforce"
+            }
+          },
+          {
+            "date": "2026-09-15T04:30:30.748Z",
+            "item": {
+              "reference": "Subscription/sub-practitioner-created-v1.0.1",
+              "display": "Practitioner Created"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "List/5bd9a84a-312f-4d95-a5c3-e3531b9ee7fe"
+      }
+    },
+    {
+      "fullUrl": "Library/6b72c61f-274e-45b0-9a26-1abb999ea794",
+      "resource": {
+        "resourceType": "Library",
+        "id": "6b72c61f-274e-45b0-9a26-1abb999ea794",
+        "meta": {
+          "versionId": "2",
+          "lastUpdated": "2026-09-09T18:24:28.447+00:00"
+        },
+        "version": "1.0.0",
+        "name": "patient-details-api",
+        "title": "Patient Details (API)",
+        "status": "active",
+        "type": {
+          "coding": [
+            {
+              "code": "icg-route",
+              "display": "ICG Route"
+            }
+          ],
+          "text": "icg-route"
+        },
+        "relatedArtifact": [
+          {
+            "type": "depends-on",
+            "display": "FHIR Patient to Datashare Patient",
+            "resource": "Library/jolt-fhir-patient-to-datashare-patient",
+            "resourceReference": {
+              "reference": "Library/jolt-fhir-patient-to-datashare-patient",
+              "display": "FHIR Patient to Datashare Patient"
+            }
+          }
+        ],
+        "content": [
+          {
+            "contentType": "application/gateway+yaml",
+            "data": "LSBpZDogcGF0aWVudF9kZXRhaWxzX2FwaQogIHVyaTogJHtGSElSX1NFUlZFUl9VUkx9CiAgcHJlZGljYXRlczoKICAgIC0gUGF0aD0vYXBpL3YxL3BhdGllbnQve2lkfQogICAgLSBNZXRob2Q9R0VUCiAgZmlsdGVyczoKICAgIC0gbmFtZTogUmV3cml0ZVBhdGgKICAgICAgYXJnczoKICAgICAgICByZWdleHA6IC9hcGkvdjEvcGF0aWVudC8oPzxpZD4uKikKICAgICAgICByZXBsYWNlbWVudDogL2ZoaXIvUGF0aWVudC8ke2lkfQogICAgLSBuYW1lOiBKb2x0VHJhbnNmb3JtCiAgICAgIGFyZ3M6CiAgICAgICAgbmFtZTogZmhpci1wYXRpZW50LXRvLXBhdGllbnQtYXBpCiAgICAgICAgdmVyc2lvbjogIjEuMC4wIgo=",
+            "title": "ICG route"
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Library/6b72c61f-274e-45b0-9a26-1abb999ea794"
+      }
+    },
+    {
+      "fullUrl": "Library/cab-practitioner-created-in-fhir",
+      "resource": {
+        "resourceType": "Library",
+        "id": "cab-practitioner-created-in-fhir",
+        "meta": {
+          "versionId": "1",
+          "lastUpdated": "2026-09-06T13:04:46.397+00:00"
+        },
+        "version": "1.0.0",
+        "name": "practitioner-created-in-fhir",
+        "title": "Practitioner Created in FHIR",
+        "status": "active",
+        "type": {
+          "coding": [
+            {
+              "code": "camel-route",
+              "display": "Camel Route"
+            }
+          ],
+          "text": "camel-route"
+        },
+        "description": "Called from FHIR subscription. Needs to check source to ensure not from Salesforce to prevent recursion.",
+        "content": [
+          {
+            "contentType": "application/camel+yaml",
+            "data": "LSByZXN0OgogICAgcG9zdDoKICAgICAgLSBwYXRoOiAvZmhpci9jYWItcHJhY3RpdGlvbmVyLWNyZWF0ZWQKICAgICAgICB0bzogZGlyZWN0OmNhYi1wcmFjdGl0aW9uZXItY3JlYXRlZAotIHJvdXRlOgogICAgaWQ6IGNhYi1wcmFjdGl0aW9uZXItY3JlYXRlZAogICAgZnJvbToKICAgICAgdXJpOiBkaXJlY3Q6Y2FiLXByYWN0aXRpb25lci1jcmVhdGVkCiAgICAgIHN0ZXBzOgogICAgICAgIC0gbG9nOiAKICAgICAgICAgICAgbWVzc2FnZTogIlJlY2VpdmVkIG5ldyBQcmFjdGl0aW9uZXIgJHtib2R5fSIKICAgICAgICAtIGNob2ljZTogCiAgICAgICAgICAgIHdoZW46IAogICAgICAgICAgICAgIC0gc2ltcGxlOiAidHJ1ZSIKICAgICAgICAgICAgICAgIHN0ZXBzOiAKICAgICAgICAgICAgICAgICAgLSBsb2c6IAogICAgICAgICAgICAgICAgICAgICAgbWVzc2FnZTogImlzIHRydWUiCiAgICAgICAgICAgICAgICAgIC0gc2V0SGVhZGVyOiAKICAgICAgICAgICAgICAgICAgICAgIG5hbWU6IENhbWVsSHR0cFBhdGgKICAgICAgICAgICAgICAgICAgICAgIHNpbXBsZTogL2ZoaXIvcHJhY3RpdGlvbmVyLWNyZWF0ZWQKICAgICAgICAgICAgICAgICAgLSB0bzoKICAgICAgICAgICAgICAgICAgICAgIHVyaTogInt7Q0FCX0NSTV9NVUxFU09GVF9IT1NUfX0/YnJpZGdlRW5kcG9pbnQ9dHJ1ZSIKICAgICAgICAgICAgb3RoZXJ3aXNlOiAKICAgICAgICAgICAgICBzdGVwczoKICAgICAgICAgICAgICAgIC0gbG9nOgogICAgICAgICAgICAgICAgICAgIG1lc3NhZ2U6ICJub3QgdHJ1ZSIKICAgICAgICAtIHRvOiAKICAgICAgICAgICAgdXJpOiBsb2c6ZG9uZQ==",
+            "title": "Camel route"
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Library/cab-practitioner-created-in-fhir"
+      }
+    },
+    {
+      "fullUrl": "Library/camel-patient-created-to-salesforce",
+      "resource": {
+        "resourceType": "Library",
+        "id": "camel-patient-created-to-salesforce",
+        "meta": {
+          "versionId": "40",
+          "lastUpdated": "2026-09-15T04:24:43.684+00:00"
+        },
+        "version": "1.0.0",
+        "name": "patient-created-to-salesforce",
+        "title": "Patient Created to Salesforce",
+        "status": "active",
+        "type": {
+          "coding": [
+            {
+              "code": "camel-route",
+              "display": "Camel Route"
+            }
+          ],
+          "text": "camel-route"
+        },
+        "relatedArtifact": [
+          {
+            "type": "depends-on",
+            "display": "FHIR Patient to SF Patient",
+            "resource": "Library/fhir-patient-to-sf-patient",
+            "resourceReference": {
+              "reference": "Library/fhir-patient-to-sf-patient",
+              "display": "FHIR Patient to SF Patient"
+            }
+          }
+        ],
+        "content": [
+          {
+            "contentType": "application/camel+yaml",
+            "data": "LSByZXN0OgogICAgcG9zdDoKICAgICAgLSBwYXRoOiAvc2FsZXNmb3JjZS9jYWItcGF0aWVudC1jcmVhdGVkCiAgICAgICAgdG86ICJkaXJlY3Q6cHJvY2Vzc1BhdGllbnRDcmVhdGVkVG9TYWxlc2ZvcmNlIgotIHJvdXRlOgogICAgaWQ6IGNtbF9wYXRpZW50X2NyZWF0ZWRfdG9fc2FsZXNmb3JjZQogICAgZnJvbToKICAgICAgdXJpOiAiZGlyZWN0OnByb2Nlc3NQYXRpZW50Q3JlYXRlZFRvU2FsZXNmb3JjZSIKICAgICAgc3RlcHM6CiAgICAgICAgLSBsb2c6CiAgICAgICAgICAgIG1lc3NhZ2U6ICJOZXcgcGF0aWVudCBjcmVhdGVkIC0gYnVuZGxlOiAke2JvZHl9IiIKICAgICAgICAtIHVubWFyc2hhbDogCiAgICAgICAgICAgIGZoaXItanNvbjoKICAgICAgICAgICAgICBmaGlyLXZlcnNpb246IFI1CiAgICAgICAgLSBsb2c6CiAgICAgICAgICAgIG1lc3NhZ2U6ICJOZXcgcGF0aWVudCBjcmVhdGVkIC0gdW5tYXJzaGFsbGVkIHBhdGllbnQ6ICR7Ym9keX0iCiAgICAgICAgLSBzZXRIZWFkZXJzOgogICAgICAgICAgICBoZWFkZXJzOgogICAgICAgICAgICAgIC0gbmFtZTogRkhJUlBBVEhfUVVFUlkKICAgICAgICAgICAgICAgIGNvbnN0YW50OiAiQnVuZGxlLmVudHJ5LnJlc291cmNlLm9mVHlwZShQYXRpZW50KS5maXJzdCgpIgogICAgICAgICAgICAgICAgI2NvbnN0YW50OiAiQnVuZGxlLmVudHJ5LnJlc291cmNlLndoZXJlKCR0aGlzIGlzIFBhdGllbnQpLmZpcnN0KCkiCiAgICAgICAgICAgICAgLSBuYW1lOiBGSElSUEFUSF9GSVJTVAogICAgICAgICAgICAgICAgY29uc3RhbnQ6IHRydWUKICAgICAgICAtIHRvOiAiYmVhbjpmaGlyUGF0aFByb2Nlc3NvciIKICAgICAgICAtIGxvZzoKICAgICAgICAgICAgbWVzc2FnZTogIk5ldyBwYXRpZW50IGNyZWF0ZWQgLSBGSElSUGF0aCBxdWVyaWVkIHBhdGllbnQ6ICR7Ym9keX0iICAgIAogICAgICAgIC0gbWFyc2hhbDoKICAgICAgICAgICAgZmhpci1qc29uOgogICAgICAgICAgICAgIGZoaXItdmVyc2lvbjogUjUKICAgICAgICAgICAgICBwcmV0dHktcHJpbnQ6IGZhbHNlCiAgICAgICAgLSBjb252ZXJ0Qm9keVRvOiAiamF2YS5sYW5nLlN0cmluZyIKICAgICAgICAgICAgICAKICAgICAgICAjIFRyYW5zZm9ybSB0byBTYWxlc2ZvcmNlIEpTT04gICAgICAgIAogICAgICAgIC0gc2V0SGVhZGVyczoKICAgICAgICAgICAgaGVhZGVyczoKICAgICAgICAgICAgICAtIG5hbWU6IEpPTFRfTkFNRQogICAgICAgICAgICAgICAgY29uc3RhbnQ6IGZoaXItcGF0aWVudC10by1zZi1wYXRpZW50CiAgICAgICAgICAgICAgLSBuYW1lOiBKT0xUX1ZFUlNJT04KICAgICAgICAgICAgICAgIGNvbnN0YW50OiAiMS4wLjAiCiAgICAgICAgLSB0bzogImJlYW46am9sdExpYnJhcnlQcm9jZXNzb3IiCiAgICAgICAgLSBsb2c6CiAgICAgICAgICAgIG1lc3NhZ2U6ICJOZXcgcGF0aWVudCBjcmVhdGVkIC0gbWFyc2hhbGxlZCBwYXRpZW50OiAke2JvZHl9IgogICAgICAgIC0gcmVtb3ZlSGVhZGVyczogCiAgICAgICAgICAgIHBhdHRlcm46ICJGSElSUEFUSF8uKnxKT0xUXy4qfEFjY2VwdC4qfENvbnRlbnQtLioiCiAgICAgICAgLSBzZXRIZWFkZXJzOgogICAgICAgICAgICBoZWFkZXJzOgogICAgICAgICAgICAgIC0gbmFtZTogQ2FtZWxIdHRwUGF0aAogICAgICAgICAgICAgICAgc2ltcGxlOiAvZmhpci9wYXRpZW50LWNyZWF0ZWQKICAgICAgICAgICAgICAtIG5hbWU6ICJDb250ZW50LVR5cGUiCiAgICAgICAgICAgICAgICBjb25zdGFudDogImFwcGxpY2F0aW9uL2pzb24iCiAgICAgICAgLSB0bzoKICAgICAgICAgICAgdXJpOiAie3tDQUJfQ1JNX01VTEVTT0ZUX0hPU1R9fT9icmlkZ2VFbmRwb2ludD10cnVlIgo=",
+            "title": "Camel route"
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Library/camel-patient-created-to-salesforce"
+      }
+    },
+    {
+      "fullUrl": "Library/fhir-patient-to-sf-patient",
+      "resource": {
+        "resourceType": "Library",
+        "id": "fhir-patient-to-sf-patient",
+        "meta": {
+          "versionId": "4",
+          "lastUpdated": "2026-09-08T17:05:57.469+00:00"
+        },
+        "version": "1.0.0",
+        "name": "fhir-patient-to-sf-patient",
+        "title": "FHIR Patient to SF Patient",
+        "status": "active",
+        "type": {
+          "coding": [
+            {
+              "code": "jolt",
+              "display": "Jolt"
+            }
+          ],
+          "text": "jolt"
+        },
+        "content": [
+          {
+            "contentType": "application/jolt+json",
+            "data": "WwogIHsKICAgICJvcGVyYXRpb24iOiAic2hpZnQiLAogICAgInNwZWMiOiB7CiAgICAgICJpZCI6ICJmaGlyX2lkIiwKICAgICAgIm5hbWUiOiB7CiAgICAgICAgIjAiOiB7CiAgICAgICAgICAiZ2l2ZW4iOiB7CiAgICAgICAgICAgICIwIjogImZpcnN0X25hbWUiCiAgICAgICAgICB9LAogICAgICAgICAgImZhbWlseSI6ICJsYXN0X25hbWUiCiAgICAgICAgfQogICAgICB9LAogICAgICAiZ2VuZGVyIjogewogICAgICAgICJmZW1hbGUiOiB7CiAgICAgICAgICAiI0YiOiAiZ2VuZGVyIgogICAgICAgIH0sCiAgICAgICAgIm1hbGUiOiB7CiAgICAgICAgICAiI00iOiAiZ2VuZGVyIgogICAgICAgIH0sCiAgICAgICAgIioiOiB7CiAgICAgICAgICAiQCgyLGdlbmRlcikiOiAiZ2VuZGVyIgogICAgICAgIH0KICAgICAgfSwKICAgICAgImJpcnRoRGF0ZSI6ICJkb2IiCiAgICB9CiAgfQpdCg==",
+            "title": "Jolt spec"
+          },
+          {
+            "contentType": "application/jolt-samples+json",
+            "data": "WwogIHsKICAgICJ0aXRsZSI6ICJTYW1wbGUgMSIsCiAgICAiaW5wdXQiOiB7CiAgICAgICJyZXNvdXJjZVR5cGUiOiAiUGF0aWVudCIsCiAgICAgICJpZCI6ICI1ZmJjNTFlOS02MDNlLTQzYzMtOTcyOC04MmZmNzI3NzIwNzgiLAogICAgICAibWV0YSI6IHsKICAgICAgICAidmVyc2lvbklkIjogIjEiLAogICAgICAgICJsYXN0VXBkYXRlZCI6ICIyMDI2LTA4LTE5VDE2OjI4OjU4LjI1NCswMDowMCIsCiAgICAgICAgInRhZyI6IFsKICAgICAgICAgIHsKICAgICAgICAgICAgInN5c3RlbSI6ICJodHRwczovL2NhZG1pbi5pby9maGlyL3RhZ3MiLAogICAgICAgICAgICAiY29kZSI6ICJkZW1vLWRhdGEiLAogICAgICAgICAgICAiZGlzcGxheSI6ICJEZW1vIGRhdGEiCiAgICAgICAgICB9CiAgICAgICAgXQogICAgICB9LAogICAgICAiaWRlbnRpZmllciI6IFsKICAgICAgICB7CiAgICAgICAgICAidXNlIjogIm9mZmljaWFsIiwKICAgICAgICAgICJ0eXBlIjogewogICAgICAgICAgICAiY29kaW5nIjogWwogICAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgICJzeXN0ZW0iOiAiaHR0cDovL3Rlcm1pbm9sb2d5LmhsNy5vcmcvQ29kZVN5c3RlbS92Mi0wMjAzIiwKICAgICAgICAgICAgICAgICJjb2RlIjogIlNTIiwKICAgICAgICAgICAgICAgICJkaXNwbGF5IjogIlNvY2lhbCBTZWN1cml0eSBOdW1iZXIiCiAgICAgICAgICAgICAgfQogICAgICAgICAgICBdLAogICAgICAgICAgICAidGV4dCI6ICJTb2NpYWwgU2VjdXJpdHkgTnVtYmVyIgogICAgICAgICAgfSwKICAgICAgICAgICJzeXN0ZW0iOiAiaHR0cDovL2hsNy5vcmcvZmhpci9zaWQvdXMtc3NuIiwKICAgICAgICAgICJ2YWx1ZSI6ICI5NTktNjAtNjUxMyIKICAgICAgICB9CiAgICAgIF0sCiAgICAgICJhY3RpdmUiOiB0cnVlLAogICAgICAibmFtZSI6IFsKICAgICAgICB7CiAgICAgICAgICAiZmFtaWx5IjogIkdhcmNpYSIsCiAgICAgICAgICAiZ2l2ZW4iOiBbCiAgICAgICAgICAgICJBbWVsaWEiCiAgICAgICAgICBdCiAgICAgICAgfQogICAgICBdLAogICAgICAidGVsZWNvbSI6IFsKICAgICAgICB7CiAgICAgICAgICAic3lzdGVtIjogInBob25lIiwKICAgICAgICAgICJ2YWx1ZSI6ICI1MTItMjQyLTc1MzgiLAogICAgICAgICAgInVzZSI6ICJob21lIgogICAgICAgIH0sCiAgICAgICAgewogICAgICAgICAgInN5c3RlbSI6ICJlbWFpbCIsCiAgICAgICAgICAidmFsdWUiOiAiYW1lbGlhLmdhcmNpYUBleGFtcGxlLmNvbSIKICAgICAgICB9CiAgICAgIF0sCiAgICAgICJnZW5kZXIiOiAiZmVtYWxlIiwKICAgICAgImJpcnRoRGF0ZSI6ICIxOTYyLTA0LTI2IiwKICAgICAgImFkZHJlc3MiOiBbCiAgICAgICAgewogICAgICAgICAgInVzZSI6ICJob21lIiwKICAgICAgICAgICJ0eXBlIjogImJvdGgiLAogICAgICAgICAgImxpbmUiOiBbCiAgICAgICAgICAgICI2ODYyIFN1bW1pdCBMbiIKICAgICAgICAgIF0sCiAgICAgICAgICAiY2l0eSI6ICJBdXN0aW4iLAogICAgICAgICAgInN0YXRlIjogIlRYIiwKICAgICAgICAgICJwb3N0YWxDb2RlIjogIjc4NzAxIiwKICAgICAgICAgICJjb3VudHJ5IjogIlVTIgogICAgICAgIH0KICAgICAgXQogICAgfSwKICAgICJleHBlY3RlZCI6IHsKICAgICAgImZoaXJfaWQiOiAiNWZiYzUxZTktNjAzZS00M2MzLTk3MjgtODJmZjcyNzcyMDc4IiwKICAgICAgImZpcnN0X25hbWUiOiAiQW1lbGlhIiwKICAgICAgImxhc3RfbmFtZSI6ICJHYXJjaWEiLAogICAgICAiZG9iIjogIjE5NjItMDQtMjYiLAogICAgICAiZ2VuZGVyIjogIkYiCiAgICB9CiAgfQpdCg==",
+            "title": "Jolt samples"
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Library/fhir-patient-to-sf-patient"
+      }
+    },
+    {
+      "fullUrl": "Library/jolt-fhir-patient-to-datashare-patient",
+      "resource": {
+        "resourceType": "Library",
+        "id": "jolt-fhir-patient-to-datashare-patient",
+        "meta": {
+          "versionId": "2",
+          "lastUpdated": "2026-09-07T19:50:21.165+00:00"
+        },
+        "version": "1.0.0",
+        "name": "fhir-patient-to-datashare-patient",
+        "title": "FHIR Patient to Datashare Patient",
+        "status": "active",
+        "type": {
+          "coding": [
+            {
+              "code": "jolt",
+              "display": "Jolt"
+            }
+          ],
+          "text": "jolt"
+        },
+        "content": [
+          {
+            "contentType": "application/jolt+json",
+            "data": "WwogIHsKICAgICJvcGVyYXRpb24iOiAic2hpZnQiLAogICAgInNwZWMiOiB7CiAgICAgICJpZCI6ICJmaGlyX2lkIiwKICAgICAgIm5hbWUiOiB7CiAgICAgICAgIjAiOiB7CiAgICAgICAgICAiZ2l2ZW4iOiB7CiAgICAgICAgICAgICIwIjogImZpcnN0X25hbWUiCiAgICAgICAgICB9LAogICAgICAgICAgImZhbWlseSI6ICJsYXN0X25hbWUiCiAgICAgICAgfQogICAgICB9LAogICAgICAiZ2VuZGVyIjogewogICAgICAgICJmZW1hbGUiOiB7CiAgICAgICAgICAiI0YiOiAiZ2VuZGVyIgogICAgICAgIH0sCiAgICAgICAgIm1hbGUiOiB7CiAgICAgICAgICAiI00iOiAiZ2VuZGVyIgogICAgICAgIH0sCiAgICAgICAgIioiOiB7CiAgICAgICAgICAiQCgyLGdlbmRlcikiOiAiZ2VuZGVyIgogICAgICAgIH0KICAgICAgfSwKICAgICAgImJpcnRoRGF0ZSI6ICJkb2IiCiAgICB9CiAgfQpdCg==",
+            "title": "Jolt spec"
+          },
+          {
+            "contentType": "application/jolt-samples+json",
+            "data": "WwogIHsKICAgICJ0aXRsZSI6ICJTYW1wbGUgMSIsCiAgICAiaW5wdXQiOiB7CiAgICAgICJyZXNvdXJjZVR5cGUiOiAiUGF0aWVudCIsCiAgICAgICJpZCI6ICI1ZmJjNTFlOS02MDNlLTQzYzMtOTcyOC04MmZmNzI3NzIwNzgiLAogICAgICAibWV0YSI6IHsKICAgICAgICAidmVyc2lvbklkIjogIjEiLAogICAgICAgICJsYXN0VXBkYXRlZCI6ICIyMDI2LTA4LTE5VDE2OjI4OjU4LjI1NCswMDowMCIsCiAgICAgICAgInRhZyI6IFsKICAgICAgICAgIHsKICAgICAgICAgICAgInN5c3RlbSI6ICJodHRwczovL2NhZG1pbi5pby9maGlyL3RhZ3MiLAogICAgICAgICAgICAiY29kZSI6ICJkZW1vLWRhdGEiLAogICAgICAgICAgICAiZGlzcGxheSI6ICJEZW1vIGRhdGEiCiAgICAgICAgICB9CiAgICAgICAgXQogICAgICB9LAogICAgICAiaWRlbnRpZmllciI6IFsKICAgICAgICB7CiAgICAgICAgICAidXNlIjogIm9mZmljaWFsIiwKICAgICAgICAgICJ0eXBlIjogewogICAgICAgICAgICAiY29kaW5nIjogWwogICAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgICJzeXN0ZW0iOiAiaHR0cDovL3Rlcm1pbm9sb2d5LmhsNy5vcmcvQ29kZVN5c3RlbS92Mi0wMjAzIiwKICAgICAgICAgICAgICAgICJjb2RlIjogIlNTIiwKICAgICAgICAgICAgICAgICJkaXNwbGF5IjogIlNvY2lhbCBTZWN1cml0eSBOdW1iZXIiCiAgICAgICAgICAgICAgfQogICAgICAgICAgICBdLAogICAgICAgICAgICAidGV4dCI6ICJTb2NpYWwgU2VjdXJpdHkgTnVtYmVyIgogICAgICAgICAgfSwKICAgICAgICAgICJzeXN0ZW0iOiAiaHR0cDovL2hsNy5vcmcvZmhpci9zaWQvdXMtc3NuIiwKICAgICAgICAgICJ2YWx1ZSI6ICI5NTktNjAtNjUxMyIKICAgICAgICB9CiAgICAgIF0sCiAgICAgICJhY3RpdmUiOiB0cnVlLAogICAgICAibmFtZSI6IFsKICAgICAgICB7CiAgICAgICAgICAiZmFtaWx5IjogIkdhcmNpYSIsCiAgICAgICAgICAiZ2l2ZW4iOiBbCiAgICAgICAgICAgICJBbWVsaWEiCiAgICAgICAgICBdCiAgICAgICAgfQogICAgICBdLAogICAgICAidGVsZWNvbSI6IFsKICAgICAgICB7CiAgICAgICAgICAic3lzdGVtIjogInBob25lIiwKICAgICAgICAgICJ2YWx1ZSI6ICI1MTItMjQyLTc1MzgiLAogICAgICAgICAgInVzZSI6ICJob21lIgogICAgICAgIH0sCiAgICAgICAgewogICAgICAgICAgInN5c3RlbSI6ICJlbWFpbCIsCiAgICAgICAgICAidmFsdWUiOiAiYW1lbGlhLmdhcmNpYUBleGFtcGxlLmNvbSIKICAgICAgICB9CiAgICAgIF0sCiAgICAgICJnZW5kZXIiOiAiZmVtYWxlIiwKICAgICAgImJpcnRoRGF0ZSI6ICIxOTYyLTA0LTI2IiwKICAgICAgImFkZHJlc3MiOiBbCiAgICAgICAgewogICAgICAgICAgInVzZSI6ICJob21lIiwKICAgICAgICAgICJ0eXBlIjogImJvdGgiLAogICAgICAgICAgImxpbmUiOiBbCiAgICAgICAgICAgICI2ODYyIFN1bW1pdCBMbiIKICAgICAgICAgIF0sCiAgICAgICAgICAiY2l0eSI6ICJBdXN0aW4iLAogICAgICAgICAgInN0YXRlIjogIlRYIiwKICAgICAgICAgICJwb3N0YWxDb2RlIjogIjc4NzAxIiwKICAgICAgICAgICJjb3VudHJ5IjogIlVTIgogICAgICAgIH0KICAgICAgXQogICAgfSwKICAgICJleHBlY3RlZCI6IHsKICAgICAgImZoaXJfaWQiOiAiNWZiYzUxZTktNjAzZS00M2MzLTk3MjgtODJmZjcyNzcyMDc4IiwKICAgICAgImZpcnN0X25hbWUiOiAiQW1lbGlhIiwKICAgICAgImxhc3RfbmFtZSI6ICJHYXJjaWEiLAogICAgICAiZG9iIjogIjE5NjItMDQtMjYiLAogICAgICAiZ2VuZGVyIjogIkYiCiAgICB9CiAgfQpdCg==",
+            "title": "Jolt samples"
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Library/jolt-fhir-patient-to-datashare-patient"
+      }
+    },
+    {
+      "fullUrl": "Library/pds-policy-jwt-required",
+      "resource": {
+        "resourceType": "Library",
+        "id": "pds-policy-jwt-required",
+        "meta": {
+          "versionId": "1",
+          "lastUpdated": "2026-09-08T16:42:15.717+00:00"
+        },
+        "name": "jwt-required",
+        "title": "JWT Required",
+        "status": "draft",
+        "type": {
+          "coding": [
+            {
+              "code": "pds-policies",
+              "display": "PDS Policies"
+            }
+          ],
+          "text": "pds-policies"
+        },
+        "description": "Denies request if JWT is missing",
+        "content": [
+          {
+            "contentType": "application/x-policy+x-yaml",
+            "data": "aWQ6IGp3dC1yZXF1aXJlZApkZXNjcmlwdGlvbjogRGVuaWVzIHJlcXVlc3QgaWYgSldUIGlzIG1pc3NpbmcKdmVyc2lvbjogIiIKc3RhdHVzOiBkcmFmdAppbXBvcnRzOiBbXQp0YXJnZXQ6ICIiCmFwcGx5OiBkZW55LW92ZXJyaWRlcwpvblRhcmdldDogW10KcnVsZXM6CiAgLSBpZDogcnVsZS0xCiAgICBkZXNjcmlwdGlvbjogIiIKICAgIHRhcmdldDogInJlcXVlc3QuYWN0aW9uID09ICdyZWFkJyIKICAgIHdoZW46IHJlcXVlc3Quc3ViamVjdCA9PSBudWxsIG9yIHJlcXVlc3Quc3ViamVjdC5qd3QgPT0gbnVsbAogICAgb3V0Y29tZTogZGVueQogICAgb25EZW55OgogICAgICAtICJyZXNwb25zZS5yZWFzb24gPSAnTWlzc2luZyBKV1QnIgo=",
+            "title": "Policy"
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Library/pds-policy-jwt-required"
+      }
+    },
+    {
+      "fullUrl": "Subscription/sub-patient-created-to-salesforce",
+      "resource": {
+        "resourceType": "Subscription",
+        "id": "sub-patient-created-to-salesforce",
+        "meta": {
+          "versionId": "72",
+          "lastUpdated": "2026-09-09T17:16:39.645+00:00",
+          "tag": [
+            {
+              "system": "http://hapifhir.io/fhir/StructureDefinition/subscription-matching-strategy",
+              "code": "TOPIC",
+              "display": "SubscriptionTopic"
+            }
+          ]
+        },
+        "name": "Patient Created to Salesforce",
+        "status": "active",
+        "topic": "https://cadmin.io/fhir/SubscriptionTopic/stp-patient-created",
+        "channelType": {
+          "system": "http://terminology.hl7.org/CodeSystem/subscription-channel-type",
+          "code": "rest-hook",
+          "display": "Rest Hook"
+        },
+        "endpoint": "http://host.docker.internal:8280/salesforce/cab-patient-created",
+        "contentType": "application/fhir+json",
+        "content": "full-resource"
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Subscription/sub-patient-created-to-salesforce"
+      }
+    },
+    {
+      "fullUrl": "Subscription/sub-practitioner-created-v1.0.1",
+      "resource": {
+        "resourceType": "Subscription",
+        "id": "sub-practitioner-created-v1.0.1",
+        "meta": {
+          "versionId": "13",
+          "lastUpdated": "2026-09-08T19:43:18.070+00:00"
+        },
+        "name": "Practitioner Created",
+        "status": "off",
+        "topic": "https://insulet.com/fhir/SubscriptionTopic/stp-practitioner-created",
+        "channelType": {
+          "system": "http://terminology.hl7.org/CodeSystem/subscription-channel-type",
+          "code": "rest-hook",
+          "display": "Rest Hook"
+        },
+        "endpoint": "http://host.docker.internal:8280/fhir/cab-practitioner-created",
+        "heartbeatPeriod": 15,
+        "timeout": 15,
+        "contentType": "application/fhir+json",
+        "content": "full-resource",
+        "maxCount": 3
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Subscription/sub-practitioner-created-v1.0.1"
+      }
+    },
+    {
+      "fullUrl": "SubscriptionTopic/stp-patient-created",
+      "resource": {
+        "resourceType": "SubscriptionTopic",
+        "id": "stp-patient-created",
+        "meta": {
+          "versionId": "4",
+          "lastUpdated": "2026-09-08T21:12:54.020+00:00"
+        },
+        "url": "https://cadmin.io/fhir/SubscriptionTopic/stp-patient-created",
+        "version": "1.0.0",
+        "name": "stp_patient_created",
+        "title": "Patient Created",
+        "status": "active",
+        "description": "Triggers on patient created event",
+        "resourceTrigger": [
+          {
+            "resource": "Patient",
+            "supportedInteraction": [
+              "create"
+            ]
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "SubscriptionTopic/stp-patient-created"
+      }
+    },
+    {
+      "fullUrl": "SubscriptionTopic/stp-practitioner-created",
+      "resource": {
+        "resourceType": "SubscriptionTopic",
+        "id": "stp-practitioner-created",
+        "meta": {
+          "versionId": "1",
+          "lastUpdated": "2026-09-06T13:14:32.591+00:00"
+        },
+        "url": "https://insulet.com/fhir/SubscriptionTopic/stp-practitioner-created",
+        "name": "stp-practitioner-created",
+        "title": "Practitioner Created",
+        "status": "active",
+        "description": "Triggers whenever any practitioner is created",
+        "resourceTrigger": [
+          {
+            "resource": "Practitioner",
+            "supportedInteraction": [
+              "create"
+            ]
+          }
+        ],
+        "notificationShape": [
+          {
+            "resource": "Practitioner",
+            "revInclude": [
+              "PractitionerRole:practitioner"
+            ]
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "SubscriptionTopic/stp-practitioner-created"
+      }
+    }
+  ]
+}
