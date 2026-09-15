@@ -239,7 +239,8 @@ function renderPatientList(initialQuery) {
                         ? '<span class="badge text-bg-success">Active</span>'
                         : '<span class="badge text-bg-secondary">Inactive</span>') + "</td>" +
                     "<td><code>" + CadminApi.escapeHtml(p.id) + "</code></td>" +
-                    '<td class="text-end"><a class="btn btn-sm btn-outline-primary" href="#/patients/' +
+                    '<td class="text-end text-nowrap">' + CadminWorkspace.listBookmarkButton(p) +
+                    '<a class="btn btn-sm btn-outline-primary" href="#/patients/' +
                         encodeURIComponent(p.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a></td>' +
                     "</tr>";
             });

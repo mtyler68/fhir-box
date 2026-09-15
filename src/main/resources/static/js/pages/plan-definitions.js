@@ -117,9 +117,10 @@ function renderPlanDefinitionList() {
                         "<td><code class=\"small\">" + CadminApi.escapeHtml(item.url || "—") + "</code></td>" +
                         "<td><code>" + CadminApi.escapeHtml(item.id) + "</code></td>" +
                         '<td class="text-end text-nowrap">' +
-                            '<a class="btn btn-sm btn-outline-primary" href="#/plan-apply/' +
+                            CadminWorkspace.listBookmarkButton(item) +
+                            '<a class="btn btn-sm btn-outline-primary me-1" href="#/plan-apply/' +
                                 encodeURIComponent(item.id) + '" title="Apply">' +
-                                '<i class="bi bi-play-circle"></i></a> ' +
+                                '<i class="bi bi-play-circle"></i></a>' +
                             '<a class="btn btn-sm btn-outline-primary" href="' + href +
                                 '" title="Open"><i class="bi bi-eye"></i></a></td></tr>';
                 }).join(""));

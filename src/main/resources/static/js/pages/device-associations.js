@@ -226,7 +226,8 @@ function renderDeviceAssociationList(initialQuery) {
                     "<td>" + statusBadge(item.status) + "</td>" +
                     "<td>" + CadminApi.escapeHtml(formatPeriod(item.period)) + "</td>" +
                     "<td><code>" + CadminApi.escapeHtml(item.id) + "</code></td>" +
-                    '<td class="text-end"><a class="btn btn-sm btn-outline-primary" href="#/device-associations/' +
+                    '<td class="text-end text-nowrap">' + CadminWorkspace.listBookmarkButton(item) +
+                    '<a class="btn btn-sm btn-outline-primary" href="#/device-associations/' +
                         encodeURIComponent(item.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a></td>' +
                     "</tr>";
             });

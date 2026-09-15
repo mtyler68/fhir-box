@@ -181,6 +181,7 @@ function renderQuestionnaireList(initialQuery) {
                     "<td>" + esc(qn.publisher || "—") + "</td>" +
                     "<td><code>" + esc(qn.id) + "</code></td>" +
                     '<td class="text-end text-nowrap">' +
+                        CadminWorkspace.listBookmarkButton(qn) +
                         '<a class="btn btn-sm btn-outline-primary me-1" href="#/questionnaires/' +
                             encodeURIComponent(qn.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a>' +
                         '<button class="btn btn-sm btn-outline-secondary" type="button" data-duplicate="' +

@@ -453,10 +453,50 @@ window.CadminPdsPolicyDetail = (function () {
         return '<tr><td colspan="' + cols + '" class="text-muted">' + text + "</td></tr>";
     }
 
-    function optionsHtml(items) {
+    function optionsHtml(items, selected) {
         return items.map(function (item) {
-            return '<option value="' + esc(item.code) + '">' + esc(item.display) + "</option>";
+            const mark = item.code === selected ? " selected" : "";
+            return '<option value="' + esc(item.code) + '"' + mark + ">" + esc(item.display) + "</option>";
         }).join("");
+    }
+
+    function navButton(paneId, icon, label, opts) {
+        opts = opts || {};
+        const classes = ["list-group-item", "list-group-item-action", "text-start"];
+        if (opts.active) {
+            classes.push("active");
+        }
+        if (opts.danger) {
+            classes.push("text-danger");
+        }
+        return '<button type="button" class="' + classes.join(" ") + '" id="' + paneId + '-btn" ' +
+            'data-bs-toggle="pill" data-bs-target="#' + paneId + '" role="tab" aria-controls="' + paneId +
+            '" aria-selected="' + (opts.active ? "true" : "false") + '">' +
+            '<i class="' + icon + ' me-2" aria-hidden="true"></i>' + label +
+            "</button>";
+    }
+
+    function tabPane(id, body, active) {
+        return '<div class="tab-pane fade' + (active ? " show active" : "") + '" id="' + id +
+            '" role="tabpanel" aria-labelledby="' + id + '-btn">' + body + "</div>";
+    }
+
+    function fieldRow(left, right) {
+        return '<div class="row">' +
+            '<div class="col-md-6">' + left + "</div>" +
+            '<div class="col-md-6">' + right + "</div>" +
+            "</div>";
+    }
+
+    function dateInputValue(value) {
+        return String(value || "").slice(0, 10);
+    }
+
+    function typeCode() {
+        const coding = ((library && library.type && library.type.coding) || []).find(function (item) {
+            return item && item.code;
+        });
+        return (coding && coding.code) || libraryType;
     }
 
     function hideModal(id) {
@@ -475,11 +515,13 @@ window.CadminPdsPolicyDetail = (function () {
     }
 
     function card(title, tableId, cols, addTarget, addLabel) {
-        return '<div class="card shadow mb-4">' +
-            '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                "<h6 class=\"m-0\">" + title + "</h6>" +
-                '<button class="btn btn-sm btn-primary" type="button" data-bs-toggle="modal" data-bs-target="' + addTarget + '">' +
-                    '<i class="bi bi-plus-lg me-1"></i>' + addLabel + "</button>" +
+        return '<div class="card mb-3">' +
+            '<div class="card-header">' +
+                '<h3 class="card-title">' + title + "</h3>" +
+                '<div class="card-tools">' +
+                    '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="' +
+                        addTarget + '"><i class="bi bi-plus-lg me-1"></i>' + addLabel + "</button>" +
+                "</div>" +
             "</div>" +
             '<div class="card-body">' +
                 '<div class="table-responsive">' +
@@ -489,16 +531,6 @@ window.CadminPdsPolicyDetail = (function () {
                     "</table>" +
                 "</div>" +
             "</div>" +
-        "</div>";
-    }
-
-    function editCard(title, bodyId, editTarget) {
-        return '<div class="card shadow mb-4">' +
-            '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                "<h6 class=\"m-0\">" + title + "</h6>" +
-                '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="' + editTarget + '">Edit</button>' +
-            "</div>" +
-            '<div class="card-body" id="' + bodyId + '"></div>' +
         "</div>";
     }
 
@@ -1320,129 +1352,194 @@ window.CadminPdsPolicyDetail = (function () {
         }
         library = resource;
         const $root = $(CadminWorkspace.root());
+        const label = esc(library.title || library.name || "PDS policy");
         $root.html(
-            '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
+            '<div class="d-flex align-items-center justify-content-between mb-3">' +
                 "<div>" +
-                    '<a class="small text-decoration-none" href="#/pds-policies"><i class="bi bi-arrow-left me-1"></i>PDS Policies</a>' +
+                    '<a class="small text-decoration-none" href="#/pds-policies">' +
+                        '<i class="bi bi-arrow-left me-1"></i>PDS Policies</a>' +
                     '<div class="d-flex align-items-center flex-wrap gap-2">' +
-                        '<h1 class="h3 mb-0 page-title">' + esc(library.title || library.name || "PDS policy") + "</h1>" +
+                        '<h1 class="mb-0 fs-3 page-title" id="pd-title">' + label + "</h1>" +
+                        '<span id="pd-status-badge">' + statusBadge(library.status) + "</span>" +
+                        (library.id
+                            ? '<code class="small" id="pd-fhir-id">' + esc(library.id) + "</code>"
+                            : '<code class="small d-none" id="pd-fhir-id"></code>') +
                         CadminApi.unsavedFlagHtml() +
                     "</div>" +
                 "</div>" +
-                CadminResourceSource.button() +
+                '<div class="d-flex flex-wrap gap-2">' +
+                    CadminResourceSource.button() +
+                "</div>" +
             "</div>" +
-            '<div class="card card-success card-outline mb-4">' +
-                '<form id="pd-policy-form">' +
-                    '<div class="card-header">' +
-                        "<div>" +
-                            '<h3 class="card-title">Policy content</h3>' +
-                            '<div class="small text-muted mt-1"><code>' + esc(policyContentType) + "</code></div>" +
-                        "</div>" +
-                        '<div class="card-tools d-flex gap-2">' +
-                            '<button class="btn btn-sm btn-primary" type="submit">Save</button>' +
-                            '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#pd-yaml-modal">' +
-                                '<i class="bi bi-filetype-yml me-1"></i>View YAML</button>' +
-                        "</div>" +
+            '<div class="row g-3">' +
+                '<div class="col-md-3">' +
+                    '<div class="list-group list-group-flush nav nav-pills flex-column cadmin-settings-nav" id="pd-settings-nav" role="tablist">' +
+                        navButton("pd-pane-basics", "bi bi-info-circle", "Basics", { active: true }) +
+                        navButton("pd-pane-identity", "bi bi-person-vcard", "Identity and version") +
+                        navButton("pd-pane-policy", "bi bi-shield-lock", "Policy") +
+                        navButton("pd-pane-attachments", "bi bi-paperclip", "Attachments") +
+                        navButton("pd-pane-related", "bi bi-link-45deg", "Related") +
+                        navButton("pd-pane-graph", "bi bi-diagram-3", "Reference graph") +
+                        navButton("pd-pane-history", "bi bi-clock-history", "History") +
+                        navButton("pd-pane-danger", "bi bi-exclamation-triangle", "Danger zone", { danger: true }) +
                     "</div>" +
-                    '<div class="card-body">' +
-                        '<div class="row">' +
-                            '<div class="col-md-6">' +
-                                field("Policy ID", '<input class="form-control font-monospace" id="pd-policy-id" required placeholder="Unique ID (Library.name)">') +
-                            "</div>" +
-                            '<div class="col-md-3">' +
-                                field("Version", '<input class="form-control" id="pd-policy-version" placeholder="e.g. 1.0.0">') +
-                            "</div>" +
-                            '<div class="col-md-3">' +
-                                field("Status", '<select class="form-select" id="pd-policy-status">' + optionsHtml(statusOptions) + "</select>") +
-                            "</div>" +
-                        "</div>" +
-                        field("Description", '<textarea class="form-control" id="pd-policy-description" rows="3"></textarea>') +
-                        '<div class="mb-3">' +
-                            '<div class="d-flex justify-content-between align-items-center mb-2">' +
-                                '<label class="form-label mb-0">Imports</label>' +
-                                '<button class="btn btn-sm btn-outline-primary" type="button" id="pd-policy-import-add">' +
-                                    '<i class="bi bi-plus-lg me-1"></i>Add import</button>' +
-                            "</div>" +
-                            '<div id="pd-policy-imports"></div>' +
-                            '<div class="form-text">Each import is another policy’s <code>Library.name</code>.</div>' +
-                        "</div>" +
-                        field("Target", '<div class="spel-host">' +
-                            '<textarea class="form-control font-monospace" id="pd-policy-target" rows="4" ' +
-                            'placeholder="SpringEL predicate"></textarea></div>' +
-                            '<div class="form-text">If this predicate is true, the policy rules are evaluated.</div>') +
-                        field("Apply", '<select class="form-select" id="pd-policy-apply">' + optionsHtml(applyOptions) + "</select>" +
-                            '<div class="form-text">Rule combiner used when the target matches.</div>') +
-                        '<div class="mb-0">' +
-                            '<div class="d-flex justify-content-between align-items-center mb-2">' +
-                                '<label class="form-label mb-0">On target</label>' +
-                                '<button class="btn btn-sm btn-outline-primary" type="button" id="pd-policy-ontarget-add">' +
-                                    '<i class="bi bi-plus-lg me-1"></i>Add statement</button>' +
-                            "</div>" +
-                            '<div id="pd-policy-ontarget"></div>' +
-                            '<div class="form-text">SpringEL statements run when the target predicate is true.</div>' +
-                        "</div>" +
-                        '<div class="mt-4">' +
-                            '<div class="d-flex justify-content-between align-items-center mb-2">' +
-                                '<label class="form-label mb-0">Rules</label>' +
-                                '<button class="btn btn-sm btn-outline-primary" type="button" id="pd-policy-rule-add">' +
-                                    '<i class="bi bi-plus-lg me-1"></i>Add rule</button>' +
-                            "</div>" +
-                            '<div id="pd-policy-rules"></div>' +
-                            '<div class="form-text">Rules are omitted from YAML when this list is empty.</div>' +
-                        "</div>" +
+                "</div>" +
+                '<div class="col-md-9">' +
+                    '<div class="tab-content">' +
+                        tabPane("pd-pane-basics",
+                            '<form id="pd-basic-form">' +
+                                '<div class="card">' +
+                                    '<div class="card-header"><h3 class="card-title">Basic details</h3></div>' +
+                                    '<div class="card-body">' +
+                                        field("Title", '<input class="form-control" id="pd-title-input">') +
+                                        fieldRow(
+                                            field("Status", '<select class="form-select" id="pd-status">' +
+                                                optionsHtml(statusOptions, library.status || "draft") + "</select>"),
+                                            field("Type",
+                                                '<input class="form-control font-monospace" id="pd-type" value="' +
+                                                    esc(typeCode()) + '" readonly disabled>')) +
+                                        '<div class="form-check mb-3">' +
+                                            '<input class="form-check-input" type="checkbox" id="pd-experimental">' +
+                                            '<label class="form-check-label" for="pd-experimental">Experimental</label>' +
+                                        "</div>" +
+                                        field("Description", '<textarea class="form-control" id="pd-description" rows="4"></textarea>') +
+                                        field("Purpose", '<textarea class="form-control" id="pd-purpose" rows="3"></textarea>') +
+                                        field("Usage", '<textarea class="form-control" id="pd-usage" rows="3"></textarea>') +
+                                        field("Copyright", '<textarea class="form-control" id="pd-copyright" rows="2"></textarea>') +
+                                        '<button type="submit" class="btn btn-primary">Save changes</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</form>",
+                            true) +
+                        tabPane("pd-pane-identity",
+                            '<form id="pd-identity-form">' +
+                                '<div class="card">' +
+                                    '<div class="card-header"><h3 class="card-title">Identity and version</h3></div>' +
+                                    '<div class="card-body">' +
+                                        field("URL", '<input class="form-control font-monospace" id="pd-url">') +
+                                        fieldRow(
+                                            field("Name", '<input class="form-control font-monospace" id="pd-name">'),
+                                            field("Version", '<input class="form-control" id="pd-version" autocomplete="off">')) +
+                                        fieldRow(
+                                            field("Publisher", '<input class="form-control" id="pd-publisher">'),
+                                            field("Date", '<input type="date" class="form-control" id="pd-date">')) +
+                                        fieldRow(
+                                            field("Approved date", '<input type="date" class="form-control" id="pd-approval">'),
+                                            field("Last review date", '<input type="date" class="form-control" id="pd-review">')) +
+                                        '<div class="mb-3">' +
+                                            '<label class="form-label">Effective date range</label>' +
+                                            '<div class="row g-2">' +
+                                                '<div class="col">' +
+                                                    '<input type="date" class="form-control" id="pd-period-start" ' +
+                                                        'aria-label="Effective start">' +
+                                                "</div>" +
+                                                '<div class="col">' +
+                                                    '<input type="date" class="form-control" id="pd-period-end" ' +
+                                                        'aria-label="Effective end">' +
+                                                "</div>" +
+                                            "</div>" +
+                                        "</div>" +
+                                        '<button type="submit" class="btn btn-primary">Save changes</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</form>") +
+                        tabPane("pd-pane-policy",
+                            '<form id="pd-policy-form">' +
+                                '<div class="card">' +
+                                    '<div class="card-header flex-wrap gap-2">' +
+                                        "<div>" +
+                                            '<h3 class="card-title mb-0">Policy content</h3>' +
+                                            '<div class="small text-muted"><code>' + esc(policyContentType) + "</code></div>" +
+                                        "</div>" +
+                                        '<div class="card-tools d-flex flex-nowrap align-items-center gap-2">' +
+                                            '<button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#pd-yaml-modal">' +
+                                                '<i class="bi bi-filetype-yml me-1"></i>View YAML</button>' +
+                                            '<button class="btn btn-sm btn-primary" type="submit">' +
+                                                '<i class="bi bi-check2 me-1"></i>Save</button>' +
+                                        "</div>" +
+                                    "</div>" +
+                                    '<div class="card-body">' +
+                                        '<div class="row">' +
+                                            '<div class="col-md-6">' +
+                                                field("Policy ID", '<input class="form-control font-monospace" id="pd-policy-id" required placeholder="Unique ID (Library.name)">') +
+                                            "</div>" +
+                                            '<div class="col-md-3">' +
+                                                field("Version", '<input class="form-control" id="pd-policy-version" placeholder="e.g. 1.0.0">') +
+                                            "</div>" +
+                                            '<div class="col-md-3">' +
+                                                field("Status", '<select class="form-select" id="pd-policy-status">' +
+                                                    optionsHtml(statusOptions) + "</select>") +
+                                            "</div>" +
+                                        "</div>" +
+                                        field("Description", '<textarea class="form-control" id="pd-policy-description" rows="3"></textarea>') +
+                                        '<div class="mb-3">' +
+                                            '<div class="d-flex justify-content-between align-items-center mb-2">' +
+                                                '<label class="form-label mb-0">Imports</label>' +
+                                                '<button class="btn btn-sm btn-outline-primary" type="button" id="pd-policy-import-add">' +
+                                                    '<i class="bi bi-plus-lg me-1"></i>Add import</button>' +
+                                            "</div>" +
+                                            '<div id="pd-policy-imports"></div>' +
+                                            '<div class="form-text">Each import is another policy’s <code>Library.name</code>.</div>' +
+                                        "</div>" +
+                                        field("Target", '<div class="spel-host">' +
+                                            '<textarea class="form-control font-monospace" id="pd-policy-target" rows="4" ' +
+                                            'placeholder="SpringEL predicate"></textarea></div>' +
+                                            '<div class="form-text">If this predicate is true, the policy rules are evaluated.</div>') +
+                                        field("Apply", '<select class="form-select" id="pd-policy-apply">' +
+                                            optionsHtml(applyOptions) + "</select>" +
+                                            '<div class="form-text">Rule combiner used when the target matches.</div>') +
+                                        '<div class="mb-0">' +
+                                            '<div class="d-flex justify-content-between align-items-center mb-2">' +
+                                                '<label class="form-label mb-0">On target</label>' +
+                                                '<button class="btn btn-sm btn-outline-primary" type="button" id="pd-policy-ontarget-add">' +
+                                                    '<i class="bi bi-plus-lg me-1"></i>Add statement</button>' +
+                                            "</div>" +
+                                            '<div id="pd-policy-ontarget"></div>' +
+                                            '<div class="form-text">SpringEL statements run when the target predicate is true.</div>' +
+                                        "</div>" +
+                                        '<div class="mt-4">' +
+                                            '<div class="d-flex justify-content-between align-items-center mb-2">' +
+                                                '<label class="form-label mb-0">Rules</label>' +
+                                                '<button class="btn btn-sm btn-outline-primary" type="button" id="pd-policy-rule-add">' +
+                                                    '<i class="bi bi-plus-lg me-1"></i>Add rule</button>' +
+                                            "</div>" +
+                                            '<div id="pd-policy-rules"></div>' +
+                                            '<div class="form-text">Rules are omitted from YAML when this list is empty.</div>' +
+                                        "</div>" +
+                                    "</div>" +
+                                "</div>" +
+                            "</form>") +
+                        tabPane("pd-pane-attachments",
+                            card("Identifiers", "pds-id-rows", ["System", "Value", ""], "#pd-id-modal", "Add") +
+                            card("Contacts", "pds-contact-rows", ["Name", "Telecom", ""], "#pd-contact-modal", "Add") +
+                            card("Content", "pds-content-rows", ["Title", "Type", ""], "#pd-content-modal", "Add")) +
+                        tabPane("pd-pane-related", CadminLibraryRelated.cards()) +
+                        tabPane("pd-pane-graph", CadminResourceGraph.card()) +
+                        tabPane("pd-pane-history", CadminResourceHistory.card()) +
+                        tabPane("pd-pane-danger",
+                            '<div class="card border-danger">' +
+                                '<div class="card-header bg-danger-subtle">' +
+                                    '<h3 class="card-title text-danger">Danger zone</h3>' +
+                                "</div>" +
+                                '<div class="card-body">' +
+                                    '<div class="d-flex justify-content-between align-items-start">' +
+                                        "<div>" +
+                                            '<p class="mb-0 fw-semibold text-danger">Delete this PDS policy</p>' +
+                                            '<small class="text-secondary">' +
+                                                "This permanently deletes the Library that stores the policy YAML." +
+                                            "</small>" +
+                                        "</div>" +
+                                        '<button class="btn btn-danger" type="button" id="pd-delete">Delete</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</div>") +
                     "</div>" +
-                "</form>" +
+                "</div>" +
             "</div>" +
-            '<div class="row">' +
-                '<div class="col-lg-6">' + editCard("Basic details", "pds-basic-details", "#pd-basic-modal") + "</div>" +
-                '<div class="col-lg-6">' + editCard("Identity and version", "pds-identity-details", "#pd-identity-modal") + "</div>" +
-            "</div>" +
-            '<div class="row">' +
-                '<div class="col-lg-6">' + editCard("Purpose and usage", "pds-purpose-details", "#pd-purpose-modal") + "</div>" +
-                '<div class="col-lg-6">' + editCard("Review dates", "pds-dates-details", "#pd-dates-modal") + "</div>" +
-            "</div>" +
-            '<div class="row">' +
-                '<div class="col-lg-6">' + card("Identifiers", "pds-id-rows",
-                    ["System", "Value", ""], "#pd-id-modal", "Add") + "</div>" +
-                '<div class="col-lg-6">' + card("Contacts", "pds-contact-rows",
-                    ["Name", "Telecom", ""], "#pd-contact-modal", "Add") + "</div>" +
-            "</div>" +
-            '<div class="row">' +
-                '<div class="col-lg-6">' + card("Content", "pds-content-rows",
-                    ["Title", "Type", ""], "#pd-content-modal", "Add") + "</div>" +
-            "</div>" +
-            CadminLibraryRelated.cards() +
-            CadminResourceHistory.card() +
-            CadminResourceGraph.card() +
             viewModal("pd-yaml-modal", "Generated YAML",
                 '<div class="yaml-preview-host">' +
                     '<textarea id="pd-yaml-preview" class="form-control font-monospace" readonly></textarea>' +
                 "</div>") +
-            modal("pd-basic-modal", "Edit basic details",
-                field("Title", '<input class="form-control" id="pd-title" required>') +
-                field("Status", '<select class="form-select" id="pd-status">' + optionsHtml(statusOptions) + "</select>") +
-                field("Description", '<textarea class="form-control" id="pd-description" rows="4"></textarea>') +
-                '<div class="form-check mb-0"><input class="form-check-input" type="checkbox" id="pd-experimental">' +
-                    '<label class="form-check-label" for="pd-experimental">Experimental</label></div>',
-                "pd-basic-form") +
-            modal("pd-identity-modal", "Edit identity and version",
-                field("Canonical URL", '<input class="form-control" id="pd-url">') +
-                field("Computer name", '<input class="form-control" id="pd-name">') +
-                field("Version", '<input class="form-control" id="pd-version">') +
-                field("Publisher", '<input class="form-control" id="pd-publisher">') +
-                field("Date", '<input type="date" class="form-control" id="pd-date">'),
-                "pd-identity-form") +
-            modal("pd-purpose-modal", "Edit purpose and usage",
-                field("Purpose", '<textarea class="form-control" id="pd-purpose" rows="3"></textarea>') +
-                field("Usage", '<textarea class="form-control" id="pd-usage" rows="3"></textarea>') +
-                field("Copyright", '<textarea class="form-control" id="pd-copyright" rows="2"></textarea>'),
-                "pd-purpose-form") +
-            modal("pd-dates-modal", "Edit review dates",
-                field("Approval date", '<input type="date" class="form-control" id="pd-approval">') +
-                field("Last review date", '<input type="date" class="form-control" id="pd-review">') +
-                field("Effective start", '<input type="date" class="form-control" id="pd-period-start">') +
-                field("Effective end", '<input type="date" class="form-control" id="pd-period-end">'),
-                "pd-dates-form") +
             modal("pd-id-modal", "Add identifier",
                 field("System", '<input class="form-control" id="pd-id-system">') +
                 field("Value", '<input class="form-control" id="pd-id-value" required>'),
@@ -1463,10 +1560,8 @@ window.CadminPdsPolicyDetail = (function () {
         CadminResourceGraph.mount(library);
         CadminResourceHistory.mount(library);
         CadminLibraryRelated.mount(library);
-        renderBasics();
-        renderIdentity();
-        renderPurpose();
-        renderDates();
+        renderHeader();
+        fillBasicsForm();
         renderIdentifiers();
         renderContacts();
         renderContent();
@@ -1545,51 +1640,77 @@ window.CadminPdsPolicyDetail = (function () {
         });
     }
 
-    function renderBasics() {
-        $("#pds-basic-details").html(
-            '<dl class="row mb-0">' +
-                '<dt class="col-sm-4">Title</dt><dd class="col-sm-8">' + esc(library.title || "—") + "</dd>" +
-                '<dt class="col-sm-4">Status</dt><dd class="col-sm-8">' + statusBadge(library.status) + "</dd>" +
-                '<dt class="col-sm-4">Type</dt><dd class="col-sm-8">' + esc(libraryType) + "</dd>" +
-                '<dt class="col-sm-4">Experimental</dt><dd class="col-sm-8">' + (library.experimental ? "Yes" : "No") + "</dd>" +
-                '<dt class="col-sm-4">Description</dt><dd class="col-sm-8">' + esc(library.description || "—") + "</dd>" +
-                '<dt class="col-sm-4">ID</dt><dd class="col-sm-8"><code>' + esc(library.id) + "</code></dd>" +
-            "</dl>"
-        );
+    function renderHeader() {
+        $("#pd-title").text(library.title || library.name || "PDS policy");
+        $("#pd-status-badge").html(statusBadge(library.status));
+        if (library.id) {
+            $("#pd-fhir-id").text(library.id).removeClass("d-none");
+        } else {
+            $("#pd-fhir-id").text("").addClass("d-none");
+        }
     }
 
-    function renderIdentity() {
-        $("#pds-identity-details").html(
-            '<dl class="row mb-0">' +
-                '<dt class="col-sm-4">URL</dt><dd class="col-sm-8"><code>' + esc(library.url || "—") + "</code></dd>" +
-                '<dt class="col-sm-4">Name</dt><dd class="col-sm-8">' + esc(library.name || "—") + "</dd>" +
-                '<dt class="col-sm-4">Version</dt><dd class="col-sm-8">' + esc(library.version || "—") + "</dd>" +
-                '<dt class="col-sm-4">Publisher</dt><dd class="col-sm-8">' + esc(library.publisher || "—") + "</dd>" +
-                '<dt class="col-sm-4">Date</dt><dd class="col-sm-8">' + esc(library.date || "—") + "</dd>" +
-            "</dl>"
-        );
-    }
-
-    function renderPurpose() {
-        $("#pds-purpose-details").html(
-            '<dl class="row mb-0">' +
-                '<dt class="col-sm-4">Purpose</dt><dd class="col-sm-8">' + esc(library.purpose || "—") + "</dd>" +
-                '<dt class="col-sm-4">Usage</dt><dd class="col-sm-8">' + esc(library.usage || "—") + "</dd>" +
-                '<dt class="col-sm-4">Copyright</dt><dd class="col-sm-8">' + esc(library.copyright || "—") + "</dd>" +
-            "</dl>"
-        );
-    }
-
-    function renderDates() {
+    function fillBasicsForm() {
         const period = library.effectivePeriod || {};
-        $("#pds-dates-details").html(
-            '<dl class="row mb-0">' +
-                '<dt class="col-sm-4">Approved</dt><dd class="col-sm-8">' + esc(library.approvalDate || "—") + "</dd>" +
-                '<dt class="col-sm-4">Last review</dt><dd class="col-sm-8">' + esc(library.lastReviewDate || "—") + "</dd>" +
-                '<dt class="col-sm-4">Effective</dt><dd class="col-sm-8">' +
-                    esc(period.start || "—") + " – " + esc(period.end || "—") + "</dd>" +
-            "</dl>"
-        );
+        $("#pd-title-input").val(library.title || "");
+        $("#pd-status").val(library.status || "draft");
+        $("#pd-type").val(typeCode());
+        $("#pd-experimental").prop("checked", !!library.experimental);
+        $("#pd-description").val(library.description || "");
+        $("#pd-purpose").val(library.purpose || "");
+        $("#pd-usage").val(library.usage || "");
+        $("#pd-copyright").val(library.copyright || "");
+        $("#pd-url").val(library.url || "");
+        $("#pd-name").val(library.name || "");
+        $("#pd-version").val(library.version || "");
+        $("#pd-publisher").val(library.publisher || "");
+        $("#pd-date").val(dateInputValue(library.date));
+        $("#pd-approval").val(dateInputValue(library.approvalDate));
+        $("#pd-review").val(dateInputValue(library.lastReviewDate));
+        $("#pd-period-start").val(dateInputValue(period.start));
+        $("#pd-period-end").val(dateInputValue(period.end));
+        CadminApi.fillValueSetSelect("#pd-status", CadminApi.valueSets.publicationStatus, {
+            fallback: statusOptions,
+            selected: library.status || "draft"
+        });
+    }
+
+    function applyLibraryMeta() {
+        setOrDelete(library, "title", $("#pd-title-input").val());
+        library.status = $("#pd-status").val() || "draft";
+        library.type = {
+            coding: [{ code: libraryType, display: "PDS Policies" }],
+            text: libraryType
+        };
+        if ($("#pd-experimental").is(":checked")) {
+            library.experimental = true;
+        } else {
+            delete library.experimental;
+        }
+        setOrDelete(library, "description", $("#pd-description").val());
+        setOrDelete(library, "purpose", $("#pd-purpose").val());
+        setOrDelete(library, "usage", $("#pd-usage").val());
+        setOrDelete(library, "copyright", $("#pd-copyright").val());
+        setOrDelete(library, "url", $("#pd-url").val());
+        setOrDelete(library, "name", $("#pd-name").val());
+        setOrDelete(library, "version", $("#pd-version").val());
+        setOrDelete(library, "publisher", $("#pd-publisher").val());
+        setOrDelete(library, "date", $("#pd-date").val());
+        setOrDelete(library, "approvalDate", $("#pd-approval").val());
+        setOrDelete(library, "lastReviewDate", $("#pd-review").val());
+        const start = ($("#pd-period-start").val() || "").trim();
+        const end = ($("#pd-period-end").val() || "").trim();
+        if (start || end) {
+            library.effectivePeriod = {};
+            if (start) {
+                library.effectivePeriod.start = start;
+            }
+            if (end) {
+                library.effectivePeriod.end = end;
+            }
+        } else {
+            delete library.effectivePeriod;
+        }
     }
 
     function renderIdentifiers() {
@@ -1644,15 +1765,10 @@ window.CadminPdsPolicyDetail = (function () {
     }
 
     function refreshLists() {
-        renderBasics();
-        renderIdentity();
-        renderPurpose();
-        renderDates();
+        renderHeader();
         renderIdentifiers();
         renderContacts();
         renderContent();
-        renderPolicyEditor();
-        $(".page-title").first().text(library.title || library.name || "PDS policy");
     }
 
     function saveLibrary(next) {
@@ -1699,7 +1815,32 @@ window.CadminPdsPolicyDetail = (function () {
     function bindForms() {
         const $root = $(CadminWorkspace.root());
         $root.off(".pdsdetail");
-        $root.on("input.pdsdetail change.pdsdetail", "#pd-policy-form :input", syncUnsavedFlag);
+        $root.on("input.pdsdetail change.pdsdetail",
+            "#pd-policy-form :input, #pd-basic-form :input, #pd-identity-form :input", syncUnsavedFlag);
+
+        $root.on("shown.bs.tab.pdsdetail", "#pd-pane-policy-btn", function () {
+            $("#pd-policy-form .CodeMirror").each(function () {
+                if (this.CodeMirror) {
+                    this.CodeMirror.refresh();
+                }
+            });
+        });
+        $root.on("shown.bs.tab.pdsdetail", "#pd-pane-graph-btn", function () {
+            if (typeof CadminResourceGraph.resize === "function") {
+                CadminResourceGraph.resize();
+            }
+        });
+
+        $root.on("click.pdsdetail", "#pd-delete", function () {
+            CadminApi.confirm("Delete this PDS policy?").done(function () {
+                CadminApi.fhir("/Library/" + encodeURIComponent(library.id), "DELETE").done(function () {
+                    CadminApi.showToast("success", "PDS policy deleted.");
+                    window.location.hash = "#/pds-policies";
+                }).fail(function (xhr) {
+                    fail("Delete policy", xhr);
+                });
+            });
+        });
 
         $root.on("click.pdsdetail", "[data-remove]", function () {
             const fieldName = $(this).attr("data-remove");
@@ -1713,97 +1854,12 @@ window.CadminPdsPolicyDetail = (function () {
             });
         });
 
-        $("#pd-basic-modal").on("show.bs.modal", function () {
-            $("#pd-title").val(library.title || "");
-            $("#pd-status").val(library.status || "draft");
-            $("#pd-description").val(library.description || "");
-            $("#pd-experimental").prop("checked", !!library.experimental);
-        });
-
-        $("#pd-identity-modal").on("show.bs.modal", function () {
-            $("#pd-url").val(library.url || "");
-            $("#pd-name").val(library.name || "");
-            $("#pd-version").val(library.version || "");
-            $("#pd-publisher").val(library.publisher || "");
-            $("#pd-date").val((library.date || "").slice(0, 10));
-        });
-
-        $("#pd-purpose-modal").on("show.bs.modal", function () {
-            $("#pd-purpose").val(library.purpose || "");
-            $("#pd-usage").val(library.usage || "");
-            $("#pd-copyright").val(library.copyright || "");
-        });
-
-        $("#pd-dates-modal").on("show.bs.modal", function () {
-            const period = library.effectivePeriod || {};
-            $("#pd-approval").val(library.approvalDate || "");
-            $("#pd-review").val(library.lastReviewDate || "");
-            $("#pd-period-start").val((period.start || "").slice(0, 10));
-            $("#pd-period-end").val((period.end || "").slice(0, 10));
-        });
-
-        $("#pd-basic-form").on("submit", function (event) {
+        $("#pd-basic-form, #pd-identity-form").on("submit", function (event) {
             event.preventDefault();
-            library.title = $("#pd-title").val();
-            library.status = $("#pd-status").val() || "draft";
-            setOrDelete(library, "description", $("#pd-description").val());
-            if ($("#pd-experimental").is(":checked")) {
-                library.experimental = true;
-            } else {
-                delete library.experimental;
-            }
+            applyLibraryMeta();
             syncYamlFromLibraryIfPresent();
             saveLibrary(function () {
-                hideModal("pd-basic-modal");
-                alertMsg("success", "Basic details updated.");
-            });
-        });
-
-        $("#pd-identity-form").on("submit", function (event) {
-            event.preventDefault();
-            setOrDelete(library, "url", $("#pd-url").val());
-            setOrDelete(library, "name", $("#pd-name").val());
-            setOrDelete(library, "version", $("#pd-version").val());
-            setOrDelete(library, "publisher", $("#pd-publisher").val());
-            setOrDelete(library, "date", $("#pd-date").val());
-            syncYamlFromLibraryIfPresent();
-            saveLibrary(function () {
-                hideModal("pd-identity-modal");
-                alertMsg("success", "Identity updated.");
-            });
-        });
-
-        $("#pd-purpose-form").on("submit", function (event) {
-            event.preventDefault();
-            setOrDelete(library, "purpose", $("#pd-purpose").val());
-            setOrDelete(library, "usage", $("#pd-usage").val());
-            setOrDelete(library, "copyright", $("#pd-copyright").val());
-            saveLibrary(function () {
-                hideModal("pd-purpose-modal");
-                alertMsg("success", "Purpose updated.");
-            });
-        });
-
-        $("#pd-dates-form").on("submit", function (event) {
-            event.preventDefault();
-            setOrDelete(library, "approvalDate", $("#pd-approval").val());
-            setOrDelete(library, "lastReviewDate", $("#pd-review").val());
-            const start = $("#pd-period-start").val();
-            const end = $("#pd-period-end").val();
-            if (start || end) {
-                library.effectivePeriod = {};
-                if (start) {
-                    library.effectivePeriod.start = start;
-                }
-                if (end) {
-                    library.effectivePeriod.end = end;
-                }
-            } else {
-                delete library.effectivePeriod;
-            }
-            saveLibrary(function () {
-                hideModal("pd-dates-modal");
-                alertMsg("success", "Review dates updated.");
+                alertMsg("success", "Library details updated.");
             });
         });
 

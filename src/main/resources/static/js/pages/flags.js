@@ -243,7 +243,8 @@ function renderFlagList() {
                     "<td>" + esc(periodLabel(flag.period)) + "</td>" +
                     "<td>" + esc(refLabel(flag.author)) + "</td>" +
                     "<td><code>" + esc(flag.id) + "</code></td>" +
-                    '<td class="text-end"><a class="btn btn-sm btn-outline-primary" href="#/flags/' +
+                    '<td class="text-end text-nowrap">' + CadminWorkspace.listBookmarkButton(flag) +
+                    '<a class="btn btn-sm btn-outline-primary" href="#/flags/' +
                         encodeURIComponent(flag.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a></td>' +
                     "</tr>";
             });

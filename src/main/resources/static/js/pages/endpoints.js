@@ -162,7 +162,8 @@ function renderEndpointList(initialQuery) {
                     "<td>" + orgHtml + "</td>" +
                     "<td>" + statusBadge(ep.status) + "</td>" +
                     "<td><code>" + CadminApi.escapeHtml(ep.id) + "</code></td>" +
-                    '<td class="text-end"><a class="btn btn-sm btn-outline-primary" href="#/endpoints/' +
+                    '<td class="text-end text-nowrap">' + CadminWorkspace.listBookmarkButton(ep) +
+                    '<a class="btn btn-sm btn-outline-primary" href="#/endpoints/' +
                         encodeURIComponent(ep.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a></td>' +
                     "</tr>";
             });

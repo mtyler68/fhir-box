@@ -167,7 +167,8 @@ function renderPractitionerRoleList(initialQuery) {
                     "<td>" + orgHtml + "</td>" +
                     "<td>" + statusBadge(item.active) + "</td>" +
                     "<td><code>" + CadminApi.escapeHtml(item.id) + "</code></td>" +
-                    '<td class="text-end"><a class="btn btn-sm btn-outline-primary" href="#/practitioner-roles/' +
+                    '<td class="text-end text-nowrap">' + CadminWorkspace.listBookmarkButton(item) +
+                    '<a class="btn btn-sm btn-outline-primary" href="#/practitioner-roles/' +
                         encodeURIComponent(item.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a></td>' +
                     "</tr>";
             });

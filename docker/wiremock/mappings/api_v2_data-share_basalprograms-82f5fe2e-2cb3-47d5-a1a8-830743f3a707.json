@@ -1,0 +1,38 @@
+{
+  "id" : "82f5fe2e-2cb3-47d5-a1a8-830743f3a707",
+  "name" : "v2_data-share_basalprograms",
+  "request" : {
+    "url" : "/api/v2/data-share/basalprograms",
+    "method" : "GET"
+  },
+  "response" : {
+    "status" : 200,
+    "jsonBody" : {
+      "basalprograms" : [ {
+        "serialNumber" : "010000-02152",
+        "recordId" : 213,
+        "name" : "Basal 1",
+        "segments" : [ {
+          "start" : 0,
+          "end" : 48,
+          "rate" : 0.05
+        } ],
+        "timestamp" : "2016-08-29T09:12:33.001Z",
+        "syncTimestamp" : "2016-08-29T09:12:33.001Z",
+        "utcOffset" : "-07:00"
+      } ],
+      "paging" : {
+        "value" : {
+          "previous" : "/api/v2/data-share/basalprograms?after=2020-02-17T00:00:00.000Z&limit=500&page=1",
+          "next" : "/api/v2/data-share/basalprograms?after=2020-02-17T00:00:00.000Z&limit=500&page=3"
+        }
+      }
+    },
+    "headers" : {
+      "Content-Type" : "application/json"
+    }
+  },
+  "uuid" : "82f5fe2e-2cb3-47d5-a1a8-830743f3a707",
+  "persistent" : true,
+  "insertionIndex" : 13
+}

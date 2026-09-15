@@ -186,7 +186,8 @@ function renderLocationList(initialQuery) {
                         ? conceptLabel(loc.form) : conceptLabel(loc.type)) + "</td>" +
                     "<td><span class=\"badge text-bg-" + kind + '">' + CadminApi.escapeHtml(loc.status || "—") + "</span></td>" +
                     "<td><code>" + CadminApi.escapeHtml(loc.id) + "</code></td>" +
-                    '<td class="text-end"><a class="btn btn-sm btn-outline-primary" href="#/locations/' +
+                    '<td class="text-end text-nowrap">' + CadminWorkspace.listBookmarkButton(loc) +
+                    '<a class="btn btn-sm btn-outline-primary" href="#/locations/' +
                         encodeURIComponent(loc.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a></td>' +
                     "</tr>";
             });

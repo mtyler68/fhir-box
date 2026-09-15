@@ -207,8 +207,59 @@ window.CadminJoltDetail = (function () {
         return CadminApi.escapeHtml(value);
     }
 
-    function field(label, control) {
-        return '<div class="mb-3"><label class="form-label">' + label + "</label>" + control + "</div>";
+    function field(label, control, hint) {
+        const idMatch = String(control).match(/\sid="([^"]+)"/);
+        const forAttr = idMatch ? ' for="' + idMatch[1] + '"' : "";
+        return '<div class="mb-3"><label class="form-label"' + forAttr + ">" + label + "</label>" + control +
+            (hint ? '<div class="form-text">' + hint + "</div>" : "") + "</div>";
+    }
+
+    function fieldRow(left, right) {
+        return '<div class="row">' +
+            '<div class="col-md-6">' + left + "</div>" +
+            '<div class="col-md-6">' + right + "</div>" +
+            "</div>";
+    }
+
+    function navButton(paneId, icon, label, opts) {
+        opts = opts || {};
+        const classes = ["list-group-item", "list-group-item-action", "text-start"];
+        if (opts.active) {
+            classes.push("active");
+        }
+        if (opts.danger) {
+            classes.push("text-danger");
+        }
+        return '<button type="button" class="' + classes.join(" ") + '" id="' + paneId + '-btn" ' +
+            'data-bs-toggle="pill" data-bs-target="#' + paneId + '" role="tab" aria-controls="' + paneId +
+            '" aria-selected="' + (opts.active ? "true" : "false") + '">' +
+            '<i class="' + icon + ' me-2" aria-hidden="true"></i>' + label +
+            "</button>";
+    }
+
+    function tabPane(id, body, active) {
+        return '<div class="tab-pane fade' + (active ? " show active" : "") + '" id="' + id +
+            '" role="tabpanel" aria-labelledby="' + id + '-btn">' + body + "</div>";
+    }
+
+    function dateInputValue(value) {
+        return String(value || "").slice(0, 10);
+    }
+
+    function typeCode() {
+        const coding = ((library && library.type && library.type.coding) || []).find(function (item) {
+            return item && item.code;
+        });
+        return (coding && coding.code) || libraryType;
+    }
+
+    function setOrDelete(obj, key, value) {
+        const trimmed = String(value == null ? "" : value).trim();
+        if (trimmed) {
+            obj[key] = trimmed;
+        } else {
+            delete obj[key];
+        }
     }
 
     function optionsHtml(items, selected) {
@@ -1303,29 +1354,40 @@ window.CadminJoltDetail = (function () {
     }
 
     function applyMeta() {
-        library.title = $page("#bjd-title-input").val().trim();
-        const name = $page("#bjd-name").val().trim();
-        const version = $page("#bjd-version").val().trim();
-        const description = $page("#bjd-description").val().trim();
+        setOrDelete(library, "title", $page("#bjd-title-input").val());
         library.status = $page("#bjd-status").val() || "draft";
         library.type = {
             coding: [{ code: libraryType, display: "Jolt" }],
             text: libraryType
         };
-        if (name) {
-            library.name = name;
+        if ($page("#bjd-experimental").is(":checked")) {
+            library.experimental = true;
         } else {
-            delete library.name;
+            delete library.experimental;
         }
-        if (version) {
-            library.version = version;
+        setOrDelete(library, "description", $page("#bjd-description").val());
+        setOrDelete(library, "purpose", $page("#bjd-purpose").val());
+        setOrDelete(library, "usage", $page("#bjd-usage").val());
+        setOrDelete(library, "copyright", $page("#bjd-copyright").val());
+        setOrDelete(library, "url", $page("#bjd-url").val());
+        setOrDelete(library, "name", $page("#bjd-name").val());
+        setOrDelete(library, "version", $page("#bjd-version").val());
+        setOrDelete(library, "publisher", $page("#bjd-publisher").val());
+        setOrDelete(library, "date", $page("#bjd-date").val());
+        setOrDelete(library, "approvalDate", $page("#bjd-approval").val());
+        setOrDelete(library, "lastReviewDate", $page("#bjd-review").val());
+        const start = ($page("#bjd-period-start").val() || "").trim();
+        const end = ($page("#bjd-period-end").val() || "").trim();
+        if (start || end) {
+            library.effectivePeriod = {};
+            if (start) {
+                library.effectivePeriod.start = start;
+            }
+            if (end) {
+                library.effectivePeriod.end = end;
+            }
         } else {
-            delete library.version;
-        }
-        if (description) {
-            library.description = description;
-        } else {
-            delete library.description;
+            delete library.effectivePeriod;
         }
     }
 
@@ -1362,7 +1424,10 @@ window.CadminJoltDetail = (function () {
         CadminApi.fhir("/Library/" + encodeURIComponent(library.id), "PUT", library).done(function (updated) {
             library = updated || library;
             captureSession();
-            renderMeta();
+            renderHeader();
+            if (withMeta) {
+                fillBasicsForm();
+            }
             CadminResourceSource.mount(function () { return library; });
             CadminResourceGraph.mount(library);
             CadminLibraryRelated.mount(library);
@@ -1475,102 +1540,195 @@ window.CadminJoltDetail = (function () {
         savedSnapshot = "";
         jsonPreviewEditor = null;
         const $root = $(CadminWorkspace.root());
+        const label = esc(library.title || library.name || "Jolt spec");
         $root.html(
-            '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
+            '<div class="d-flex align-items-center justify-content-between mb-3">' +
                 "<div>" +
                     '<a class="small text-decoration-none" href="#/jolts">' +
                         '<i class="bi bi-arrow-left me-1"></i>Jolt Specs</a>' +
                     '<div class="d-flex align-items-center flex-wrap gap-2">' +
-                        '<h1 class="h3 mb-0 page-title" id="bjd-title"></h1>' +
+                        '<h1 class="mb-0 fs-3 page-title" id="bjd-title">' + label + "</h1>" +
+                        '<span id="bjd-status-badge">' + statusBadge(library.status) + "</span>" +
+                        (library.id
+                            ? '<code class="small" id="bjd-fhir-id">' + esc(library.id) + "</code>"
+                            : '<code class="small d-none" id="bjd-fhir-id"></code>') +
                         CadminApi.unsavedFlagHtml() +
                     "</div>" +
                 "</div>" +
                 '<div class="d-flex flex-wrap gap-2">' +
-                    '<button class="btn btn-outline-danger" type="button" id="bjd-delete">' +
-                        '<i class="bi bi-trash me-1"></i>Delete</button>' +
                     CadminResourceSource.button() +
                 "</div>" +
             "</div>" +
-            '<div class="card card-success card-outline mb-4">' +
-                '<form id="bjd-spec-form">' +
-                    '<div class="card-header">' +
-                        "<div>" +
-                            '<h3 class="card-title">Jolt specification</h3>' +
-                            '<div class="small text-muted mt-1"><code>' + esc(specContentType) + "</code></div>" +
-                        "</div>" +
-                        '<div class="card-tools d-flex flex-wrap align-items-center gap-2">' +
-                            '<select class="form-select form-select-sm" id="bjd-template" style="max-width:16rem">' +
-                                '<option value="">Insert template…</option>' +
-                                templates.map(function (item) {
-                                    return '<option value="' + esc(item.id) + '">' + esc(item.label) + "</option>";
-                                }).join("") +
-                            "</select>" +
-                            '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#bjd-load-modal">' +
-                                '<i class="bi bi-upload me-1"></i>Load JSON</button>' +
-                            '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#bjd-json-modal">' +
-                                '<i class="bi bi-braces me-1"></i>View JSON</button>' +
-                            '<button class="btn btn-sm btn-primary" type="submit">Save</button>' +
-                        "</div>" +
+            '<div class="row g-3">' +
+                '<div class="col-md-3">' +
+                    '<div class="list-group list-group-flush nav nav-pills flex-column cadmin-settings-nav" id="bjd-settings-nav" role="tablist">' +
+                        navButton("bjd-pane-basics", "bi bi-info-circle", "Basics", { active: true }) +
+                        navButton("bjd-pane-identity", "bi bi-person-vcard", "Identity and version") +
+                        navButton("bjd-pane-spec", "bi bi-braces", "Specification") +
+                        navButton("bjd-pane-samples", "bi bi-collection", "Samples") +
+                        navButton("bjd-pane-related", "bi bi-link-45deg", "Related") +
+                        navButton("bjd-pane-graph", "bi bi-diagram-3", "Reference graph") +
+                        navButton("bjd-pane-history", "bi bi-clock-history", "History") +
+                        navButton("bjd-pane-danger", "bi bi-exclamation-triangle", "Danger zone", { danger: true }) +
                     "</div>" +
-                    '<div class="card-body">' +
-                        '<div class="row jolt-spec-split">' +
-                            '<div class="col-lg-4 mb-3 mb-lg-0">' +
-                                '<div class="d-flex justify-content-between align-items-center mb-2">' +
-                                    '<label class="form-label mb-0">Operations</label>' +
-                                    '<button class="btn btn-sm btn-outline-primary" type="button" id="bjd-op-add">' +
-                                        '<i class="bi bi-plus-lg me-1"></i>Add</button>' +
-                                "</div>" +
-                                '<div class="list-group jolt-op-list" id="bjd-ops"></div>' +
-                                '<div class="text-muted small d-none mt-2" id="bjd-ops-empty">No operations.</div>' +
-                                '<div class="form-text">Drag to set Chainr order. Select an operation to edit its spec.</div>' +
-                            "</div>" +
-                            '<div class="col-lg-8">' +
-                                '<div id="bjd-op-editor"></div>' +
-                            "</div>" +
-                        "</div>" +
-                    "</div>" +
-                "</form>" +
-            "</div>" +
-            '<div class="card card-info card-outline mb-4">' +
-                '<form id="bjd-samples-form">' +
-                    '<div class="card-header">' +
-                        "<div>" +
-                            '<h3 class="card-title">Samples</h3>' +
-                            '<div class="small text-muted mt-1"><code>' + esc(sampleContentType) + "</code></div>" +
-                        "</div>" +
-                        '<div class="card-tools d-flex flex-wrap align-items-center gap-2">' +
-                            '<button class="btn btn-sm btn-primary" type="submit">Save</button>' +
-                        "</div>" +
-                    "</div>" +
-                    '<div class="card-body">' +
-                        '<div class="row jolt-spec-split">' +
-                            '<div class="col-lg-4 mb-3 mb-lg-0">' +
-                                '<div class="d-flex justify-content-between align-items-center mb-2">' +
-                                    '<label class="form-label mb-0">Samples</label>' +
-                                    '<button class="btn btn-sm btn-outline-primary" type="button" id="bjd-sample-add">' +
-                                        '<i class="bi bi-plus-lg me-1"></i>Add</button>' +
-                                "</div>" +
-                                '<div class="list-group jolt-sample-list" id="bjd-sample-list"></div>' +
-                                '<div class="text-muted small d-none mt-2" id="bjd-samples-empty">No samples.</div>' +
-                                '<div class="form-text">Drag to set sample order. Select a sample to edit its input and expected output.</div>' +
-                            "</div>" +
-                            '<div class="col-lg-8">' +
-                                '<div id="bjd-sample-editor"></div>' +
-                            "</div>" +
-                        "</div>" +
-                    "</div>" +
-                "</form>" +
-            "</div>" +
-            '<div class="card shadow mb-4">' +
-                '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                    '<h6 class="m-0">Identity</h6>' +
-                    '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#bjd-meta-modal">Edit</button>' +
                 "</div>" +
-                '<div class="card-body" id="bjd-meta"></div>' +
+                '<div class="col-md-9">' +
+                    '<div class="tab-content">' +
+                        tabPane("bjd-pane-basics",
+                            '<form id="bjd-basic-form">' +
+                                '<div class="card">' +
+                                    '<div class="card-header"><h3 class="card-title">Basic details</h3></div>' +
+                                    '<div class="card-body">' +
+                                        field("Title", '<input class="form-control" id="bjd-title-input">') +
+                                        fieldRow(
+                                            field("Status", '<select class="form-select" id="bjd-status">' +
+                                                optionsHtml(statusOptions, library.status || "draft") + "</select>"),
+                                            field("Type",
+                                                '<input class="form-control font-monospace" id="bjd-type" value="' +
+                                                    esc(typeCode()) + '" readonly disabled>')) +
+                                        '<div class="form-check mb-3">' +
+                                            '<input class="form-check-input" type="checkbox" id="bjd-experimental">' +
+                                            '<label class="form-check-label" for="bjd-experimental">Experimental</label>' +
+                                        "</div>" +
+                                        field("Description", '<textarea class="form-control" id="bjd-description" rows="4"></textarea>') +
+                                        field("Purpose", '<textarea class="form-control" id="bjd-purpose" rows="3"></textarea>') +
+                                        field("Usage", '<textarea class="form-control" id="bjd-usage" rows="3"></textarea>') +
+                                        field("Copyright", '<textarea class="form-control" id="bjd-copyright" rows="2"></textarea>') +
+                                        '<button type="submit" class="btn btn-primary">Save changes</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</form>",
+                            true) +
+                        tabPane("bjd-pane-identity",
+                            '<form id="bjd-identity-form">' +
+                                '<div class="card">' +
+                                    '<div class="card-header"><h3 class="card-title">Identity and version</h3></div>' +
+                                    '<div class="card-body">' +
+                                        field("URL", '<input class="form-control font-monospace" id="bjd-url">') +
+                                        fieldRow(
+                                            field("Name", '<input class="form-control font-monospace" id="bjd-name">'),
+                                            field("Version", '<input class="form-control" id="bjd-version" autocomplete="off">')) +
+                                        fieldRow(
+                                            field("Publisher", '<input class="form-control" id="bjd-publisher">'),
+                                            field("Date", '<input type="date" class="form-control" id="bjd-date">')) +
+                                        fieldRow(
+                                            field("Approved date", '<input type="date" class="form-control" id="bjd-approval">'),
+                                            field("Last review date", '<input type="date" class="form-control" id="bjd-review">')) +
+                                        '<div class="mb-3">' +
+                                            '<label class="form-label">Effective date range</label>' +
+                                            '<div class="row g-2">' +
+                                                '<div class="col">' +
+                                                    '<input type="date" class="form-control" id="bjd-period-start" ' +
+                                                        'aria-label="Effective start">' +
+                                                "</div>" +
+                                                '<div class="col">' +
+                                                    '<input type="date" class="form-control" id="bjd-period-end" ' +
+                                                        'aria-label="Effective end">' +
+                                                "</div>" +
+                                            "</div>" +
+                                        "</div>" +
+                                        '<button type="submit" class="btn btn-primary">Save changes</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</form>") +
+                        tabPane("bjd-pane-spec",
+                            '<form id="bjd-spec-form">' +
+                                '<div class="card">' +
+                                    '<div class="card-header flex-wrap gap-2">' +
+                                        "<div>" +
+                                            '<h3 class="card-title mb-0">Jolt specification</h3>' +
+                                            '<div class="small text-muted"><code>' + esc(specContentType) + "</code></div>" +
+                                        "</div>" +
+                                        '<div class="card-tools d-flex flex-nowrap align-items-center gap-2 flex-wrap">' +
+                                            '<select class="form-select form-select-sm" id="bjd-template" style="max-width:16rem">' +
+                                                '<option value="">Insert template…</option>' +
+                                                templates.map(function (item) {
+                                                    return '<option value="' + esc(item.id) + '">' +
+                                                        esc(item.label) + "</option>";
+                                                }).join("") +
+                                            "</select>" +
+                                            '<button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#bjd-load-modal">' +
+                                                '<i class="bi bi-upload me-1"></i>Load JSON</button>' +
+                                            '<button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#bjd-json-modal">' +
+                                                '<i class="bi bi-braces me-1"></i>View JSON</button>' +
+                                            '<button class="btn btn-sm btn-primary" type="submit">' +
+                                                '<i class="bi bi-check2 me-1"></i>Save</button>' +
+                                        "</div>" +
+                                    "</div>" +
+                                    '<div class="card-body">' +
+                                        '<div class="row jolt-spec-split">' +
+                                            '<div class="col-lg-4 mb-3 mb-lg-0">' +
+                                                '<div class="d-flex justify-content-between align-items-center mb-2">' +
+                                                    '<label class="form-label mb-0">Operations</label>' +
+                                                    '<button class="btn btn-sm btn-outline-primary" type="button" id="bjd-op-add">' +
+                                                        '<i class="bi bi-plus-lg me-1"></i>Add</button>' +
+                                                "</div>" +
+                                                '<div class="list-group jolt-op-list" id="bjd-ops"></div>' +
+                                                '<div class="text-muted small d-none mt-2" id="bjd-ops-empty">No operations.</div>' +
+                                                '<div class="form-text">Drag to set Chainr order. Select an operation to edit its spec.</div>' +
+                                            "</div>" +
+                                            '<div class="col-lg-8">' +
+                                                '<div id="bjd-op-editor"></div>' +
+                                            "</div>" +
+                                        "</div>" +
+                                    "</div>" +
+                                "</div>" +
+                            "</form>") +
+                        tabPane("bjd-pane-samples",
+                            '<form id="bjd-samples-form">' +
+                                '<div class="card">' +
+                                    '<div class="card-header flex-wrap gap-2">' +
+                                        "<div>" +
+                                            '<h3 class="card-title mb-0">Samples</h3>' +
+                                            '<div class="small text-muted"><code>' + esc(sampleContentType) + "</code></div>" +
+                                        "</div>" +
+                                        '<div class="card-tools">' +
+                                            '<button class="btn btn-sm btn-primary" type="submit">' +
+                                                '<i class="bi bi-check2 me-1"></i>Save</button>' +
+                                        "</div>" +
+                                    "</div>" +
+                                    '<div class="card-body">' +
+                                        '<div class="row jolt-spec-split">' +
+                                            '<div class="col-lg-4 mb-3 mb-lg-0">' +
+                                                '<div class="d-flex justify-content-between align-items-center mb-2">' +
+                                                    '<label class="form-label mb-0">Samples</label>' +
+                                                    '<button class="btn btn-sm btn-outline-primary" type="button" id="bjd-sample-add">' +
+                                                        '<i class="bi bi-plus-lg me-1"></i>Add</button>' +
+                                                "</div>" +
+                                                '<div class="list-group jolt-sample-list" id="bjd-sample-list"></div>' +
+                                                '<div class="text-muted small d-none mt-2" id="bjd-samples-empty">No samples.</div>' +
+                                                '<div class="form-text">Drag to set sample order. Select a sample to edit its input and expected output.</div>' +
+                                            "</div>" +
+                                            '<div class="col-lg-8">' +
+                                                '<div id="bjd-sample-editor"></div>' +
+                                            "</div>" +
+                                        "</div>" +
+                                    "</div>" +
+                                "</div>" +
+                            "</form>") +
+                        tabPane("bjd-pane-related", CadminLibraryRelated.cards()) +
+                        tabPane("bjd-pane-graph", CadminResourceGraph.card()) +
+                        tabPane("bjd-pane-history", CadminResourceHistory.card()) +
+                        tabPane("bjd-pane-danger",
+                            '<div class="card border-danger">' +
+                                '<div class="card-header bg-danger-subtle">' +
+                                    '<h3 class="card-title text-danger">Danger zone</h3>' +
+                                "</div>" +
+                                '<div class="card-body">' +
+                                    '<div class="d-flex justify-content-between align-items-start">' +
+                                        "<div>" +
+                                            '<p class="mb-0 fw-semibold text-danger">Delete this Jolt spec</p>' +
+                                            '<small class="text-secondary">' +
+                                                "This permanently deletes the Library that stores the specification and samples." +
+                                            "</small>" +
+                                        "</div>" +
+                                        '<button class="btn btn-danger" type="button" id="bjd-delete">Delete</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</div>") +
+                    "</div>" +
+                "</div>" +
             "</div>" +
-            CadminLibraryRelated.cards() +
-            CadminResourceHistory.card() +
-            CadminResourceGraph.card() +
             viewModal("bjd-json-modal", "Generated JSON",
                 '<div class="yaml-preview-host">' +
                     '<textarea id="bjd-json-preview" class="form-control font-monospace" readonly></textarea>' +
@@ -1597,33 +1755,14 @@ window.CadminJoltDetail = (function () {
                         "</div>" +
                     "</form>" +
                 "</div>" +
-            "</div>" +
-            '<div class="modal fade" id="bjd-meta-modal" tabindex="-1">' +
-                '<div class="modal-dialog">' +
-                    '<form class="modal-content" id="bjd-meta-form">' +
-                        '<div class="modal-header"><h5 class="modal-title">Edit identity</h5>' +
-                            '<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>' +
-                        '<div class="modal-body">' +
-                            field("Title", '<input class="form-control" id="bjd-title-input">') +
-                            field("Name", '<input class="form-control font-monospace" id="bjd-name">') +
-                            field("Status", '<select class="form-select" id="bjd-status">' +
-                                optionsHtml(statusOptions, "") + "</select>") +
-                            field("Version", '<input class="form-control" id="bjd-version">') +
-                            field("Description", '<textarea class="form-control" id="bjd-description" rows="3"></textarea>') +
-                        "</div>" +
-                        '<div class="modal-footer">' +
-                            '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>' +
-                            '<button type="submit" class="btn btn-primary">Save</button>' +
-                        "</div>" +
-                    "</form>" +
-                "</div>" +
             "</div>"
         );
         CadminResourceSource.mount(function () { return library; });
         CadminResourceGraph.mount(library);
         CadminResourceHistory.mount(library);
         CadminLibraryRelated.mount(library);
-        renderMeta();
+        renderHeader();
+        fillBasicsForm();
         const stored = readJson();
         const steps = stepsFromText(stored);
         if (stored && !steps) {
@@ -1646,27 +1785,35 @@ window.CadminJoltDetail = (function () {
         syncUnsavedFlag();
     }
 
-    function renderMeta() {
+    function renderHeader() {
         $page("#bjd-title").text(library.title || library.name || "Jolt spec");
-        $page("#bjd-meta").html(
-            '<dl class="row mb-0">' +
-                '<dt class="col-sm-3">Title</dt><dd class="col-sm-9">' + esc(library.title || "—") + "</dd>" +
-                '<dt class="col-sm-3">Status</dt><dd class="col-sm-9">' + statusBadge(library.status) + "</dd>" +
-                '<dt class="col-sm-3">Type</dt><dd class="col-sm-9"><code>' + esc(libraryType) + "</code></dd>" +
-                '<dt class="col-sm-3">Name</dt><dd class="col-sm-9"><code>' + esc(library.name || "—") + "</code></dd>" +
-                '<dt class="col-sm-3">Version</dt><dd class="col-sm-9"><code>' + esc(library.version || "—") + "</code></dd>" +
-                '<dt class="col-sm-3">Description</dt><dd class="col-sm-9">' + esc(library.description || "—") + "</dd>" +
-                '<dt class="col-sm-3">ID</dt><dd class="col-sm-9"><code>' + esc(library.id) + "</code></dd>" +
-            "</dl>"
-        );
+        $page("#bjd-status-badge").html(statusBadge(library.status));
+        if (library.id) {
+            $page("#bjd-fhir-id").text(library.id).removeClass("d-none");
+        } else {
+            $page("#bjd-fhir-id").text("").addClass("d-none");
+        }
     }
 
-    function populateMetaForm() {
+    function fillBasicsForm() {
+        const period = library.effectivePeriod || {};
         $page("#bjd-title-input").val(library.title || "");
         $page("#bjd-name").val(library.name || "");
         $page("#bjd-status").val(library.status || "draft");
+        $page("#bjd-type").val(typeCode());
+        $page("#bjd-experimental").prop("checked", !!library.experimental);
         $page("#bjd-version").val(library.version || "");
         $page("#bjd-description").val(library.description || "");
+        $page("#bjd-purpose").val(library.purpose || "");
+        $page("#bjd-usage").val(library.usage || "");
+        $page("#bjd-copyright").val(library.copyright || "");
+        $page("#bjd-url").val(library.url || "");
+        $page("#bjd-publisher").val(library.publisher || "");
+        $page("#bjd-date").val(dateInputValue(library.date));
+        $page("#bjd-approval").val(dateInputValue(library.approvalDate));
+        $page("#bjd-review").val(dateInputValue(library.lastReviewDate));
+        $page("#bjd-period-start").val(dateInputValue(period.start));
+        $page("#bjd-period-end").val(dateInputValue(period.end));
         CadminApi.fillValueSetSelect($page("#bjd-status"), CadminApi.valueSets.publicationStatus, {
             fallback: statusOptions,
             selected: library.status || "draft"
@@ -1695,6 +1842,12 @@ window.CadminJoltDetail = (function () {
     function bind() {
         const $root = $(CadminWorkspace.root());
         $root.off(".bjdetail");
+        $root.on("shown.bs.tab.bjdetail", "#bjd-pane-spec-btn, #bjd-pane-samples-btn", refreshSpecEditors);
+        $root.on("shown.bs.tab.bjdetail", "#bjd-pane-graph-btn", function () {
+            if (typeof CadminResourceGraph.resize === "function") {
+                CadminResourceGraph.resize();
+            }
+        });
         $root.on("click.bjdetail", "#bjd-delete", function () {
             CadminApi.confirm("Delete this Jolt spec?").done(function () {
                 CadminApi.fhir("/Library/" + encodeURIComponent(library.id), "DELETE").done(function () {
@@ -1778,7 +1931,9 @@ window.CadminJoltDetail = (function () {
         $root.on("dragend.bjdetail", "#bjd-ops .jolt-op-item", function () {
             clearOpDrag();
         });
-        $root.on("input.bjdetail change.bjdetail", "#bjd-spec-form :input, #bjd-samples-form :input", syncUnsavedFlag);
+        $root.on("input.bjdetail change.bjdetail",
+            "#bjd-spec-form :input, #bjd-samples-form :input, #bjd-basic-form :input, #bjd-identity-form :input",
+            syncUnsavedFlag);
         $root.on("input.bjdetail", "#bjd-sample-title", function () {
             if (selectedSample >= 0 && samples[selectedSample]) {
                 samples[selectedSample].title = ($(this).val() || "").trim();
@@ -1865,7 +2020,12 @@ window.CadminJoltDetail = (function () {
                 CadminApi.showToast("success", "Jolt samples saved.");
             }, false, "samples");
         });
-        $root.on("show.bs.modal.bjdetail", "#bjd-meta-modal", populateMetaForm);
+        $root.on("submit.bjdetail", "#bjd-basic-form, #bjd-identity-form", function (event) {
+            event.preventDefault();
+            saveLibrary(function () {
+                CadminApi.showToast("success", "Identity updated.");
+            }, true);
+        });
         $root.on("shown.bs.modal.bjdetail", "#bjd-json-modal", showGeneratedJson);
         $root.on("hidden.bs.modal.bjdetail", "#bjd-json-modal", teardownJsonPreview);
         $root.on("shown.bs.modal.bjdetail", "#bjd-load-modal", showLoadJson);
@@ -1886,17 +2046,6 @@ window.CadminJoltDetail = (function () {
                 modal.hide();
             }
             CadminApi.showToast("success", "JSON spec loaded into the editor.");
-        });
-        $root.on("submit.bjdetail", "#bjd-meta-form", function (event) {
-            event.preventDefault();
-            saveLibrary(function () {
-                const el = pageEl("bjd-meta-modal");
-                const modal = el && bootstrap.Modal.getInstance(el);
-                if (modal) {
-                    modal.hide();
-                }
-                CadminApi.showToast("success", "Identity updated.");
-            }, true);
         });
     }
 

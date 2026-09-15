@@ -103,6 +103,34 @@ window.CadminQuestionnaireDetail = (function () {
         return '<div class="mb-3"><label class="form-label">' + label + "</label>" + control + "</div>";
     }
 
+    function fieldRow(left, right) {
+        return '<div class="row">' +
+            '<div class="col-md-6">' + left + "</div>" +
+            '<div class="col-md-6">' + right + "</div>" +
+            "</div>";
+    }
+
+    function navButton(paneId, icon, label, opts) {
+        opts = opts || {};
+        const classes = ["list-group-item", "list-group-item-action", "text-start"];
+        if (opts.active) {
+            classes.push("active");
+        }
+        if (opts.danger) {
+            classes.push("text-danger");
+        }
+        return '<button type="button" class="' + classes.join(" ") + '" id="' + paneId + '-btn" ' +
+            'data-bs-toggle="pill" data-bs-target="#' + paneId + '" role="tab" aria-controls="' + paneId +
+            '" aria-selected="' + (opts.active ? "true" : "false") + '">' +
+            '<i class="' + icon + ' me-2" aria-hidden="true"></i>' + label +
+            "</button>";
+    }
+
+    function tabPane(id, body, active) {
+        return '<div class="tab-pane fade' + (active ? " show active" : "") + '" id="' + id +
+            '" role="tabpanel" aria-labelledby="' + id + '-btn">' + body + "</div>";
+    }
+
     function parsePath(path) {
         return String(path || "").split(".").filter(function (part) {
             return part !== "";
@@ -402,7 +430,7 @@ window.CadminQuestionnaireDetail = (function () {
         CadminApi.fhir("/Questionnaire/" + encodeURIComponent(questionnaire.id), "PUT", questionnaire)
             .done(function (updated) {
                 questionnaire = updated || questionnaire;
-                renderMeta();
+                renderHeader();
                 renderTree();
                 renderInspector();
                 renderPreview();
@@ -422,127 +450,149 @@ window.CadminQuestionnaireDetail = (function () {
         selectedPath = questionnaire.item.length ? "0" : "";
         previewAnswers = {};
         const $root = $(CadminWorkspace.root());
+        const label = esc(questionnaire.title || questionnaire.name || "Questionnaire");
         $root.html(
-            '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
+            '<div class="d-flex align-items-center justify-content-between mb-3">' +
                 "<div>" +
                     '<a class="small text-decoration-none" href="#/questionnaires">' +
                         '<i class="bi bi-arrow-left me-1"></i>Questionnaires</a>' +
-                    '<h1 class="h3 mb-0 page-title" id="qd-title"></h1>' +
+                    '<div class="d-flex align-items-center flex-wrap gap-2">' +
+                        '<h1 class="mb-0 fs-3 page-title" id="qd-title">' + label + "</h1>" +
+                        '<span id="qd-status-badge">' + statusBadge(questionnaire.status) + "</span>" +
+                        (questionnaire.id
+                            ? '<code class="small" id="qd-fhir-id">' + esc(questionnaire.id) + "</code>"
+                            : '<code class="small d-none" id="qd-fhir-id"></code>') +
+                        CadminApi.unsavedFlagHtml() +
+                    "</div>" +
                 "</div>" +
                 '<div class="d-flex flex-wrap gap-2">' +
-                    '<button class="btn btn-primary" type="button" id="qd-save">' +
-                        '<i class="bi bi-check2 me-1"></i>Save</button>' +
-                    '<button class="btn btn-outline-danger" type="button" id="qd-delete">' +
-                        '<i class="bi bi-trash me-1"></i>Delete</button>' +
                     CadminResourceSource.button() +
                 "</div>" +
             "</div>" +
-            '<div class="card shadow mb-4">' +
-                '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                    '<h6 class="m-0">Metadata</h6>' +
-                    '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#qd-meta-modal">Edit</button>' +
-                "</div>" +
-                '<div class="card-body" id="qd-meta"></div>' +
-            "</div>" +
-            '<div class="card shadow mb-4">' +
-                '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                    '<h6 class="m-0">Items</h6>' +
-                    '<div class="d-flex gap-2">' +
-                        '<button class="btn btn-sm btn-outline-primary" type="button" id="qd-add-group">' +
-                            '<i class="bi bi-folder-plus me-1"></i>Add group</button>' +
-                        '<button class="btn btn-sm btn-primary" type="button" id="qd-add-question">' +
-                            '<i class="bi bi-plus-lg me-1"></i>Add question</button>' +
+            '<div class="row g-3">' +
+                '<div class="col-md-3">' +
+                    '<div class="list-group list-group-flush nav nav-pills flex-column cadmin-settings-nav" id="qd-settings-nav" role="tablist">' +
+                        navButton("qd-pane-basics", "bi bi-info-circle", "Basics", { active: true }) +
+                        navButton("qd-pane-items", "bi bi-list-nested", "Items") +
+                        navButton("qd-pane-preview", "bi bi-eye", "Preview") +
+                        navButton("qd-pane-graph", "bi bi-diagram-3", "Reference graph") +
+                        navButton("qd-pane-history", "bi bi-clock-history", "History") +
+                        navButton("qd-pane-danger", "bi bi-exclamation-triangle", "Danger zone", { danger: true }) +
                     "</div>" +
                 "</div>" +
-                '<div class="q-editor">' +
-                    '<div class="q-tree" id="qd-tree"></div>' +
-                    '<div class="q-inspector" id="qd-inspector"></div>' +
-                "</div>" +
-            "</div>" +
-            '<div class="card shadow mb-4">' +
-                '<div class="card-header py-3"><h6 class="m-0">Preview</h6></div>' +
-                '<div class="card-body" id="qd-preview"></div>' +
-                '<div class="card-footer">' +
-                    '<button class="btn btn-outline-primary" type="button" id="qd-view-response">' +
-                        '<i class="bi bi-code-slash me-1"></i>View Response</button>' +
-                "</div>" +
-            "</div>" +
-            CadminResourceHistory.card() +
-            CadminResourceGraph.card() +
-            '<div class="modal fade" id="qd-meta-modal" tabindex="-1">' +
-                '<div class="modal-dialog modal-lg">' +
-                    '<form class="modal-content" id="qd-meta-form">' +
-                        '<div class="modal-header"><h5 class="modal-title">Edit metadata</h5>' +
-                            '<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>' +
-                        '<div class="modal-body">' +
-                            field("Title", '<input class="form-control" id="qd-title-input" required>') +
-                            field("Name", '<input class="form-control font-monospace" id="qd-name">') +
-                            field("URL", '<input class="form-control font-monospace" id="qd-url">') +
-                            '<div class="row"><div class="col-md-6">' +
-                                field("Version", '<input class="form-control" id="qd-version">') +
-                            "</div><div class=\"col-md-6\">" +
-                                field("Status", '<select class="form-select" id="qd-status">' +
-                                    optionsHtml(statusOptions) + "</select>") +
-                            "</div></div>" +
-                            field("Publisher", '<input class="form-control" id="qd-publisher">') +
-                            field("Description", '<textarea class="form-control" id="qd-description" rows="2"></textarea>') +
-                            field("Purpose", '<textarea class="form-control" id="qd-purpose" rows="2"></textarea>') +
-                            '<div class="mb-3"><label class="form-label">Subject type</label>' +
-                                '<div id="qd-subject-types">' +
-                                    subjectTypes.map(function (item) {
-                                        return '<div class="form-check form-check-inline">' +
-                                            '<input class="form-check-input" type="checkbox" id="qd-st-' +
-                                            item.code + '" value="' + item.code + '">' +
-                                            '<label class="form-check-label" for="qd-st-' + item.code + '">' +
-                                            esc(item.display) + "</label></div>";
-                                    }).join("") +
-                                "</div></div>" +
-                            '<div class="row"><div class="col-md-6 mb-0"><label class="form-label">Period start</label>' +
-                                '<input class="form-control" id="qd-period-start" type="date"></div>' +
-                                '<div class="col-md-6 mb-0"><label class="form-label">Period end</label>' +
-                                '<input class="form-control" id="qd-period-end" type="date"></div></div>' +
-                        "</div>" +
-                        '<div class="modal-footer">' +
-                            '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>' +
-                            '<button type="submit" class="btn btn-primary">Save</button>' +
-                        "</div>" +
-                    "</form>" +
+                '<div class="col-md-9">' +
+                    '<div class="tab-content">' +
+                        tabPane("qd-pane-basics",
+                            '<form id="qd-meta-form">' +
+                                '<div class="card">' +
+                                    '<div class="card-header"><h3 class="card-title">Basics</h3></div>' +
+                                    '<div class="card-body">' +
+                                        field("Title", '<input class="form-control" id="qd-title-input" required>') +
+                                        fieldRow(
+                                            field("Name", '<input class="form-control font-monospace" id="qd-name">'),
+                                            field("Status", '<select class="form-select" id="qd-status">' +
+                                                optionsHtml(statusOptions) + "</select>")) +
+                                        field("URL", '<input class="form-control font-monospace" id="qd-url">') +
+                                        fieldRow(
+                                            field("Version", '<input class="form-control" id="qd-version">'),
+                                            field("Publisher", '<input class="form-control" id="qd-publisher">')) +
+                                        field("Description", '<textarea class="form-control" id="qd-description" rows="2"></textarea>') +
+                                        field("Purpose", '<textarea class="form-control" id="qd-purpose" rows="2"></textarea>') +
+                                        '<div class="mb-3"><label class="form-label">Subject type</label>' +
+                                            '<div id="qd-subject-types">' +
+                                                subjectTypes.map(function (item) {
+                                                    return '<div class="form-check form-check-inline">' +
+                                                        '<input class="form-check-input" type="checkbox" id="qd-st-' +
+                                                        item.code + '" value="' + item.code + '">' +
+                                                        '<label class="form-check-label" for="qd-st-' + item.code + '">' +
+                                                        esc(item.display) + "</label></div>";
+                                                }).join("") +
+                                            "</div></div>" +
+                                        '<div class="mb-3">' +
+                                            '<label class="form-label">Effective date range</label>' +
+                                            '<div class="row g-2">' +
+                                                '<div class="col">' +
+                                                    '<input class="form-control" id="qd-period-start" type="date" aria-label="Period start">' +
+                                                "</div>" +
+                                                '<div class="col">' +
+                                                    '<input class="form-control" id="qd-period-end" type="date" aria-label="Period end">' +
+                                                "</div>" +
+                                            "</div>" +
+                                        "</div>" +
+                                        '<button type="submit" class="btn btn-primary">Save changes</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</form>",
+                            true) +
+                        tabPane("qd-pane-items",
+                            '<div class="card">' +
+                                '<div class="card-header flex-wrap gap-2">' +
+                                    '<h3 class="card-title mb-0">Items</h3>' +
+                                    '<div class="card-tools d-flex flex-wrap gap-2">' +
+                                        '<button class="btn btn-sm btn-outline-primary" type="button" id="qd-add-group">' +
+                                            '<i class="bi bi-folder-plus me-1"></i>Add group</button>' +
+                                        '<button class="btn btn-sm btn-outline-primary" type="button" id="qd-add-question">' +
+                                            '<i class="bi bi-plus-lg me-1"></i>Add question</button>' +
+                                        '<button class="btn btn-sm btn-primary" type="button" id="qd-save">' +
+                                            '<i class="bi bi-check2 me-1"></i>Save</button>' +
+                                    "</div>" +
+                                "</div>" +
+                                '<div class="q-editor">' +
+                                    '<div class="q-tree" id="qd-tree"></div>' +
+                                    '<div class="q-inspector" id="qd-inspector"></div>' +
+                                "</div>" +
+                            "</div>") +
+                        tabPane("qd-pane-preview",
+                            '<div class="card">' +
+                                '<div class="card-header flex-wrap gap-2">' +
+                                    '<h3 class="card-title mb-0">Preview</h3>' +
+                                    '<div class="card-tools">' +
+                                        '<button class="btn btn-sm btn-outline-primary" type="button" id="qd-view-response">' +
+                                            '<i class="bi bi-code-slash me-1"></i>View Response</button>' +
+                                    "</div>" +
+                                "</div>" +
+                                '<div class="card-body" id="qd-preview"></div>' +
+                            "</div>") +
+                        tabPane("qd-pane-graph", CadminResourceGraph.card()) +
+                        tabPane("qd-pane-history", CadminResourceHistory.card()) +
+                        tabPane("qd-pane-danger",
+                            '<div class="card border-danger">' +
+                                '<div class="card-header bg-danger-subtle">' +
+                                    '<h3 class="card-title text-danger">Danger zone</h3>' +
+                                "</div>" +
+                                '<div class="card-body">' +
+                                    '<div class="d-flex justify-content-between align-items-start">' +
+                                        "<div>" +
+                                            '<p class="mb-0 fw-semibold text-danger">Delete this questionnaire</p>' +
+                                            '<small class="text-secondary">This permanently deletes the Questionnaire resource.</small>' +
+                                        "</div>" +
+                                        '<button class="btn btn-danger" type="button" id="qd-delete">Delete</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</div>") +
+                    "</div>" +
                 "</div>" +
             "</div>"
         );
         CadminResourceSource.mount(function () { return questionnaire; });
         CadminResourceGraph.mount(questionnaire);
         CadminResourceHistory.mount(questionnaire);
-        renderMeta();
+        renderHeader();
+        populateMetaForm();
         renderTree();
         renderInspector();
         renderPreview();
         bind();
-        $("#qd-meta-modal").on("show.bs.modal", populateMetaForm);
     }
 
-    function renderMeta() {
+    function renderHeader() {
         $("#qd-title").text(questionnaire.title || questionnaire.name || "Questionnaire");
-        const subjects = (questionnaire.subjectType || []).join(", ") || "—";
-        const period = questionnaire.effectivePeriod;
-        const periodText = period && (period.start || period.end)
-            ? [period.start || "…", period.end || "…"].join(" – ")
-            : "—";
-        $("#qd-meta").html(
-            '<dl class="row mb-0">' +
-                '<dt class="col-sm-3">Title</dt><dd class="col-sm-9">' + esc(questionnaire.title || "—") + "</dd>" +
-                '<dt class="col-sm-3">Status</dt><dd class="col-sm-9">' + statusBadge(questionnaire.status) + "</dd>" +
-                '<dt class="col-sm-3">Name</dt><dd class="col-sm-9"><code>' + esc(questionnaire.name || "—") + "</code></dd>" +
-                '<dt class="col-sm-3">URL</dt><dd class="col-sm-9"><code>' + esc(questionnaire.url || "—") + "</code></dd>" +
-                '<dt class="col-sm-3">Version</dt><dd class="col-sm-9"><code>' + esc(questionnaire.version || "—") + "</code></dd>" +
-                '<dt class="col-sm-3">Subject type</dt><dd class="col-sm-9">' + esc(subjects) + "</dd>" +
-                '<dt class="col-sm-3">Publisher</dt><dd class="col-sm-9">' + esc(questionnaire.publisher || "—") + "</dd>" +
-                '<dt class="col-sm-3">Description</dt><dd class="col-sm-9">' + esc(questionnaire.description || "—") + "</dd>" +
-                '<dt class="col-sm-3">Purpose</dt><dd class="col-sm-9">' + esc(questionnaire.purpose || "—") + "</dd>" +
-                '<dt class="col-sm-3">Period</dt><dd class="col-sm-9">' + esc(periodText) + "</dd>" +
-                '<dt class="col-sm-3">ID</dt><dd class="col-sm-9"><code>' + esc(questionnaire.id) + "</code></dd>" +
-            "</dl>"
-        );
+        $("#qd-status-badge").html(statusBadge(questionnaire.status));
+        if (questionnaire.id) {
+            $("#qd-fhir-id").text(questionnaire.id).removeClass("d-none");
+        } else {
+            $("#qd-fhir-id").text("").addClass("d-none");
+        }
     }
 
     function populateMetaForm() {
@@ -1495,6 +1545,12 @@ window.CadminQuestionnaireDetail = (function () {
     function bind() {
         const $root = $(CadminWorkspace.root());
         $root.off(".qdetail");
+        $root.on("shown.bs.tab.qdetail", "#qd-pane-graph-btn", function () {
+            if (typeof CadminResourceGraph.resize === "function") {
+                CadminResourceGraph.resize();
+            }
+        });
+        $root.on("shown.bs.tab.qdetail", "#qd-pane-preview-btn", renderPreview);
 
         $root.on("dragstart.qdetail", "#qd-tree .q-tree-row", function (event) {
             if ($(event.target).closest("button, a").length) {
@@ -1759,7 +1815,6 @@ window.CadminQuestionnaireDetail = (function () {
                 delete questionnaire.effectivePeriod;
             }
             saveQuestionnaire(function () {
-                hideModal("qd-meta-modal");
                 alertMsg("success", "Metadata updated.");
             });
         });

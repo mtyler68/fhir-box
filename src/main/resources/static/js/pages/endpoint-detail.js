@@ -125,12 +125,13 @@ window.CadminEndpointDetail = (function () {
     }
 
     function card(title, tableId, cols, addTarget, addLabel) {
-        return '<div class="card shadow mb-4">' +
-            '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                "<h6 class=\"m-0\">" + title + "</h6>" +
+        return '<div class="card mb-3">' +
+            '<div class="card-header">' +
+                '<h3 class="card-title">' + title + "</h3>" +
                 (addTarget
-                    ? '<button class="btn btn-sm btn-primary" type="button" data-bs-toggle="modal" data-bs-target="' +
-                        addTarget + '"><i class="bi bi-plus-lg me-1"></i>' + addLabel + "</button>"
+                    ? '<div class="card-tools">' +
+                        '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="' +
+                        addTarget + '"><i class="bi bi-plus-lg me-1"></i>' + addLabel + "</button></div>"
                     : "") +
             "</div>" +
             '<div class="card-body">' +
@@ -164,6 +165,34 @@ window.CadminEndpointDetail = (function () {
         return '<div class="mb-3"><label class="form-label">' + label + "</label>" + control + "</div>";
     }
 
+    function fieldRow(left, right) {
+        return '<div class="row">' +
+            '<div class="col-md-6">' + left + "</div>" +
+            '<div class="col-md-6">' + right + "</div>" +
+            "</div>";
+    }
+
+    function navButton(paneId, icon, label, opts) {
+        opts = opts || {};
+        const classes = ["list-group-item", "list-group-item-action", "text-start"];
+        if (opts.active) {
+            classes.push("active");
+        }
+        if (opts.danger) {
+            classes.push("text-danger");
+        }
+        return '<button type="button" class="' + classes.join(" ") + '" id="' + paneId + '-btn" ' +
+            'data-bs-toggle="pill" data-bs-target="#' + paneId + '" role="tab" aria-controls="' + paneId +
+            '" aria-selected="' + (opts.active ? "true" : "false") + '">' +
+            '<i class="' + icon + ' me-2" aria-hidden="true"></i>' + label +
+            "</button>";
+    }
+
+    function tabPane(id, body, active) {
+        return '<div class="tab-pane fade' + (active ? " show active" : "") + '" id="' + id +
+            '" role="tabpanel" aria-labelledby="' + id + '-btn">' + body + "</div>";
+    }
+
     function dropRef(list, id) {
         return (list || []).filter(function (ref) {
             return refId(ref) !== id;
@@ -173,7 +202,7 @@ window.CadminEndpointDetail = (function () {
     function saveEndpoint(next) {
         CadminApi.fhir("/Endpoint/" + encodeURIComponent(endpoint.id), "PUT", endpoint).done(function (updated) {
             endpoint = updated || endpoint;
-            renderBasics();
+            renderHeader();
             renderPayload();
             renderHeaders();
             renderContacts();
@@ -188,53 +217,97 @@ window.CadminEndpointDetail = (function () {
     function render(resource) {
         endpoint = resource;
         const $root = $(CadminWorkspace.root());
+        const label = esc(endpoint.name || endpoint.address || "Endpoint");
         $root.html(
-            '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
+            '<div class="d-flex align-items-center justify-content-between mb-3">' +
                 "<div>" +
                     '<a class="small text-decoration-none" href="#/endpoints">' +
                         '<i class="bi bi-arrow-left me-1"></i>Endpoints</a>' +
-                    '<h1 class="h3 mb-0 page-title" id="ed-title"></h1>' +
+                    '<div class="d-flex align-items-center flex-wrap gap-2">' +
+                        '<h1 class="mb-0 fs-3 page-title" id="ed-title">' + label + "</h1>" +
+                        '<span id="ed-status-badge">' + statusBadge(endpoint.status) + "</span>" +
+                        (endpoint.id
+                            ? '<code class="small" id="ed-fhir-id">' + esc(endpoint.id) + "</code>"
+                            : '<code class="small d-none" id="ed-fhir-id"></code>') +
+                        CadminApi.unsavedFlagHtml() +
+                    "</div>" +
                 "</div>" +
                 '<div class="d-flex flex-wrap gap-2">' +
-                    '<button class="btn btn-outline-danger" type="button" id="ed-delete">' +
-                        '<i class="bi bi-trash me-1"></i>Delete</button>' +
                     CadminResourceSource.button() +
                 "</div>" +
             "</div>" +
-            '<div class="card shadow mb-4">' +
-                '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                    '<h6 class="m-0">Basics</h6>' +
-                    '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#ed-basic-modal">Edit</button>' +
+            '<div class="row g-3">' +
+                '<div class="col-md-3">' +
+                    '<div class="list-group list-group-flush nav nav-pills flex-column cadmin-settings-nav" id="ed-settings-nav" role="tablist">' +
+                        navButton("ed-pane-basics", "bi bi-info-circle", "Basics", { active: true }) +
+                        navButton("ed-pane-connection", "bi bi-hdd-network", "Connection") +
+                        navButton("ed-pane-used", "bi bi-diagram-2", "Used by") +
+                        navButton("ed-pane-graph", "bi bi-diagram-3", "Reference graph") +
+                        navButton("ed-pane-history", "bi bi-clock-history", "History") +
+                        navButton("ed-pane-danger", "bi bi-exclamation-triangle", "Danger zone", { danger: true }) +
+                    "</div>" +
                 "</div>" +
-                '<div class="card-body" id="ed-basics"></div>' +
+                '<div class="col-md-9">' +
+                    '<div class="tab-content">' +
+                        tabPane("ed-pane-basics",
+                            '<form id="ed-basic-form">' +
+                                '<div class="card">' +
+                                    '<div class="card-header"><h3 class="card-title">Basics</h3></div>' +
+                                    '<div class="card-body">' +
+                                        field("Name", '<input class="form-control" id="ed-name" required>') +
+                                        fieldRow(
+                                            field("Status", '<select class="form-select" id="ed-status">' +
+                                                optionsHtml(statusOptions) + "</select>"),
+                                            field("Connection type", '<select class="form-select" id="ed-type">' +
+                                                optionsHtml(connectionTypes) + "</select>")) +
+                                        field("Address", '<input class="form-control font-monospace" id="ed-address" required placeholder="https://example.org/fhir">') +
+                                        field("Description", '<textarea class="form-control" id="ed-description" rows="2"></textarea>') +
+                                        field("Managing organization",
+                                            '<select class="form-select" id="ed-org"><option value="">None</option></select>') +
+                                        '<div class="mb-3">' +
+                                            '<label class="form-label">Period</label>' +
+                                            '<div class="row g-2">' +
+                                                '<div class="col">' +
+                                                    '<input class="form-control" id="ed-period-start" type="date" aria-label="Period start">' +
+                                                "</div>" +
+                                                '<div class="col">' +
+                                                    '<input class="form-control" id="ed-period-end" type="date" aria-label="Period end">' +
+                                                "</div>" +
+                                            "</div>" +
+                                        "</div>" +
+                                        '<button type="submit" class="btn btn-primary">Save changes</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</form>",
+                            true) +
+                        tabPane("ed-pane-connection",
+                            card("Payload", "ed-payload-rows", ["Type", "MIME type", ""], "#ed-payload-modal", "Add") +
+                            card("Headers", "ed-header-rows", ["Header", ""], "#ed-header-modal", "Add") +
+                            card("Contacts", "ed-contact-rows", ["System", "Value", ""], "#ed-contact-modal", "Add")) +
+                        tabPane("ed-pane-used",
+                            card("Used by", "ed-used-rows", ["Resource", "Name", ""], "", "")) +
+                        tabPane("ed-pane-graph", CadminResourceGraph.card()) +
+                        tabPane("ed-pane-history", CadminResourceHistory.card()) +
+                        tabPane("ed-pane-danger",
+                            '<div class="card border-danger">' +
+                                '<div class="card-header bg-danger-subtle">' +
+                                    '<h3 class="card-title text-danger">Danger zone</h3>' +
+                                "</div>" +
+                                '<div class="card-body">' +
+                                    '<div class="d-flex justify-content-between align-items-start">' +
+                                        "<div>" +
+                                            '<p class="mb-0 fw-semibold text-danger">Delete this endpoint</p>' +
+                                            '<small class="text-secondary">' +
+                                                "It will be unlinked from organizations, locations, and healthcare services first." +
+                                            "</small>" +
+                                        "</div>" +
+                                        '<button class="btn btn-danger" type="button" id="ed-delete">Delete</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</div>") +
+                    "</div>" +
+                "</div>" +
             "</div>" +
-            '<div class="row">' +
-                '<div class="col-lg-6">' + card("Payload", "ed-payload-rows",
-                    ["Type", "MIME type", ""], "#ed-payload-modal", "Add") + "</div>" +
-                '<div class="col-lg-6">' + card("Headers", "ed-header-rows",
-                    ["Header", ""], "#ed-header-modal", "Add") + "</div>" +
-            "</div>" +
-            '<div class="row">' +
-                '<div class="col-lg-6">' + card("Contacts", "ed-contact-rows",
-                    ["System", "Value", ""], "#ed-contact-modal", "Add") + "</div>" +
-                '<div class="col-lg-6">' + card("Used by", "ed-used-rows",
-                    ["Resource", "Name", ""], "", "") + "</div>" +
-            "</div>" +
-            CadminResourceHistory.card() +
-            CadminResourceGraph.card() +
-            modal("ed-basic-modal", "Edit basics",
-                field("Name", '<input class="form-control" id="ed-name" required>') +
-                field("Status", '<select class="form-select" id="ed-status">' + optionsHtml(statusOptions) + "</select>") +
-                field("Connection type", '<select class="form-select" id="ed-type">' + optionsHtml(connectionTypes) + "</select>") +
-                field("Address", '<input class="form-control font-monospace" id="ed-address" required placeholder="https://example.org/fhir">') +
-                field("Description", '<textarea class="form-control" id="ed-description" rows="2"></textarea>') +
-                field("Managing organization",
-                    '<select class="form-select" id="ed-org"><option value="">None</option></select>') +
-                '<div class="row"><div class="col-md-6 mb-0"><label class="form-label">Period start</label>' +
-                    '<input class="form-control" id="ed-period-start" type="date"></div>' +
-                    '<div class="col-md-6 mb-0"><label class="form-label">Period end</label>' +
-                    '<input class="form-control" id="ed-period-end" type="date"></div></div>',
-                "ed-basic-form") +
             modal("ed-payload-modal", "Add payload",
                 field("Type", '<select class="form-select" id="ed-pl-type">' + optionsHtml(payloadTypes) + "</select>") +
                 field("MIME type", '<select class="form-select" id="ed-pl-mime">' +
@@ -256,13 +329,13 @@ window.CadminEndpointDetail = (function () {
         CadminResourceSource.mount(function () { return endpoint; });
         CadminResourceGraph.mount(endpoint);
         CadminResourceHistory.mount(endpoint);
-        renderBasics();
+        renderHeader();
+        populateBasicForm();
         renderPayload();
         renderHeaders();
         renderContacts();
         loadUsedBy();
         bind();
-        $("#ed-basic-modal").on("show.bs.modal", populateBasicForm);
     }
 
     function managingHtml() {
@@ -281,23 +354,14 @@ window.CadminEndpointDetail = (function () {
         return [period.start || "…", period.end || "…"].join(" – ");
     }
 
-    function renderBasics() {
+    function renderHeader() {
         $("#ed-title").text(endpoint.name || endpoint.address || "Endpoint");
-        $("#ed-basics").html(
-            '<dl class="row mb-0">' +
-                '<dt class="col-sm-3">Name</dt><dd class="col-sm-9">' + esc(endpoint.name || "—") + "</dd>" +
-                '<dt class="col-sm-3">Status</dt><dd class="col-sm-9">' + statusBadge(endpoint.status) + "</dd>" +
-                '<dt class="col-sm-3">Connection type</dt><dd class="col-sm-9">' +
-                    esc(conceptLabel(endpoint.connectionType)) + "</dd>" +
-                '<dt class="col-sm-3">Address</dt><dd class="col-sm-9"><code>' +
-                    esc(endpoint.address || "—") + "</code></dd>" +
-                '<dt class="col-sm-3">Description</dt><dd class="col-sm-9">' +
-                    esc(endpoint.description || "—") + "</dd>" +
-                '<dt class="col-sm-3">Managing organization</dt><dd class="col-sm-9">' + managingHtml() + "</dd>" +
-                '<dt class="col-sm-3">Period</dt><dd class="col-sm-9">' + esc(formatPeriod(endpoint.period)) + "</dd>" +
-                '<dt class="col-sm-3">ID</dt><dd class="col-sm-9"><code>' + esc(endpoint.id) + "</code></dd>" +
-            "</dl>"
-        );
+        $("#ed-status-badge").html(statusBadge(endpoint.status));
+        if (endpoint.id) {
+            $("#ed-fhir-id").text(endpoint.id).removeClass("d-none");
+        } else {
+            $("#ed-fhir-id").text("").addClass("d-none");
+        }
     }
 
     function renderPayload() {
@@ -431,6 +495,11 @@ window.CadminEndpointDetail = (function () {
     function bind() {
         const $root = $(CadminWorkspace.root());
         $root.off(".epdetail");
+        $root.on("shown.bs.tab.epdetail", "#ed-pane-graph-btn", function () {
+            if (typeof CadminResourceGraph.resize === "function") {
+                CadminResourceGraph.resize();
+            }
+        });
 
         $root.on("click.epdetail", "[data-remove-payload]", function () {
             const index = Number($(this).attr("data-remove-payload"));
@@ -528,7 +597,6 @@ window.CadminEndpointDetail = (function () {
                 delete endpoint.period;
             }
             saveEndpoint(function () {
-                hideModal("ed-basic-modal");
                 alertMsg("success", "Endpoint updated.");
             });
         });

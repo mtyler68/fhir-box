@@ -181,6 +181,7 @@ function renderCodeSystemList(initialQuery) {
                     "<td>" + countConcepts(cs.concept) + "</td>" +
                     "<td><code>" + esc(cs.id) + "</code></td>" +
                     '<td class="text-end text-nowrap">' +
+                        CadminWorkspace.listBookmarkButton(cs) +
                         '<a class="btn btn-sm btn-outline-primary" href="#/code-systems/' +
                             encodeURIComponent(cs.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a>' +
                     "</td></tr>";

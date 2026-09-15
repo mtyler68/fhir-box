@@ -158,6 +158,7 @@ function renderFhirListIndex() {
                     "<td><code>" + esc(item.id) + "</code></td>" +
                     '<td class="text-end text-nowrap">' +
                         CadminTargetList.chooserButton(item.id) +
+                        CadminWorkspace.listBookmarkButton(item) +
                         '<a class="btn btn-sm btn-outline-primary ms-1" href="' +
                         esc(href) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a></td>' +
                     "</tr>";

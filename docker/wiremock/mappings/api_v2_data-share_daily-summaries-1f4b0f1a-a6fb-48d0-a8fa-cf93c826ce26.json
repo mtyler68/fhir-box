@@ -1,0 +1,49 @@
+{
+  "id" : "1f4b0f1a-a6fb-48d0-a8fa-cf93c826ce26",
+  "name" : "v2_data-share_daily-summaries",
+  "request" : {
+    "urlPath" : "/api/v2/data-share/daily-summaries",
+    "method" : "GET",
+    "headers" : {
+      "Accept" : {
+        "equalTo" : "application/json"
+      }
+    },
+    "queryParameters" : {
+      "customerId" : {
+        "equalTo" : "12345"
+      },
+      "after" : {
+        "equalTo" : "xyz"
+      }
+    }
+  },
+  "response" : {
+    "status" : 200,
+    "jsonBody" : {
+      "serialNumber" : "12345",
+      "_id" : "441be72118f149efa841b5bac7bd8707",
+      "messageId" : 1234,
+      "createTs" : "2019-06-18T00:19:54.729Z",
+      "dateReceived" : "2019-06-18T00:20:00.078Z",
+      "latest" : {
+        "insulinTotal" : 1560817200029
+      },
+      "insulinTotal" : {
+        "id" : "1560817200029",
+        "totalBasal" : 30.46,
+        "totalBolus" : 20.48,
+        "totalInsulin" : 50.94,
+        "createdTimestamp" : "0",
+        "createdTimestampStr" : "2019-05-17T13:01:30.342 America/Los_Angeles"
+      },
+      "lastSynced" : "2019-06-18T00:20:00.073Z"
+    },
+    "headers" : {
+      "Content-Type" : "application/json"
+    }
+  },
+  "uuid" : "1f4b0f1a-a6fb-48d0-a8fa-cf93c826ce26",
+  "persistent" : true,
+  "insertionIndex" : 14
+}

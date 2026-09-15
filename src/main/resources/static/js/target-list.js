@@ -221,8 +221,13 @@ window.CadminTargetList = (function () {
                     "</div>" +
                     '<div class="cadmin-target-list-body" id="' + ROOT_ID + '-body"></div>' +
                     '<div class="cadmin-target-list-footer">' +
-                        '<button class="btn btn-outline-secondary" type="button" data-ctl-hide>Hide</button>' +
-                        '<button class="btn btn-outline-danger" type="button" data-ctl-close>Close</button>' +
+                        '<button class="btn btn-outline-secondary" type="button" data-ctl-bundle ' +
+                            'title="Create a Bundle of this list\'s contents">' +
+                            '<i class="bi bi-collection me-1" aria-hidden="true"></i>Bundle</button>' +
+                        '<div class="d-flex gap-2">' +
+                            '<button class="btn btn-outline-secondary" type="button" data-ctl-hide>Hide</button>' +
+                            '<button class="btn btn-outline-danger" type="button" data-ctl-close>Close</button>' +
+                        "</div>" +
                     "</div>" +
                 "</aside>" +
             "</div>"
@@ -234,6 +239,7 @@ window.CadminTargetList = (function () {
         $el.toggleClass("has-target", !!targetId);
         $el.toggleClass("is-open", !!(targetId && open));
         $el.find("[data-ctl-toggle]").attr("aria-expanded", targetId && open ? "true" : "false");
+        $el.find("[data-ctl-bundle]").prop("disabled", !target);
         const count = entryCount();
         $el.find(".cadmin-target-list-count").text(String(count)).toggleClass("d-none", !targetId);
         paintChoosers();
@@ -533,6 +539,13 @@ window.CadminTargetList = (function () {
         }
         bound = true;
         const $doc = $(document);
+        $doc.on("click.targetlist", "[data-ctl-bundle]", function (event) {
+            event.preventDefault();
+            if (!window.CadminResourceGraph || typeof CadminResourceGraph.promptListBundle !== "function") {
+                return;
+            }
+            CadminResourceGraph.promptListBundle(target, $(this));
+        });
         $doc.on("click.targetlist", "[data-ctl-hide]", function (event) {
             event.preventDefault();
             hide();

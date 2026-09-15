@@ -100,6 +100,9 @@ window.CadminWorkspace = (function ($) {
     let dragKey = "";
     let dragPinned = false;
     let suppressClick = false;
+    let bookmarkDragFrom = -1;
+    let bookmarkDropBefore = -1;
+    let suppressBookmarkClick = false;
     let restoring = false;
     let restored = false;
 
@@ -536,6 +539,7 @@ window.CadminWorkspace = (function ($) {
         });
         writeBookmarks(list);
         renderBookmarkMenu();
+        paintListBookmarkButtons();
     }
 
     function removeBookmark(key) {
@@ -543,11 +547,134 @@ window.CadminWorkspace = (function ($) {
             return item.key !== key;
         }));
         renderBookmarkMenu();
+        paintListBookmarkButtons();
     }
 
     function clearBookmarks() {
         writeBookmarks([]);
         renderBookmarkMenu();
+        paintListBookmarkButtons();
+    }
+
+    function moveBookmark(from, to) {
+        const list = readBookmarks();
+        if (from < 0 || to < 0 || from >= list.length) {
+            return;
+        }
+        if (from === to || from + 1 === to) {
+            return;
+        }
+        const item = list.splice(from, 1)[0];
+        list.splice(to > from ? to - 1 : to, 0, item);
+        writeBookmarks(list);
+        renderBookmarkMenu();
+    }
+
+    function clearBookmarkDrag() {
+        bookmarkDragFrom = -1;
+        bookmarkDropBefore = -1;
+        const menu = document.getElementById("workspace-bookmark-menu");
+        if (!menu) {
+            return;
+        }
+        menu.querySelectorAll(".workspace-bookmark-row").forEach(function (node) {
+            node.classList.remove("is-dragging", "drop-before", "drop-after");
+        });
+    }
+
+    function bookmarkRowFromPoint(target) {
+        if (!target || !target.closest) {
+            return null;
+        }
+        return target.closest("#workspace-bookmark-menu .workspace-bookmark-row");
+    }
+
+    function suppressNextBookmarkClick() {
+        suppressBookmarkClick = true;
+        window.setTimeout(function () {
+            suppressBookmarkClick = false;
+        }, 50);
+    }
+
+    function scrollBookmarkMenuDuringDrag(clientY) {
+        const menu = document.getElementById("workspace-bookmark-menu");
+        if (!menu || clientY == null) {
+            return;
+        }
+        const box = menu.getBoundingClientRect();
+        if (clientY < box.top + 28) {
+            menu.scrollTop -= 12;
+        } else if (clientY > box.bottom - 28) {
+            menu.scrollTop += 12;
+        }
+    }
+
+    function routeNameFromHash(hash) {
+        const match = String(hash || "").match(/^#\/([^/?#]+)/);
+        return match ? match[1] : "";
+    }
+
+    function listBookmarkButton(resource) {
+        if (!resource || !resource.resourceType || !resource.id) {
+            return "";
+        }
+        const key = tabKey(resource.resourceType, resource.id);
+        const on = isBookmarked(key);
+        return '<button type="button" class="btn btn-sm btn-outline-secondary me-1" data-list-bookmark="' +
+            CadminApi.escapeHtml(key) + '"' + (on ? " disabled" : "") +
+            ' title="' + (on ? "Bookmarked" : "Bookmark") +
+            '" aria-label="' + (on ? "Bookmarked" : "Bookmark") + '">' +
+            '<i class="bi bi-bookmark' + (on ? "-fill" : "") + '" aria-hidden="true"></i></button>';
+    }
+
+    function paintListBookmarkButtons() {
+        $("[data-list-bookmark]").each(function () {
+            const on = isBookmarked(this.getAttribute("data-list-bookmark"));
+            this.disabled = on;
+            this.setAttribute("title", on ? "Bookmarked" : "Bookmark");
+            this.setAttribute("aria-label", on ? "Bookmarked" : "Bookmark");
+            const icon = this.querySelector("i");
+            if (icon) {
+                icon.className = "bi " + (on ? "bi-bookmark-fill" : "bi-bookmark");
+            }
+        });
+    }
+
+    function bookmarkFromListButton(button) {
+        const key = button && button.getAttribute("data-list-bookmark");
+        if (!key || isBookmarked(key)) {
+            return;
+        }
+        const slash = key.indexOf("/");
+        const type = slash >= 0 ? key.slice(0, slash) : "";
+        const id = slash >= 0 ? key.slice(slash + 1) : "";
+        if (!type || !id) {
+            return;
+        }
+        const $row = $(button).closest("tr");
+        const encoded = encodeURIComponent(id);
+        const title = ($row.find("a[href]").filter(function () {
+            const value = this.getAttribute("href") || "";
+            return value.indexOf("/" + encoded) >= 0 || value.indexOf("/" + id) >= 0;
+        }).first().text() || $row.find("td").first().text() || "").trim() || id;
+        const href = $row.find("a[href^='#/']").filter(function () {
+            const value = this.getAttribute("href") || "";
+            return value.indexOf("/" + encoded) >= 0 || value.indexOf("/" + id) >= 0;
+        }).first().attr("href")
+            || (window.CadminApi && typeof CadminApi.detailHref === "function"
+                ? CadminApi.detailHref(type, id) : ("#/" + type + "/" + encodeURIComponent(id)));
+        const hash = href && href.charAt(0) === "#" ? href : "#" + (href || "");
+        const routeName = routeNameFromHash(hash) || routeNameForType(type);
+        const spec = specFor(routeName);
+        addBookmark({
+            key: key,
+            hash: hash,
+            title: title,
+            icon: (spec && spec.icon) || "bi-bookmark",
+            type: type,
+            id: id,
+            routeName: routeName
+        });
     }
 
     function renderBookmarkMenu() {
@@ -560,13 +687,17 @@ window.CadminWorkspace = (function ($) {
             menu.innerHTML = '<li><span class="dropdown-item-text text-muted">No bookmarks</span></li>';
             return;
         }
-        menu.innerHTML = list.map(function (item) {
-            return '<li class="workspace-bookmark-row">' +
-                '<a class="dropdown-item text-truncate" href="' + CadminApi.escapeHtml(item.hash) +
-                '" data-bookmark-open="' + CadminApi.escapeHtml(item.key) + '">' +
+        menu.innerHTML = list.map(function (item, index) {
+            return '<li class="workspace-bookmark-row" draggable="true" data-bookmark-index="' + index +
+                '" data-bookmark-key="' + CadminApi.escapeHtml(item.key) + '">' +
+                '<span class="cadmin-list-grip" title="Drag to reorder" aria-hidden="true">' +
+                '<i class="bi bi-grip-vertical"></i></span>' +
+                '<a class="dropdown-item text-truncate" draggable="false" href="' +
+                CadminApi.escapeHtml(item.hash) + '" data-bookmark-open="' +
+                CadminApi.escapeHtml(item.key) + '">' +
                 iconHtml(item.icon || "bi-bookmark", "me-2") +
                 CadminApi.escapeHtml(item.title || item.key) + "</a>" +
-                '<button type="button" class="workspace-bookmark-remove" data-bookmark-remove="' +
+                '<button type="button" class="workspace-bookmark-remove" draggable="false" data-bookmark-remove="' +
                 CadminApi.escapeHtml(item.key) + '" title="Remove bookmark" aria-label="Remove bookmark">&times;</button></li>';
         }).join("") +
             '<li><hr class="dropdown-divider"></li>' +
@@ -811,18 +942,99 @@ window.CadminWorkspace = (function ($) {
                 hideTabMenu();
             }
         });
+        $(document).on("click.workspace", "[data-list-bookmark]", function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (this.disabled) {
+                return;
+            }
+            bookmarkFromListButton(this);
+        });
         $(document).on("click.workspace", "[data-bookmark-open]", function (event) {
             event.preventDefault();
+            if (suppressBookmarkClick) {
+                return;
+            }
             openBookmark($(this).attr("data-bookmark-open"));
         });
         $(document).on("click.workspace", "[data-bookmark-remove]", function (event) {
             event.preventDefault();
             event.stopPropagation();
+            if (suppressBookmarkClick) {
+                return;
+            }
             removeBookmark($(this).attr("data-bookmark-remove"));
         });
         $(document).on("click.workspace", "[data-bookmark-clear]", function (event) {
             event.preventDefault();
             clearBookmarks();
+        });
+        $(document).on("hide.bs.dropdown.workspace", "#workspace-bookmarks", function (event) {
+            if (bookmarkDragFrom >= 0) {
+                event.preventDefault();
+            }
+        });
+        $(document).on("dragstart.workspace", "#workspace-bookmark-menu .workspace-bookmark-row", function (event) {
+            if ($(event.target).closest("[data-bookmark-remove], [data-bookmark-open]").length) {
+                event.preventDefault();
+                return;
+            }
+            bookmarkDragFrom = Number($(this).attr("data-bookmark-index"));
+            if (bookmarkDragFrom < 0 || isNaN(bookmarkDragFrom)) {
+                event.preventDefault();
+                return;
+            }
+            bookmarkDropBefore = bookmarkDragFrom;
+            const native = event.originalEvent && event.originalEvent.dataTransfer;
+            if (native) {
+                native.effectAllowed = "move";
+                native.setData("text/plain", String(bookmarkDragFrom));
+            }
+            this.classList.add("is-dragging");
+        });
+        $(document).on("dragover.workspace", "#workspace-bookmark-menu", function (event) {
+            if (bookmarkDragFrom < 0) {
+                return;
+            }
+            event.preventDefault();
+            const native = event.originalEvent;
+            if (native && native.dataTransfer) {
+                native.dataTransfer.dropEffect = "move";
+            }
+            const clientY = native ? native.clientY : event.clientY;
+            scrollBookmarkMenuDuringDrag(clientY);
+            const menu = document.getElementById("workspace-bookmark-menu");
+            if (menu) {
+                menu.querySelectorAll(".workspace-bookmark-row").forEach(function (node) {
+                    node.classList.remove("drop-before", "drop-after");
+                });
+            }
+            const row = bookmarkRowFromPoint(native && native.target);
+            const rows = menu ? menu.querySelectorAll(".workspace-bookmark-row") : [];
+            if (row) {
+                const rect = row.getBoundingClientRect();
+                const before = clientY < rect.top + rect.height / 2;
+                row.classList.add(before ? "drop-before" : "drop-after");
+                bookmarkDropBefore = Number(row.getAttribute("data-bookmark-index")) + (before ? 0 : 1);
+            } else if (rows.length) {
+                rows[rows.length - 1].classList.add("drop-after");
+                bookmarkDropBefore = rows.length;
+            }
+        });
+        $(document).on("drop.workspace", "#workspace-bookmark-menu", function (event) {
+            if (bookmarkDragFrom < 0) {
+                return;
+            }
+            event.preventDefault();
+            const from = bookmarkDragFrom;
+            const to = bookmarkDropBefore;
+            suppressNextBookmarkClick();
+            clearBookmarkDrag();
+            moveBookmark(from, to);
+        });
+        $(document).on("dragend.workspace", "#workspace-bookmark-menu .workspace-bookmark-row", function () {
+            suppressNextBookmarkClick();
+            clearBookmarkDrag();
         });
         $(document).on("click.workspace", "[data-history-open]", function (event) {
             event.preventDefault();
@@ -1817,6 +2029,8 @@ window.CadminWorkspace = (function ($) {
         rememberResource: rememberResource,
         refreshActive: refreshActive,
         close: close,
-        restore: restoreSession
+        restore: restoreSession,
+        bookmarks: readBookmarks,
+        listBookmarkButton: listBookmarkButton
     };
 }(jQuery));

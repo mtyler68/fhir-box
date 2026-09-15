@@ -216,7 +216,8 @@ function renderDeviceList(initialQuery) {
                             refLabel(association.subject))
                         : "—") + "</td>" +
                     "<td><code>" + CadminApi.escapeHtml(device.id) + "</code></td>" +
-                    '<td class="text-end"><a class="btn btn-sm btn-outline-primary" href="#/devices/' +
+                    '<td class="text-end text-nowrap">' + CadminWorkspace.listBookmarkButton(device) +
+                    '<a class="btn btn-sm btn-outline-primary" href="#/devices/' +
                         encodeURIComponent(device.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a></td>' +
                     "</tr>";
             });

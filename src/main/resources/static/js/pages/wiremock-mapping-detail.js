@@ -46,6 +46,12 @@ window.CadminWiremockMappingDetail = (function () {
     let queryRows = [];
     let queryDragFrom = -1;
     let queryDropBefore = -1;
+    let reqHeaderRows = [];
+    let reqHeaderDragFrom = -1;
+    let reqHeaderDropBefore = -1;
+    let metadataRows = [];
+    let metadataDragFrom = -1;
+    let metadataDropBefore = -1;
 
     function esc(value) {
         return CadminApi.escapeHtml(value);
@@ -62,6 +68,34 @@ window.CadminWiremockMappingDetail = (function () {
 
     function field(label, control) {
         return '<div class="mb-3"><label class="form-label">' + label + "</label>" + control + "</div>";
+    }
+
+    function fieldRow(left, right) {
+        return '<div class="row">' +
+            '<div class="col-md-6">' + left + "</div>" +
+            '<div class="col-md-6">' + right + "</div>" +
+            "</div>";
+    }
+
+    function navButton(paneId, icon, label, opts) {
+        opts = opts || {};
+        const classes = ["list-group-item", "list-group-item-action", "text-start"];
+        if (opts.active) {
+            classes.push("active");
+        }
+        if (opts.danger) {
+            classes.push("text-danger");
+        }
+        return '<button type="button" class="' + classes.join(" ") + '" id="' + paneId + '-btn" ' +
+            'data-bs-toggle="pill" data-bs-target="#' + paneId + '" role="tab" aria-controls="' + paneId +
+            '" aria-selected="' + (opts.active ? "true" : "false") + '">' +
+            '<i class="' + icon + ' me-2" aria-hidden="true"></i>' + label +
+            "</button>";
+    }
+
+    function tabPane(id, body, active) {
+        return '<div class="tab-pane fade' + (active ? " show active" : "") + '" id="' + id +
+            '" role="tabpanel" aria-labelledby="' + id + '-btn">' + body + "</div>";
     }
 
     function destroyEditor() {
@@ -124,11 +158,15 @@ window.CadminWiremockMappingDetail = (function () {
         $("#wmd-body").val(wm().responseBodyText(response));
         headerRows = wm().headerEntries(response.headers);
         renderHeaderList();
+        reqHeaderRows = wm().requestHeaderEntries(request.headers);
+        renderReqHeaderList();
         queryRows = wm().queryParamEntries(request.queryParameters);
         renderQueryList();
         $("#wmd-scenario-name").val(resource.scenarioName || "");
         $("#wmd-scenario-required").val(resource.requiredScenarioState || "");
         $("#wmd-scenario-new").val(resource.newScenarioState || "");
+        metadataRows = metadataEntries(resource.metadata);
+        renderMetadataList();
         syncBodyPlaceholder();
         renderBodyPatterns();
     }
@@ -264,6 +302,148 @@ window.CadminWiremockMappingDetail = (function () {
         headerDragFrom = -1;
         headerDropBefore = -1;
         $("#wmd-header-rows tr").removeClass("is-dragging drop-before drop-after");
+    }
+
+    function metadataValueText(value) {
+        if (value == null) {
+            return "";
+        }
+        if (typeof value === "string") {
+            return value;
+        }
+        try {
+            return JSON.stringify(value);
+        } catch (error) {
+            return String(value);
+        }
+    }
+
+    function parseMetadataValue(text) {
+        const raw = text == null ? "" : String(text);
+        const trimmed = raw.trim();
+        if (!trimmed) {
+            return "";
+        }
+        const ch = trimmed.charAt(0);
+        if (ch === "{" || ch === "[" || ch === '"' || trimmed === "true" || trimmed === "false"
+                || trimmed === "null" || /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(trimmed)) {
+            try {
+                return JSON.parse(trimmed);
+            } catch (error) {
+                return raw;
+            }
+        }
+        return raw;
+    }
+
+    function metadataEntries(metadata) {
+        return Object.keys(metadata || {}).map(function (name) {
+            return { name: name, value: metadataValueText(metadata[name]) };
+        });
+    }
+
+    function metadataFromEntries(entries) {
+        const metadata = {};
+        (entries || []).forEach(function (row) {
+            const name = String((row && row.name) || "").trim();
+            if (!name) {
+                return;
+            }
+            metadata[name] = parseMetadataValue(row && row.value);
+        });
+        return metadata;
+    }
+
+    function flushMetadataRows() {
+        const rows = [];
+        $("#wmd-meta-rows tr[data-meta-index]").each(function () {
+            rows.push({
+                name: ($(this).find("[data-meta-name]").val() || "").trim(),
+                value: $(this).find("[data-meta-value]").val() || ""
+            });
+        });
+        if (rows.length || !$("#wmd-meta-rows").length) {
+            metadataRows = rows.length ? rows : metadataRows;
+        }
+        return metadataRows;
+    }
+
+    function renderMetadataList() {
+        const $rows = $("#wmd-meta-rows");
+        if (!$rows.length) {
+            return;
+        }
+        if (!metadataRows.length) {
+            $rows.html(
+                '<tr class="wmd-meta-empty"><td colspan="4" class="text-muted">' +
+                    "No metadata. Add tags or other attributes for this stub.</td></tr>"
+            );
+            return;
+        }
+        $rows.html(metadataRows.map(function (row, index) {
+            return '<tr draggable="true" data-meta-index="' + index + '">' +
+                '<td class="cadmin-list-grip-col">' +
+                    '<span class="cadmin-list-grip" title="Drag to reorder" aria-hidden="true">' +
+                        '<i class="bi bi-grip-vertical"></i></span></td>' +
+                '<td><input class="form-control form-control-sm font-monospace" data-meta-name ' +
+                    'value="' + esc(row.name) +
+                    '" placeholder="team" autocomplete="off" spellcheck="false"></td>' +
+                '<td><input class="form-control form-control-sm font-monospace" data-meta-value ' +
+                    'value="' + esc(row.value) +
+                    '" placeholder="payments" autocomplete="off" spellcheck="false"></td>' +
+                '<td class="text-end text-nowrap">' +
+                    '<button class="btn btn-sm btn-outline-danger" type="button" data-remove-meta="' +
+                        index + '" title="Remove" aria-label="Remove">' +
+                        '<i class="bi bi-trash"></i></button></td></tr>';
+        }).join(""));
+    }
+
+    function addMetadataRow() {
+        flushMetadataRows();
+        metadataRows.push({ name: "", value: "" });
+        renderMetadataList();
+        const el = document.querySelector("#wmd-meta-rows tr:last-child [data-meta-name]");
+        if (el) {
+            el.focus();
+        }
+        lastEdited = "form";
+        refreshJsonFromForm();
+        syncUnsavedFlag();
+    }
+
+    function removeMetadataRow(index) {
+        flushMetadataRows();
+        if (index < 0 || index >= metadataRows.length) {
+            return;
+        }
+        metadataRows.splice(index, 1);
+        renderMetadataList();
+        lastEdited = "form";
+        refreshJsonFromForm();
+        syncUnsavedFlag();
+    }
+
+    function moveMetadataRow(from, to) {
+        flushMetadataRows();
+        if (from < 0 || to < 0 || from >= metadataRows.length) {
+            return;
+        }
+        if (from === to || from + 1 === to) {
+            return;
+        }
+        const item = metadataRows.splice(from, 1)[0];
+        const dest = to > from ? to - 1 : to;
+        metadataRows.splice(dest, 0, item);
+        renderMetadataList();
+        lastEdited = "form";
+        refreshJsonFromForm();
+        syncUnsavedFlag();
+    }
+
+    function clearMetadataDrag() {
+        metadataDragFrom = -1;
+        metadataDropBefore = -1;
+        $("#wmd-meta-rows tr").removeClass("is-dragging drop-before drop-after");
     }
 
     function flushQueryRows() {
@@ -428,6 +608,152 @@ window.CadminWiremockMappingDetail = (function () {
         $("#wmd-query-rows tr").removeClass("is-dragging drop-before drop-after");
     }
 
+    function flushReqHeaderRows() {
+        const rows = [];
+        $("#wmd-req-header-rows tr[data-req-header-index]").each(function () {
+            rows.push({
+                name: ($(this).find("[data-req-header-name]").val() || "").trim(),
+                matcher: $(this).find("[data-req-header-matcher]").val() || "equalTo",
+                value: $(this).find("[data-req-header-value]").val() || "",
+                caseInsensitive: $(this).find("[data-req-header-case]").prop("checked")
+            });
+        });
+        if (rows.length || !$("#wmd-req-header-rows").length) {
+            reqHeaderRows = rows.length ? rows : reqHeaderRows;
+        }
+        return reqHeaderRows;
+    }
+
+    function reqHeaderValueListAttr(name) {
+        const listId = wm().requestHeaderValueListId(name);
+        return listId ? ' list="' + esc(listId) + '"' : "";
+    }
+
+    function syncReqHeaderValueSuggest(nameInput) {
+        const $name = $(nameInput);
+        const $value = $name.closest("tr").find("[data-req-header-value]");
+        if (!$value.length) {
+            return;
+        }
+        const listId = wm().requestHeaderValueListId($name.val());
+        if (listId) {
+            $value.attr("list", listId);
+        } else {
+            $value.removeAttr("list");
+        }
+    }
+
+    function syncReqHeaderRowControls(rowEl) {
+        const $row = $(rowEl);
+        const matcher = $row.find("[data-req-header-matcher]").val() || "equalTo";
+        const $value = $row.find("[data-req-header-value]");
+        const $case = $row.find("[data-req-header-case]").closest(".form-check");
+        const absent = matcher === "absent";
+        $value.prop("disabled", absent)
+            .attr("placeholder", queryValuePlaceholder(matcher));
+        if (absent) {
+            $value.val("");
+        }
+        $case.toggleClass("d-none", !wm().queryParamSupportsCase(matcher));
+    }
+
+    function reqHeaderValueDatalistsHtml() {
+        const suggest = wm().REQUEST_HEADER_VALUE_SUGGEST || {};
+        return Object.keys(suggest).map(function (name) {
+            return datalistHtml(wm().requestHeaderValueListId(name), suggest[name]);
+        }).join("");
+    }
+
+    function renderReqHeaderList() {
+        const $rows = $("#wmd-req-header-rows");
+        if (!$rows.length) {
+            return;
+        }
+        if (!reqHeaderRows.length) {
+            $rows.html(
+                '<tr class="wmd-req-header-empty"><td colspan="6" class="text-muted">' +
+                    "No request header matchers. The stub matches any request headers.</td></tr>"
+            );
+            return;
+        }
+        $rows.html(reqHeaderRows.map(function (row, index) {
+            const matcher = row.matcher || "equalTo";
+            const absent = matcher === "absent";
+            const caseClass = wm().queryParamSupportsCase(matcher) ? "" : " d-none";
+            return '<tr draggable="true" data-req-header-index="' + index + '">' +
+                '<td class="cadmin-list-grip-col">' +
+                    '<span class="cadmin-list-grip" title="Drag to reorder" aria-hidden="true">' +
+                        '<i class="bi bi-grip-vertical"></i></span></td>' +
+                '<td><input class="form-control form-control-sm font-monospace" data-req-header-name ' +
+                    'list="wmd-req-header-names" value="' + esc(row.name) +
+                    '" placeholder="Accept" autocomplete="off" spellcheck="false"></td>' +
+                '<td><select class="form-select form-select-sm" data-req-header-matcher>' +
+                    optionsHtml(wm().QUERY_PARAM_MATCHERS, matcher) + "</select></td>" +
+                '<td><input class="form-control form-control-sm font-monospace" data-req-header-value ' +
+                    reqHeaderValueListAttr(row.name) + ' value="' + esc(absent ? "" : row.value) +
+                    '" placeholder="' + esc(queryValuePlaceholder(matcher)) +
+                    '"' + (absent ? " disabled" : "") +
+                    ' autocomplete="off" spellcheck="false"></td>' +
+                '<td class="wmd-req-header-case-col">' +
+                    '<div class="form-check mb-0 d-flex justify-content-center' + caseClass + '">' +
+                        '<input class="form-check-input" type="checkbox" data-req-header-case' +
+                            (row.caseInsensitive ? " checked" : "") +
+                            ' title="Case insensitive" aria-label="Case insensitive"></div></td>' +
+                '<td class="text-end text-nowrap">' +
+                    '<button class="btn btn-sm btn-outline-danger" type="button" data-remove-req-header="' +
+                        index + '" title="Remove" aria-label="Remove">' +
+                        '<i class="bi bi-trash"></i></button></td></tr>';
+        }).join(""));
+    }
+
+    function addReqHeaderRow() {
+        flushReqHeaderRows();
+        reqHeaderRows.push({ name: "", matcher: "equalTo", value: "", caseInsensitive: false });
+        renderReqHeaderList();
+        const el = document.querySelector("#wmd-req-header-rows tr:last-child [data-req-header-name]");
+        if (el) {
+            el.focus();
+        }
+        lastEdited = "form";
+        refreshJsonFromForm();
+        syncUnsavedFlag();
+    }
+
+    function removeReqHeaderRow(index) {
+        flushReqHeaderRows();
+        if (index < 0 || index >= reqHeaderRows.length) {
+            return;
+        }
+        reqHeaderRows.splice(index, 1);
+        renderReqHeaderList();
+        lastEdited = "form";
+        refreshJsonFromForm();
+        syncUnsavedFlag();
+    }
+
+    function moveReqHeaderRow(from, to) {
+        flushReqHeaderRows();
+        if (from < 0 || to < 0 || from >= reqHeaderRows.length) {
+            return;
+        }
+        if (from === to || from + 1 === to) {
+            return;
+        }
+        const item = reqHeaderRows.splice(from, 1)[0];
+        const dest = to > from ? to - 1 : to;
+        reqHeaderRows.splice(dest, 0, item);
+        renderReqHeaderList();
+        lastEdited = "form";
+        refreshJsonFromForm();
+        syncUnsavedFlag();
+    }
+
+    function clearReqHeaderDrag() {
+        reqHeaderDragFrom = -1;
+        reqHeaderDropBefore = -1;
+        $("#wmd-req-header-rows tr").removeClass("is-dragging drop-before drop-after");
+    }
+
     function applyForm(resource) {
         const next = JSON.parse(JSON.stringify(resource || {}));
         next.request = next.request || {};
@@ -485,6 +811,12 @@ window.CadminWiremockMappingDetail = (function () {
         } else {
             delete next.response.headers;
         }
+        const requestHeaders = wm().requestHeadersFromEntries(flushReqHeaderRows());
+        if (Object.keys(requestHeaders).length) {
+            next.request.headers = requestHeaders;
+        } else {
+            delete next.request.headers;
+        }
         const queryParameters = wm().queryParamsFromEntries(flushQueryRows());
         if (Object.keys(queryParameters).length) {
             next.request.queryParameters = queryParameters;
@@ -511,6 +843,12 @@ window.CadminWiremockMappingDetail = (function () {
         }
         if (next.request.bodyPatterns && !next.request.bodyPatterns.length) {
             delete next.request.bodyPatterns;
+        }
+        const metadata = metadataFromEntries(flushMetadataRows());
+        if (Object.keys(metadata).length) {
+            next.metadata = metadata;
+        } else {
+            delete next.metadata;
         }
         return next;
     }
@@ -751,13 +1089,14 @@ window.CadminWiremockMappingDetail = (function () {
 
     function renderSummary() {
         const title = mapping.name || wm().mappingUrl(mapping) || mapping.id || "Stub mapping";
-        $("#wmd-crumb").text(title);
         $("#wmd-title").text(title);
-        $("#wmd-subtitle").html(
-            '<code>' + esc(wm().mappingMethod(mapping)) + "</code> " +
-            "<code>" + esc(wm().mappingUrl(mapping)) + "</code> → " +
-            esc(String(wm().mappingStatus(mapping)))
-        );
+        $("#wmd-method-badge").text(wm().mappingMethod(mapping));
+        $("#wmd-status-badge").text(String(wm().mappingStatus(mapping)));
+        if (mapping.id) {
+            $("#wmd-id").text(mapping.id).removeClass("d-none");
+        } else {
+            $("#wmd-id").text("").addClass("d-none");
+        }
     }
 
     function save() {
@@ -813,11 +1152,16 @@ window.CadminWiremockMappingDetail = (function () {
     function bind() {
         const $root = $("#app-content");
         $root.off(".wmdetail");
+        $root.on("shown.bs.tab.wmdetail", "#wmd-pane-json-btn", function () {
+            if (editor) {
+                editor.refresh();
+            }
+        });
         $root.on("submit.wmdetail", "#wmd-form", function (event) {
             event.preventDefault();
         });
         $root.on("input.wmdetail change.wmdetail", "#wmd-form :input", function () {
-            if (syncing) {
+            if (syncing || this.id === "wmd-json") {
                 return;
             }
             lastEdited = "form";
@@ -826,6 +1170,9 @@ window.CadminWiremockMappingDetail = (function () {
             }
             if ($(this).is("[data-query-matcher]")) {
                 syncQueryRowControls($(this).closest("tr"));
+            }
+            if ($(this).is("[data-req-header-matcher]")) {
+                syncReqHeaderRowControls($(this).closest("tr"));
             }
             refreshJsonFromForm();
             syncUnsavedFlag();
@@ -880,8 +1227,105 @@ window.CadminWiremockMappingDetail = (function () {
         $root.on("dragend.wmdetail", "#wmd-header-rows tr[data-header-index]", function () {
             clearHeaderDrag();
         });
+        $root.on("click.wmdetail", "#wmd-meta-add", function () {
+            addMetadataRow();
+        });
+        $root.on("click.wmdetail", "[data-remove-meta]", function () {
+            removeMetadataRow(Number($(this).attr("data-remove-meta")));
+        });
+        $root.on("dragstart.wmdetail", "#wmd-meta-rows tr[data-meta-index]", function (event) {
+            if ($(event.target).closest("button, input, textarea, a").length) {
+                event.preventDefault();
+                return;
+            }
+            metadataDragFrom = Number($(this).attr("data-meta-index"));
+            const native = event.originalEvent && event.originalEvent.dataTransfer;
+            if (native) {
+                native.effectAllowed = "move";
+                native.setData("text/plain", String(metadataDragFrom));
+            }
+            $(this).addClass("is-dragging");
+        });
+        $root.on("dragover.wmdetail", "#wmd-meta-rows tr[data-meta-index]", function (event) {
+            if (metadataDragFrom < 0) {
+                return;
+            }
+            event.preventDefault();
+            const native = event.originalEvent;
+            if (native && native.dataTransfer) {
+                native.dataTransfer.dropEffect = "move";
+            }
+            const rect = this.getBoundingClientRect();
+            const before = native && (native.clientY - rect.top) < rect.height / 2;
+            $("#wmd-meta-rows tr").removeClass("drop-before drop-after");
+            $(this).addClass(before ? "drop-before" : "drop-after");
+            metadataDropBefore = Number($(this).attr("data-meta-index")) + (before ? 0 : 1);
+        });
+        $root.on("drop.wmdetail", "#wmd-meta-rows tr[data-meta-index]", function (event) {
+            if (metadataDragFrom < 0) {
+                return;
+            }
+            event.preventDefault();
+            const from = metadataDragFrom;
+            const to = metadataDropBefore;
+            clearMetadataDrag();
+            moveMetadataRow(from, to);
+        });
+        $root.on("dragend.wmdetail", "#wmd-meta-rows tr[data-meta-index]", function () {
+            clearMetadataDrag();
+        });
         $root.on("input.wmdetail", "[data-query-name]", function () {
             syncQueryValueSuggest(this);
+        });
+        $root.on("input.wmdetail", "[data-req-header-name]", function () {
+            syncReqHeaderValueSuggest(this);
+        });
+        $root.on("click.wmdetail", "#wmd-req-header-add", function () {
+            addReqHeaderRow();
+        });
+        $root.on("click.wmdetail", "[data-remove-req-header]", function () {
+            removeReqHeaderRow(Number($(this).attr("data-remove-req-header")));
+        });
+        $root.on("dragstart.wmdetail", "#wmd-req-header-rows tr[data-req-header-index]", function (event) {
+            if ($(event.target).closest("button, input, textarea, select, a").length) {
+                event.preventDefault();
+                return;
+            }
+            reqHeaderDragFrom = Number($(this).attr("data-req-header-index"));
+            const native = event.originalEvent && event.originalEvent.dataTransfer;
+            if (native) {
+                native.effectAllowed = "move";
+                native.setData("text/plain", String(reqHeaderDragFrom));
+            }
+            $(this).addClass("is-dragging");
+        });
+        $root.on("dragover.wmdetail", "#wmd-req-header-rows tr[data-req-header-index]", function (event) {
+            if (reqHeaderDragFrom < 0) {
+                return;
+            }
+            event.preventDefault();
+            const native = event.originalEvent;
+            if (native && native.dataTransfer) {
+                native.dataTransfer.dropEffect = "move";
+            }
+            const rect = this.getBoundingClientRect();
+            const before = native && (native.clientY - rect.top) < rect.height / 2;
+            $("#wmd-req-header-rows tr").removeClass("drop-before drop-after");
+            $(this).addClass(before ? "drop-before" : "drop-after");
+            reqHeaderDropBefore = Number($(this).attr("data-req-header-index")) + (before ? 0 : 1);
+        });
+        $root.on("drop.wmdetail", "#wmd-req-header-rows tr[data-req-header-index]", function (event) {
+            if (reqHeaderDragFrom < 0) {
+                return;
+            }
+            event.preventDefault();
+            const from = reqHeaderDragFrom;
+            const to = reqHeaderDropBefore;
+            clearReqHeaderDrag();
+            moveReqHeaderRow(from, to);
+        });
+        $root.on("dragend.wmdetail", "#wmd-req-header-rows tr[data-req-header-index]", function () {
+            clearReqHeaderDrag();
         });
         $root.on("click.wmdetail", "#wmd-query-add", function () {
             addQueryRow();
@@ -1011,139 +1455,227 @@ window.CadminWiremockMappingDetail = (function () {
         destroyEditor();
         const $root = $("#app-content");
         $root.html(
-            '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
+            '<div class="d-flex align-items-center justify-content-between mb-3">' +
                 "<div>" +
-                    '<nav aria-label="breadcrumb">' +
-                        '<ol class="breadcrumb mb-1">' +
-                            '<li class="breadcrumb-item"><a href="#/wiremock-mappings">Mappings</a></li>' +
-                            '<li class="breadcrumb-item active" aria-current="page" id="wmd-crumb">Mapping</li>' +
-                        "</ol>" +
-                    "</nav>" +
+                    '<a class="small text-decoration-none" href="#/wiremock-mappings">' +
+                        '<i class="bi bi-arrow-left me-1"></i>Mappings</a>' +
                     '<div class="d-flex align-items-center flex-wrap gap-2">' +
-                        '<h1 class="h3 mb-0 page-title" id="wmd-title">Stub mapping</h1>' +
+                        '<h1 class="mb-0 fs-3 page-title" id="wmd-title">Stub mapping</h1>' +
+                        '<span class="badge text-bg-secondary" id="wmd-method-badge"></span>' +
+                        '<span class="badge text-bg-info" id="wmd-status-badge"></span>' +
+                        '<code class="small d-none" id="wmd-id"></code>' +
                         CadminApi.unsavedFlagHtml() +
                     "</div>" +
-                    '<p class="text-muted mb-0" id="wmd-subtitle"></p>' +
                 "</div>" +
                 '<div class="d-flex flex-wrap gap-2">' +
-                    '<button class="btn btn-outline-danger" type="button" id="wmd-delete">' +
-                        '<i class="bi bi-trash me-1"></i>Delete</button>' +
                     CadminResourceSource.button() +
                     '<button class="btn btn-primary" type="button" id="wmd-save">' +
-                        '<i class="bi bi-check-lg me-1"></i>Save</button>' +
+                        '<i class="bi bi-check2 me-1"></i>Save</button>' +
                 "</div>" +
             "</div>" +
             '<div id="wmd-alert" class="alert d-none"></div>' +
-            '<form id="wmd-form">' +
-                '<div class="row">' +
-                    '<div class="col-lg-6">' +
-                        '<div class="card shadow mb-4">' +
-                            '<div class="card-header py-3"><h6 class="m-0">Request</h6></div>' +
-                            '<div class="card-body">' +
-                                field("Name", '<input class="form-control" id="wmd-name" placeholder="Optional display name">') +
-                                field("Method", '<select class="form-select" id="wmd-method">' +
-                                    optionsHtml(METHODS) + "</select>") +
-                                '<div class="row">' +
-                                    '<div class="col-md-5 mb-3"><label class="form-label">URL match</label>' +
-                                        '<select class="form-select" id="wmd-url-kind">' +
-                                            optionsHtml(URL_KINDS) + "</select></div>" +
-                                    '<div class="col-md-7 mb-3"><label class="form-label">Value</label>' +
-                                        '<input class="form-control font-monospace" id="wmd-url" required></div>' +
-                                "</div>" +
-                                '<div class="row">' +
-                                    '<div class="col-md-6 mb-0"><label class="form-label">Priority</label>' +
-                                        '<input class="form-control" id="wmd-priority" type="number" min="1" placeholder="5"></div>' +
-                                    '<div class="col-md-6 mb-0 d-flex align-items-end">' +
-                                        '<div class="form-check mb-2">' +
-                                            '<input class="form-check-input" type="checkbox" id="wmd-persistent">' +
-                                            '<label class="form-check-label" for="wmd-persistent">Persistent</label>' +
-                                        "</div></div>" +
-                                "</div>" +
-                            "</div>" +
-                        "</div>" +
+            '<div class="row g-3">' +
+                '<div class="col-md-3">' +
+                    '<div class="list-group list-group-flush nav nav-pills flex-column cadmin-settings-nav" id="wmd-settings-nav" role="tablist">' +
+                        navButton("wmd-pane-request", "bi bi-box-arrow-in-down", "Request", { active: true }) +
+                        navButton("wmd-pane-matchers", "bi bi-funnel", "Matchers") +
+                        navButton("wmd-pane-response", "bi bi-box-arrow-up-right", "Response") +
+                        navButton("wmd-pane-json", "bi bi-braces", "Stub mapping") +
+                        navButton("wmd-pane-danger", "bi bi-exclamation-triangle", "Danger zone", { danger: true }) +
                     "</div>" +
-                    '<div class="col-lg-6">' +
-                        '<div class="card shadow mb-4">' +
-                            '<div class="card-header py-3"><h6 class="m-0">Response</h6></div>' +
-                            '<div class="card-body">' +
-                                '<div class="row">' +
-                                    '<div class="col-md-4 mb-3"><label class="form-label">Status</label>' +
-                                        '<input class="form-control" id="wmd-status" type="number" min="100" max="599"></div>' +
-                                    '<div class="col-md-8 mb-3"><label class="form-label">Body</label>' +
-                                        '<select class="form-select" id="wmd-body-kind">' +
-                                            optionsHtml(BODY_KINDS) + "</select></div>" +
-                                "</div>" +
-                                field("Body content",
-                                    '<textarea class="form-control font-monospace" id="wmd-body" rows="8"></textarea>') +
-                                '<div class="mb-0">' +
-                                    '<div class="d-flex justify-content-between align-items-center mb-2">' +
-                                        '<label class="form-label mb-0">Headers</label>' +
-                                        '<button class="btn btn-sm btn-outline-primary" type="button" id="wmd-header-add">' +
-                                            "Add</button>" +
+                "</div>" +
+                '<div class="col-md-9">' +
+                    '<form id="wmd-form">' +
+                        '<div class="tab-content">' +
+                            tabPane("wmd-pane-request",
+                                '<div class="d-flex flex-column gap-3">' +
+                                    '<div class="card">' +
+                                        '<div class="card-header"><h3 class="card-title">Request</h3></div>' +
+                                        '<div class="card-body">' +
+                                            field("Name", '<input class="form-control" id="wmd-name" placeholder="Optional display name">') +
+                                            field("Method", '<select class="form-select" id="wmd-method">' +
+                                                optionsHtml(METHODS) + "</select>") +
+                                            '<div class="row">' +
+                                                '<div class="col-md-5 mb-3"><label class="form-label">URL match</label>' +
+                                                    '<select class="form-select" id="wmd-url-kind">' +
+                                                        optionsHtml(URL_KINDS) + "</select></div>" +
+                                                '<div class="col-md-7 mb-3"><label class="form-label">Value</label>' +
+                                                    '<input class="form-control font-monospace" id="wmd-url" required></div>' +
+                                            "</div>" +
+                                            fieldRow(
+                                                field("Priority",
+                                                    '<input class="form-control" id="wmd-priority" type="number" min="1" placeholder="5">'),
+                                                '<div class="mb-3 d-flex align-items-end">' +
+                                                    '<div class="form-check mb-2">' +
+                                                        '<input class="form-check-input" type="checkbox" id="wmd-persistent">' +
+                                                        '<label class="form-check-label" for="wmd-persistent">Persistent</label>' +
+                                                    "</div></div>") +
+                                        "</div>" +
                                     "</div>" +
-                                    '<div class="table-responsive">' +
-                                        '<table class="table table-sm align-middle mb-0" id="wmd-header-table">' +
-                                            '<thead><tr><th class="cadmin-list-grip-col"></th><th>Name</th>' +
-                                                "<th>Value</th><th></th></tr></thead>" +
-                                            '<tbody id="wmd-header-rows"></tbody>' +
-                                        "</table>" +
-                                        datalistHtml("wmd-header-names", wm().RESPONSE_HEADER_NAMES) +
-                                        datalistHtml("wmd-header-content-types", wm().CONTENT_TYPE_VALUES) +
+                                    '<div class="card">' +
+                                        '<div class="card-header"><h3 class="card-title">Scenario</h3></div>' +
+                                        '<div class="card-body">' +
+                                            '<div class="row">' +
+                                                '<div class="col-md-4 mb-3 mb-md-0"><label class="form-label">Name</label>' +
+                                                    '<input class="form-control" id="wmd-scenario-name" placeholder="Optional"></div>' +
+                                                '<div class="col-md-4 mb-3 mb-md-0"><label class="form-label">Required state</label>' +
+                                                    '<input class="form-control" id="wmd-scenario-required" placeholder="Started"></div>' +
+                                                '<div class="col-md-4 mb-0"><label class="form-label">New state</label>' +
+                                                    '<input class="form-control" id="wmd-scenario-new"></div>' +
+                                            "</div>" +
+                                        "</div>" +
                                     "</div>" +
-                                "</div>" +
-                            "</div>" +
+                                    '<div class="card">' +
+                                        '<div class="card-header flex-wrap gap-2">' +
+                                            '<h3 class="card-title mb-0">Metadata</h3>' +
+                                            '<div class="card-tools">' +
+                                                '<button class="btn btn-sm btn-outline-primary" type="button" id="wmd-meta-add">' +
+                                                    "Add</button>" +
+                                            "</div>" +
+                                        "</div>" +
+                                        '<div class="card-body">' +
+                                            '<p class="text-muted small mb-3">Arbitrary JSON attributes used for tagging, search, and documentation. Object, array, and number values can be entered as JSON.</p>' +
+                                            '<div class="table-responsive">' +
+                                                '<table class="table table-sm align-middle mb-0" id="wmd-meta-table">' +
+                                                    '<thead><tr><th class="cadmin-list-grip-col"></th><th>Name</th>' +
+                                                        "<th>Value</th><th></th></tr></thead>" +
+                                                    '<tbody id="wmd-meta-rows"></tbody>' +
+                                                "</table>" +
+                                            "</div>" +
+                                        "</div>" +
+                                    "</div>" +
+                                "</div>",
+                                true) +
+                            tabPane("wmd-pane-matchers",
+                                '<div class="d-flex flex-column gap-3">' +
+                                    '<div class="card">' +
+                                        '<div class="card-header flex-wrap gap-2">' +
+                                            '<h3 class="card-title mb-0">Request headers</h3>' +
+                                            '<div class="card-tools">' +
+                                                '<button class="btn btn-sm btn-outline-primary" type="button" id="wmd-req-header-add">' +
+                                                    "Add</button>" +
+                                            "</div>" +
+                                        "</div>" +
+                                        '<div class="card-body">' +
+                                            '<p class="text-muted small mb-3">Match individual request headers. Leave empty to match any headers.</p>' +
+                                            '<div class="table-responsive">' +
+                                                '<table class="table table-sm align-middle mb-0" id="wmd-req-header-table">' +
+                                                    '<thead><tr><th class="cadmin-list-grip-col"></th><th>Name</th>' +
+                                                        "<th>Matcher</th><th>Value</th>" +
+                                                        '<th class="wmd-req-header-case-col" title="Case insensitive">Case</th>' +
+                                                        "<th></th></tr></thead>" +
+                                                    '<tbody id="wmd-req-header-rows"></tbody>' +
+                                                "</table>" +
+                                                datalistHtml("wmd-req-header-names", wm().REQUEST_HEADER_NAMES) +
+                                                reqHeaderValueDatalistsHtml() +
+                                            "</div>" +
+                                        "</div>" +
+                                    "</div>" +
+                                    '<div class="card">' +
+                                        '<div class="card-header flex-wrap gap-2">' +
+                                            '<h3 class="card-title mb-0">Query parameters</h3>' +
+                                            '<div class="card-tools">' +
+                                                '<button class="btn btn-sm btn-outline-primary" type="button" id="wmd-query-add">' +
+                                                    "Add</button>" +
+                                            "</div>" +
+                                        "</div>" +
+                                        '<div class="card-body">' +
+                                            '<p class="text-muted small mb-3">Match individual query string fields. Prefer Path URL match when these constraints should apply independently of a full URL.</p>' +
+                                            '<div class="table-responsive">' +
+                                                '<table class="table table-sm align-middle mb-0" id="wmd-query-table">' +
+                                                    '<thead><tr><th class="cadmin-list-grip-col"></th><th>Name</th>' +
+                                                        "<th>Matcher</th><th>Value</th>" +
+                                                        '<th class="wmd-query-case-col" title="Case insensitive">Case</th>' +
+                                                        "<th></th></tr></thead>" +
+                                                    '<tbody id="wmd-query-rows"></tbody>' +
+                                                "</table>" +
+                                                datalistHtml("wmd-query-names", wm().QUERY_PARAM_NAMES) +
+                                                queryValueDatalistsHtml() +
+                                            "</div>" +
+                                        "</div>" +
+                                    "</div>" +
+                                    '<div class="card">' +
+                                        '<div class="card-header flex-wrap gap-2">' +
+                                            '<h3 class="card-title mb-0">Body patterns</h3>' +
+                                            '<div class="card-tools">' +
+                                                '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#wmd-pattern-modal">Add</button>' +
+                                            "</div>" +
+                                        "</div>" +
+                                        '<div class="card-body">' +
+                                            '<div class="table-responsive">' +
+                                                '<table class="table table-hover align-middle mb-0">' +
+                                                    "<thead><tr><th>Matcher</th><th>Value</th><th>Options</th><th></th></tr></thead>" +
+                                                    '<tbody id="wmd-pattern-rows"></tbody>' +
+                                                "</table>" +
+                                            "</div>" +
+                                        "</div>" +
+                                    "</div>" +
+                                "</div>") +
+                            tabPane("wmd-pane-response",
+                                '<div class="card">' +
+                                    '<div class="card-header"><h3 class="card-title">Response</h3></div>' +
+                                    '<div class="card-body">' +
+                                        '<div class="row">' +
+                                            '<div class="col-md-4 mb-3"><label class="form-label">Status</label>' +
+                                                '<input class="form-control" id="wmd-status" type="number" min="100" max="599"></div>' +
+                                            '<div class="col-md-8 mb-3"><label class="form-label">Body</label>' +
+                                                '<select class="form-select" id="wmd-body-kind">' +
+                                                    optionsHtml(BODY_KINDS) + "</select></div>" +
+                                        "</div>" +
+                                        field("Body content",
+                                            '<textarea class="form-control font-monospace" id="wmd-body" rows="8"></textarea>') +
+                                        '<div class="mb-0">' +
+                                            '<div class="d-flex justify-content-between align-items-center mb-2">' +
+                                                '<label class="form-label mb-0">Headers</label>' +
+                                                '<button class="btn btn-sm btn-outline-primary" type="button" id="wmd-header-add">' +
+                                                    "Add</button>" +
+                                            "</div>" +
+                                            '<div class="table-responsive">' +
+                                                '<table class="table table-sm align-middle mb-0" id="wmd-header-table">' +
+                                                    '<thead><tr><th class="cadmin-list-grip-col"></th><th>Name</th>' +
+                                                        "<th>Value</th><th></th></tr></thead>" +
+                                                    '<tbody id="wmd-header-rows"></tbody>' +
+                                                "</table>" +
+                                                datalistHtml("wmd-header-names", wm().RESPONSE_HEADER_NAMES) +
+                                                datalistHtml("wmd-header-content-types", wm().CONTENT_TYPE_VALUES) +
+                                            "</div>" +
+                                        "</div>" +
+                                    "</div>" +
+                                "</div>") +
+                            tabPane("wmd-pane-json",
+                                '<div class="card">' +
+                                    '<div class="card-header flex-wrap gap-2">' +
+                                        '<h3 class="card-title mb-0">Stub mapping JSON</h3>' +
+                                        '<div class="card-tools d-flex gap-2">' +
+                                            '<button class="btn btn-sm btn-outline-secondary" type="button" id="wmd-beautify">Beautify</button>' +
+                                            '<button class="btn btn-sm btn-outline-primary" type="button" id="wmd-apply-json">Apply to form</button>' +
+                                        "</div>" +
+                                    "</div>" +
+                                    '<div class="card-body p-0">' +
+                                        '<textarea id="wmd-json" class="d-none"></textarea>' +
+                                    "</div>" +
+                                "</div>") +
+                            tabPane("wmd-pane-danger",
+                                '<div class="card border-danger">' +
+                                    '<div class="card-header bg-danger-subtle">' +
+                                        '<h3 class="card-title text-danger">Danger zone</h3>' +
+                                    "</div>" +
+                                    '<div class="card-body">' +
+                                        '<div class="d-flex justify-content-between align-items-start">' +
+                                            "<div>" +
+                                                '<p class="mb-0 fw-semibold text-danger">Delete this stub mapping</p>' +
+                                                '<small class="text-secondary">' +
+                                                    "This permanently removes the mapping from WireMock." +
+                                                "</small>" +
+                                            "</div>" +
+                                            '<button class="btn btn-danger" type="button" id="wmd-delete">Delete</button>' +
+                                        "</div>" +
+                                    "</div>" +
+                                "</div>") +
                         "</div>" +
-                    "</div>" +
+                    "</form>" +
                 "</div>" +
-                '<div class="card shadow mb-4">' +
-                    '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                        '<h6 class="m-0">Query parameters</h6>' +
-                        '<button class="btn btn-sm btn-outline-primary" type="button" id="wmd-query-add">' +
-                            "Add</button>" +
-                    "</div>" +
-                    '<div class="card-body">' +
-                        '<p class="text-muted small mb-3">Match individual query string fields. Prefer Path URL match when these constraints should apply independently of a full URL.</p>' +
-                        '<div class="table-responsive">' +
-                            '<table class="table table-sm align-middle mb-0" id="wmd-query-table">' +
-                                '<thead><tr><th class="cadmin-list-grip-col"></th><th>Name</th>' +
-                                    "<th>Matcher</th><th>Value</th>" +
-                                    '<th class="wmd-query-case-col" title="Case insensitive">Case</th>' +
-                                    "<th></th></tr></thead>" +
-                                '<tbody id="wmd-query-rows"></tbody>' +
-                            "</table>" +
-                            datalistHtml("wmd-query-names", wm().QUERY_PARAM_NAMES) +
-                            queryValueDatalistsHtml() +
-                        "</div>" +
-                    "</div>" +
-                "</div>" +
-                '<div class="card shadow mb-4">' +
-                    '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                        '<h6 class="m-0">Body patterns</h6>' +
-                        '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#wmd-pattern-modal">Add</button>' +
-                    "</div>" +
-                    '<div class="card-body">' +
-                        '<div class="table-responsive">' +
-                            '<table class="table table-hover align-middle mb-0">' +
-                                "<thead><tr><th>Matcher</th><th>Value</th><th>Options</th><th></th></tr></thead>" +
-                                '<tbody id="wmd-pattern-rows"></tbody>' +
-                            "</table>" +
-                        "</div>" +
-                    "</div>" +
-                "</div>" +
-                '<div class="card shadow mb-4">' +
-                    '<div class="card-header py-3"><h6 class="m-0">Scenario</h6></div>' +
-                    '<div class="card-body">' +
-                        '<div class="row">' +
-                            '<div class="col-md-4 mb-3 mb-md-0"><label class="form-label">Name</label>' +
-                                '<input class="form-control" id="wmd-scenario-name" placeholder="Optional"></div>' +
-                            '<div class="col-md-4 mb-3 mb-md-0"><label class="form-label">Required state</label>' +
-                                '<input class="form-control" id="wmd-scenario-required" placeholder="Started"></div>' +
-                            '<div class="col-md-4 mb-0"><label class="form-label">New state</label>' +
-                                '<input class="form-control" id="wmd-scenario-new"></div>' +
-                        "</div>" +
-                    "</div>" +
-                "</div>" +
-            "</form>" +
+            "</div>" +
             '<div class="modal fade" id="wmd-pattern-modal" tabindex="-1">' +
                 '<div class="modal-dialog">' +
                     '<form class="modal-content" id="wmd-pattern-form">' +
@@ -1181,18 +1713,6 @@ window.CadminWiremockMappingDetail = (function () {
                         "</div>" +
                     "</form>" +
                 "</div>" +
-            "</div>" +
-            '<div class="card shadow mb-4">' +
-                '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                    '<h6 class="m-0">Stub mapping JSON</h6>' +
-                    '<div class="d-flex gap-2">' +
-                        '<button class="btn btn-sm btn-outline-secondary" type="button" id="wmd-beautify">Beautify</button>' +
-                        '<button class="btn btn-sm btn-outline-primary" type="button" id="wmd-apply-json">Apply to form</button>' +
-                    "</div>" +
-                "</div>" +
-                '<div class="card-body p-0">' +
-                    '<textarea id="wmd-json" class="d-none"></textarea>' +
-                "</div>" +
             "</div>"
         );
         const textarea = document.getElementById("wmd-json");
@@ -1225,6 +1745,18 @@ window.CadminWiremockMappingDetail = (function () {
             next.response.headers = headers;
         } else {
             delete next.response.headers;
+        }
+        try {
+            const requestHeaders = wm().requestHeadersFromEntries(
+                wm().requestHeaderEntries(next.request.headers)
+            );
+            if (Object.keys(requestHeaders).length) {
+                next.request.headers = requestHeaders;
+            } else {
+                delete next.request.headers;
+            }
+        } catch (error) {
+            /* keep recorded request headers when they cannot be normalized */
         }
         try {
             const queryParameters = wm().queryParamsFromEntries(

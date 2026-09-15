@@ -263,6 +263,7 @@ function renderCamelRouteList(initialQuery) {
                     "<td><code>" + esc(library.name || "—") + "</code></td>" +
                     "<td><code>" + esc(library.id) + "</code></td>" +
                     '<td class="text-end text-nowrap">' +
+                        CadminWorkspace.listBookmarkButton(library) +
                         '<a class="btn btn-sm btn-outline-primary me-1" href="#/camel-routes/' +
                             encodeURIComponent(library.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a>' +
                         '<button class="btn btn-sm btn-outline-secondary" type="button" data-duplicate="' +

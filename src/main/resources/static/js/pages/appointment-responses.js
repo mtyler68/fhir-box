@@ -73,7 +73,8 @@ function renderAppointmentResponseList() {
                         "<td>" + CadminScheduling.refHtml(item.actor) + "</td>" +
                         "<td>" + CadminScheduling.statusBadge(item.participantStatus, CadminScheduling.responseStatus) + "</td>" +
                         "<td><code>" + CadminApi.escapeHtml(item.id) + "</code></td>" +
-                        '<td class="text-end"><a class="btn btn-sm btn-outline-primary" href="' + href +
+                        '<td class="text-end text-nowrap">' + CadminWorkspace.listBookmarkButton(item) +
+                    '<a class="btn btn-sm btn-outline-primary" href="' + href +
                             '"><i class="bi bi-eye"></i></a></td></tr>';
                 }).join(""));
             }).fail(function (xhr) {

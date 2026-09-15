@@ -1,0 +1,10 @@
+{
+  "serialNumber": "12345",
+  "recordId": 1234,
+  "totalBasal": 30.46,
+  "totalBolus": 20.48,
+  "totalInsulin": 50.94,
+  "timestamp": "2019-05-17T20:01:30.342Z",
+  "syncTimestamp": "2019-06-18T00:20:00.078Z",
+  "utcOffset": "-07:00"
+}

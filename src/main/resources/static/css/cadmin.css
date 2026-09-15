@@ -168,9 +168,11 @@
     margin-bottom: 0;
 }
 
+.cadmin-settings-nav,
 #td-settings-nav,
 #sd-settings-nav,
 #crd-settings-nav,
+#ird-settings-nav,
 #rlp-settings-nav,
 #rlt-settings-nav {
     position: sticky;
@@ -178,18 +180,22 @@
     gap: 0.15rem;
 }
 
+.cadmin-settings-nav .list-group-item,
 #td-settings-nav .list-group-item,
 #sd-settings-nav .list-group-item,
 #crd-settings-nav .list-group-item,
+#ird-settings-nav .list-group-item,
 #rlp-settings-nav .list-group-item,
 #rlt-settings-nav .list-group-item {
     border: 0;
     border-radius: var(--bs-border-radius);
 }
 
+.cadmin-settings-nav .list-group-item.active,
 #td-settings-nav .list-group-item.active,
 #sd-settings-nav .list-group-item.active,
 #crd-settings-nav .list-group-item.active,
+#ird-settings-nav .list-group-item.active,
 #rlp-settings-nav .list-group-item.active,
 #rlt-settings-nav .list-group-item.active {
     font-weight: 600;
@@ -334,10 +340,30 @@ body.layout-fixed .app-main {
 .workspace-bookmark-row {
     display: flex;
     align-items: stretch;
+    cursor: grab;
+}
+
+.workspace-bookmark-row .cadmin-list-grip {
+    display: flex;
+    align-items: center;
+    padding: 0 0.15rem 0 0.45rem;
 }
 
 .workspace-bookmark-row .dropdown-item {
     min-width: 0;
+    flex: 1 1 auto;
+}
+
+.workspace-bookmark-row.is-dragging {
+    opacity: 0.45;
+}
+
+.workspace-bookmark-row.drop-before {
+    box-shadow: inset 0 2px 0 var(--bs-primary);
+}
+
+.workspace-bookmark-row.drop-after {
+    box-shadow: inset 0 -2px 0 var(--bs-primary);
 }
 
 .workspace-bookmark-remove {
@@ -1447,13 +1473,37 @@ body.layout-fixed .app-main {
     background-image: none;
 }
 
-#sd-basic-form .min-w-0 > .ts-wrapper {
+#sd-basic-form .min-w-0 > .ts-wrapper,
+#sd-basic-form .min-w-0 > .cadmin-fhir-select-group {
     width: 100%;
 }
 
 .ts-wrapper.form-select .ts-control {
     border: 0;
     box-shadow: none;
+}
+
+.cadmin-fhir-select-group {
+    width: 100%;
+    flex-wrap: nowrap;
+}
+
+.cadmin-fhir-select-group > .ts-wrapper.form-select {
+    width: auto;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.cadmin-fhir-select-group > [data-bookmark-pick] {
+    flex: 0 0 auto;
+}
+
+button[data-list-bookmark]:disabled {
+    opacity: 0.55;
+}
+
+#cadmin-bookmark-pick-modal {
+    z-index: 1105;
 }
 
 .ts-dropdown {
@@ -1610,7 +1660,8 @@ body:not(.cadmin-has-fhir-resource) [data-target-list-add] {
 }
 
 .cadmin-target-list-footer {
-    justify-content: flex-end;
+    justify-content: space-between;
+    flex-wrap: wrap;
     border-bottom: 0;
     border-top: 1px solid var(--bs-border-color);
 }
@@ -1701,36 +1752,68 @@ body:not(.cadmin-has-fhir-resource) [data-target-list-add] {
 }
 
 #wmd-header-rows tr[data-header-index],
-#wmd-query-rows tr[data-query-index] {
+#wmd-query-rows tr[data-query-index],
+#wmd-req-header-rows tr[data-req-header-index],
+#wmd-meta-rows tr[data-meta-index] {
     cursor: grab;
 }
 
 #wmd-header-rows tr.is-dragging,
-#wmd-query-rows tr.is-dragging {
+#wmd-query-rows tr.is-dragging,
+#wmd-req-header-rows tr.is-dragging,
+#wmd-meta-rows tr.is-dragging {
     opacity: 0.45;
 }
 
 #wmd-header-rows tr.drop-before td,
-#wmd-query-rows tr.drop-before td {
+#wmd-query-rows tr.drop-before td,
+#wmd-req-header-rows tr.drop-before td,
+#wmd-meta-rows tr.drop-before td {
     box-shadow: inset 0 2px 0 var(--bs-primary);
 }
 
 #wmd-header-rows tr.drop-after td,
-#wmd-query-rows tr.drop-after td {
+#wmd-query-rows tr.drop-after td,
+#wmd-req-header-rows tr.drop-after td,
+#wmd-meta-rows tr.drop-after td {
     box-shadow: inset 0 -2px 0 var(--bs-primary);
 }
 
 #wmd-header-table .cadmin-list-grip-col,
-#wmd-query-table .cadmin-list-grip-col {
+#wmd-query-table .cadmin-list-grip-col,
+#wmd-req-header-table .cadmin-list-grip-col,
+#wmd-meta-table .cadmin-list-grip-col {
     width: 1.5rem;
 }
 
-#wmd-query-table .wmd-query-case-col {
+#csd-concept-rows tr[data-concept-index],
+#vsd-compose tr[data-cindex] {
+    cursor: grab;
+}
+
+#csd-concept-rows tr.is-dragging,
+#vsd-compose tr.is-dragging {
+    opacity: 0.45;
+}
+
+#csd-concept-rows tr.drop-before td,
+#vsd-compose tr.drop-before td {
+    box-shadow: inset 0 2px 0 var(--bs-primary);
+}
+
+#csd-concept-rows tr.drop-after td,
+#vsd-compose tr.drop-after td {
+    box-shadow: inset 0 -2px 0 var(--bs-primary);
+}
+
+#wmd-query-table .wmd-query-case-col,
+#wmd-req-header-table .wmd-req-header-case-col {
     width: 3.5rem;
     text-align: center;
 }
 
-#wmd-query-table [data-query-matcher] {
+#wmd-query-table [data-query-matcher],
+#wmd-req-header-table [data-req-header-matcher] {
     min-width: 10rem;
 }
 

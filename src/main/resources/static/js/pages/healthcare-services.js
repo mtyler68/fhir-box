@@ -135,7 +135,8 @@ function renderHealthcareServiceList(initialQuery) {
                         ? '<span class="badge text-bg-success">Active</span>'
                         : '<span class="badge text-bg-secondary">Inactive</span>') + "</td>" +
                     "<td><code>" + CadminApi.escapeHtml(service.id) + "</code></td>" +
-                    '<td class="text-end"><a class="btn btn-sm btn-outline-primary" href="#/healthcare-services/' +
+                    '<td class="text-end text-nowrap">' + CadminWorkspace.listBookmarkButton(service) +
+                    '<a class="btn btn-sm btn-outline-primary" href="#/healthcare-services/' +
                         encodeURIComponent(service.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a></td>' +
                     "</tr>";
             });

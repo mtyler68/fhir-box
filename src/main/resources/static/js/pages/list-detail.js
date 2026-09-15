@@ -302,6 +302,9 @@ window.CadminListDetail = (function () {
                     '<button class="btn btn-outline-danger" type="button" id="ld-delete">' +
                         '<i class="bi bi-trash me-1"></i>Delete</button>' +
                     CadminTargetList.chooserButton(list.id, { large: true }) +
+                    '<button class="btn btn-outline-secondary" type="button" id="ld-bundle" ' +
+                        'title="Create a Bundle of this list\'s contents">' +
+                        '<i class="bi bi-collection me-1"></i>Bundle</button>' +
                     CadminResourceSource.button() +
                 "</div>" +
             "</div>" +
@@ -547,6 +550,13 @@ window.CadminListDetail = (function () {
             saveList(function () {
                 CadminApi.showToast("success", "Entry removed.");
             });
+        });
+
+        $root.on("click.listdetail", "#ld-bundle", function () {
+            if (!window.CadminResourceGraph || typeof CadminResourceGraph.promptListBundle !== "function") {
+                return;
+            }
+            CadminResourceGraph.promptListBundle(list, $(this));
         });
 
         $root.on("click.listdetail", "#ld-delete", function () {

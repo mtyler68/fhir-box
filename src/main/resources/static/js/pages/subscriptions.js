@@ -270,7 +270,8 @@ function renderSubscriptionList(initialQuery) {
                     "<td>" + statusBadge(sub.status) + "</td>" +
                     "<td><code>" + esc(sub.id) + "</code></td>" +
                     '<td class="text-end text-nowrap">' + statusToggleButton(sub) +
-                    '<a class="btn btn-sm btn-outline-primary" href="#/subscriptions/' +
+                    CadminWorkspace.listBookmarkButton(sub) +
+                        '<a class="btn btn-sm btn-outline-primary" href="#/subscriptions/' +
                         encodeURIComponent(sub.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a></td>' +
                     "</tr>";
             });

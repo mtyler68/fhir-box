@@ -13,6 +13,9 @@ window.CadminValueSetDetail = (function () {
 
     let valueSet = null;
     let includes = [];
+    let conceptDragInclude = -1;
+    let conceptDragFrom = -1;
+    let conceptDropBefore = -1;
 
     function esc(value) {
         return CadminApi.escapeHtml(value);
@@ -20,6 +23,34 @@ window.CadminValueSetDetail = (function () {
 
     function field(label, control) {
         return '<div class="mb-3"><label class="form-label">' + label + "</label>" + control + "</div>";
+    }
+
+    function fieldRow(left, right) {
+        return '<div class="row">' +
+            '<div class="col-md-6">' + left + "</div>" +
+            '<div class="col-md-6">' + right + "</div>" +
+            "</div>";
+    }
+
+    function navButton(paneId, icon, label, opts) {
+        opts = opts || {};
+        const classes = ["list-group-item", "list-group-item-action", "text-start"];
+        if (opts.active) {
+            classes.push("active");
+        }
+        if (opts.danger) {
+            classes.push("text-danger");
+        }
+        return '<button type="button" class="' + classes.join(" ") + '" id="' + paneId + '-btn" ' +
+            'data-bs-toggle="pill" data-bs-target="#' + paneId + '" role="tab" aria-controls="' + paneId +
+            '" aria-selected="' + (opts.active ? "true" : "false") + '">' +
+            '<i class="' + icon + ' me-2" aria-hidden="true"></i>' + label +
+            "</button>";
+    }
+
+    function tabPane(id, body, active) {
+        return '<div class="tab-pane fade' + (active ? " show active" : "") + '" id="' + id +
+            '" role="tabpanel" aria-labelledby="' + id + '-btn">' + body + "</div>";
     }
 
     function statusLabel(code) {
@@ -164,7 +195,7 @@ window.CadminValueSetDetail = (function () {
             .done(function (updated) {
                 valueSet = updated || valueSet;
                 includes = fromResource(valueSet);
-                renderMeta();
+                renderHeader();
                 renderCompose();
                 CadminResourceSource.mount(function () { return valueSet; });
                 CadminResourceGraph.mount(valueSet);
@@ -180,93 +211,129 @@ window.CadminValueSetDetail = (function () {
         valueSet = resource;
         includes = fromResource(valueSet);
         const $root = $(CadminWorkspace.root());
+        const label = esc(valueSet.title || valueSet.name || "ValueSet");
         $root.html(
-            '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
+            '<div class="d-flex align-items-center justify-content-between mb-3">' +
                 "<div>" +
                     '<a class="small text-decoration-none" href="#/value-sets">' +
                         '<i class="bi bi-arrow-left me-1"></i>Value sets</a>' +
-                    '<h1 class="h3 mb-0 page-title" id="vsd-title"></h1>' +
+                    '<div class="d-flex align-items-center flex-wrap gap-2">' +
+                        '<h1 class="mb-0 fs-3 page-title" id="vsd-title">' + label + "</h1>" +
+                        '<span id="vsd-status-badge">' + statusBadge(valueSet.status) + "</span>" +
+                        (valueSet.id
+                            ? '<code class="small" id="vsd-fhir-id">' + esc(valueSet.id) + "</code>"
+                            : '<code class="small d-none" id="vsd-fhir-id"></code>') +
+                        CadminApi.unsavedFlagHtml() +
+                    "</div>" +
                 "</div>" +
                 '<div class="d-flex flex-wrap gap-2">' +
-                    '<button class="btn btn-primary" type="button" id="vsd-save">' +
-                        '<i class="bi bi-check2 me-1"></i>Save</button>' +
-                    '<button class="btn btn-outline-danger" type="button" id="vsd-delete">' +
-                        '<i class="bi bi-trash me-1"></i>Delete</button>' +
                     CadminResourceSource.button() +
                 "</div>" +
             "</div>" +
-            '<div class="card shadow mb-4">' +
-                '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                    '<h6 class="m-0">Identity</h6>' +
-                    '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#vsd-meta-modal">Edit</button>' +
+            '<div class="row g-3">' +
+                '<div class="col-md-3">' +
+                    '<div class="list-group list-group-flush nav nav-pills flex-column cadmin-settings-nav" id="vsd-settings-nav" role="tablist">' +
+                        navButton("vsd-pane-basics", "bi bi-info-circle", "Basics", { active: true }) +
+                        navButton("vsd-pane-compose", "bi bi-collection", "Compose") +
+                        navButton("vsd-pane-expansion", "bi bi-arrow-repeat", "Expansion") +
+                        navButton("vsd-pane-validate", "bi bi-check2-circle", "Validate code") +
+                        navButton("vsd-pane-graph", "bi bi-diagram-3", "Reference graph") +
+                        navButton("vsd-pane-history", "bi bi-clock-history", "History") +
+                        navButton("vsd-pane-danger", "bi bi-exclamation-triangle", "Danger zone", { danger: true }) +
+                    "</div>" +
                 "</div>" +
-                '<div class="card-body" id="vsd-meta"></div>' +
-            "</div>" +
-            '<div class="card shadow mb-4">' +
-                '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                    '<h6 class="m-0">Compose</h6>' +
-                    '<button class="btn btn-sm btn-primary" type="button" id="vsd-add-include">' +
-                        '<i class="bi bi-plus-lg me-1"></i>Add include</button>' +
-                "</div>" +
-                '<div class="card-body" id="vsd-compose"></div>' +
-            "</div>" +
-            '<div class="card shadow mb-4">' +
-                '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                    '<h6 class="m-0">Expansion preview</h6>' +
-                    '<button class="btn btn-sm btn-outline-primary" type="button" id="vsd-expand">' +
-                        '<i class="bi bi-arrow-repeat me-1"></i>Expand</button>' +
-                "</div>" +
-                '<div class="card-body" id="vsd-expansion"></div>' +
-            "</div>" +
-            '<div class="card shadow mb-4">' +
-                '<div class="card-header py-3"><h6 class="m-0">Validate code</h6></div>' +
-                '<div class="card-body">' +
-                    '<form class="row g-2 align-items-end" id="vsd-validate-form">' +
-                        '<div class="col-md-4"><label class="form-label" for="vsd-val-system">System</label>' +
-                            '<select class="form-select" id="vsd-val-system"></select></div>' +
-                        '<div class="col-md-3"><label class="form-label" for="vsd-val-code">Code</label>' +
-                            '<input class="form-control font-monospace" id="vsd-val-code" required></div>' +
-                        '<div class="col-md-3"><label class="form-label" for="vsd-val-display">Display (optional)</label>' +
-                            '<input class="form-control" id="vsd-val-display"></div>' +
-                        '<div class="col-md-2">' +
-                            '<button class="btn btn-outline-primary w-100" type="submit">Validate</button></div>' +
-                    "</form>" +
-                    '<div class="mt-3 d-none" id="vsd-validate-result"></div>' +
-                "</div>" +
-            "</div>" +
-            CadminResourceHistory.card() +
-            CadminResourceGraph.card() +
-            '<div class="modal fade" id="vsd-meta-modal" tabindex="-1">' +
-                '<div class="modal-dialog">' +
-                    '<form class="modal-content" id="vsd-meta-form">' +
-                        '<div class="modal-header"><h5 class="modal-title">Edit identity</h5>' +
-                            '<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>' +
-                        '<div class="modal-body">' +
-                            field("Title", '<input class="form-control" id="vsd-title-input">') +
-                            field("Name", '<input class="form-control" id="vsd-name">') +
-                            field("URL", '<input class="form-control font-monospace" id="vsd-url">') +
-                            field("Status", '<select class="form-select" id="vsd-status">' +
-                                optionsHtml(statusOptions, "") + "</select>") +
-                            field("Version", '<input class="form-control" id="vsd-version">') +
-                            field("Publisher", '<input class="form-control" id="vsd-publisher">') +
-                            field("Description", '<textarea class="form-control" id="vsd-description" rows="2"></textarea>') +
-                        "</div>" +
-                        '<div class="modal-footer">' +
-                            '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>' +
-                            '<button type="submit" class="btn btn-primary">Save</button>' +
-                        "</div>" +
-                    "</form>" +
+                '<div class="col-md-9">' +
+                    '<div class="tab-content">' +
+                        tabPane("vsd-pane-basics",
+                            '<form id="vsd-meta-form">' +
+                                '<div class="card">' +
+                                    '<div class="card-header"><h3 class="card-title">Basics</h3></div>' +
+                                    '<div class="card-body">' +
+                                        field("Title", '<input class="form-control" id="vsd-title-input">') +
+                                        fieldRow(
+                                            field("Name", '<input class="form-control" id="vsd-name">'),
+                                            field("Status", '<select class="form-select" id="vsd-status">' +
+                                                optionsHtml(statusOptions, "") + "</select>")) +
+                                        field("URL", '<input class="form-control font-monospace" id="vsd-url">') +
+                                        fieldRow(
+                                            field("Version", '<input class="form-control" id="vsd-version">'),
+                                            field("Publisher", '<input class="form-control" id="vsd-publisher">')) +
+                                        field("Description", '<textarea class="form-control" id="vsd-description" rows="2"></textarea>') +
+                                        '<button type="submit" class="btn btn-primary">Save changes</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</form>",
+                            true) +
+                        tabPane("vsd-pane-compose",
+                            '<div class="card">' +
+                                '<div class="card-header flex-wrap gap-2">' +
+                                    '<h3 class="card-title mb-0">Compose</h3>' +
+                                    '<div class="card-tools d-flex gap-2">' +
+                                        '<button class="btn btn-sm btn-outline-primary" type="button" id="vsd-add-include">' +
+                                            '<i class="bi bi-plus-lg me-1"></i>Add include</button>' +
+                                        '<button class="btn btn-sm btn-primary" type="button" id="vsd-save">' +
+                                            '<i class="bi bi-check2 me-1"></i>Save</button>' +
+                                    "</div>" +
+                                "</div>" +
+                                '<div class="card-body" id="vsd-compose"></div>' +
+                            "</div>") +
+                        tabPane("vsd-pane-expansion",
+                            '<div class="card">' +
+                                '<div class="card-header flex-wrap gap-2">' +
+                                    '<h3 class="card-title mb-0">Expansion preview</h3>' +
+                                    '<div class="card-tools">' +
+                                        '<button class="btn btn-sm btn-outline-primary" type="button" id="vsd-expand">' +
+                                            '<i class="bi bi-arrow-repeat me-1"></i>Expand</button>' +
+                                    "</div>" +
+                                "</div>" +
+                                '<div class="card-body" id="vsd-expansion"></div>' +
+                            "</div>") +
+                        tabPane("vsd-pane-validate",
+                            '<div class="card">' +
+                                '<div class="card-header"><h3 class="card-title">Validate code</h3></div>' +
+                                '<div class="card-body">' +
+                                    '<form class="row g-2 align-items-end" id="vsd-validate-form">' +
+                                        '<div class="col-md-4"><label class="form-label" for="vsd-val-system">System</label>' +
+                                            '<select class="form-select" id="vsd-val-system"></select></div>' +
+                                        '<div class="col-md-3"><label class="form-label" for="vsd-val-code">Code</label>' +
+                                            '<input class="form-control font-monospace" id="vsd-val-code" required></div>' +
+                                        '<div class="col-md-3"><label class="form-label" for="vsd-val-display">Display (optional)</label>' +
+                                            '<input class="form-control" id="vsd-val-display"></div>' +
+                                        '<div class="col-md-2">' +
+                                            '<button class="btn btn-outline-primary w-100" type="submit">Validate</button></div>' +
+                                    "</form>" +
+                                    '<div class="mt-3 d-none" id="vsd-validate-result"></div>' +
+                                "</div>" +
+                            "</div>") +
+                        tabPane("vsd-pane-graph", CadminResourceGraph.card()) +
+                        tabPane("vsd-pane-history", CadminResourceHistory.card()) +
+                        tabPane("vsd-pane-danger",
+                            '<div class="card border-danger">' +
+                                '<div class="card-header bg-danger-subtle">' +
+                                    '<h3 class="card-title text-danger">Danger zone</h3>' +
+                                "</div>" +
+                                '<div class="card-body">' +
+                                    '<div class="d-flex justify-content-between align-items-start">' +
+                                        "<div>" +
+                                            '<p class="mb-0 fw-semibold text-danger">Delete this value set</p>' +
+                                            '<small class="text-secondary">This permanently deletes the ValueSet resource.</small>' +
+                                        "</div>" +
+                                        '<button class="btn btn-danger" type="button" id="vsd-delete">Delete</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</div>") +
+                    "</div>" +
                 "</div>" +
             "</div>"
         );
         CadminResourceSource.mount(function () { return valueSet; });
         CadminResourceGraph.mount(valueSet);
         CadminResourceHistory.mount(valueSet);
-        renderMeta();
+        renderHeader();
+        populateMetaForm();
         renderCompose();
         $("#vsd-expansion").html('<div class="text-muted">Expand to preview codes from the current compose.</div>');
         bind();
-        $("#vsd-meta-modal").on("show.bs.modal", populateMetaForm);
         CadminApi.bindCodeSystemPicker("#vsd-val-system", {
             placeholder: "Code system…",
             selectedUrl: (includes[0] && includes[0].system) || "",
@@ -274,20 +341,14 @@ window.CadminValueSetDetail = (function () {
         });
     }
 
-    function renderMeta() {
+    function renderHeader() {
         $("#vsd-title").text(valueSet.title || valueSet.name || "ValueSet");
-        $("#vsd-meta").html(
-            '<dl class="row mb-0">' +
-                '<dt class="col-sm-3">Title</dt><dd class="col-sm-9">' + esc(valueSet.title || "—") + "</dd>" +
-                '<dt class="col-sm-3">Status</dt><dd class="col-sm-9">' + statusBadge(valueSet.status) + "</dd>" +
-                '<dt class="col-sm-3">Name</dt><dd class="col-sm-9"><code>' + esc(valueSet.name || "—") + "</code></dd>" +
-                '<dt class="col-sm-3">URL</dt><dd class="col-sm-9"><code>' + esc(valueSet.url || "—") + "</code></dd>" +
-                '<dt class="col-sm-3">Version</dt><dd class="col-sm-9"><code>' + esc(valueSet.version || "—") + "</code></dd>" +
-                '<dt class="col-sm-3">Publisher</dt><dd class="col-sm-9">' + esc(valueSet.publisher || "—") + "</dd>" +
-                '<dt class="col-sm-3">Description</dt><dd class="col-sm-9">' + esc(valueSet.description || "—") + "</dd>" +
-                '<dt class="col-sm-3">ID</dt><dd class="col-sm-9"><code>' + esc(valueSet.id) + "</code></dd>" +
-            "</dl>"
-        );
+        $("#vsd-status-badge").html(statusBadge(valueSet.status));
+        if (valueSet.id) {
+            $("#vsd-fhir-id").text(valueSet.id).removeClass("d-none");
+        } else {
+            $("#vsd-fhir-id").text("").addClass("d-none");
+        }
     }
 
     function populateMetaForm() {
@@ -304,12 +365,52 @@ window.CadminValueSetDetail = (function () {
         });
     }
 
+    function flushIncludeConcepts(includeIndex) {
+        const row = includes[includeIndex];
+        if (!row || !row.concepts) {
+            return;
+        }
+        $('#vsd-compose [data-include-card="' + includeIndex + '"] tr[data-cindex]').each(function () {
+            const cIndex = Number($(this).attr("data-cindex"));
+            if (!row.concepts[cIndex]) {
+                return;
+            }
+            row.concepts[cIndex].code = $(this).find("[data-concept-code]").val() || "";
+            row.concepts[cIndex].display = $(this).find("[data-concept-display]").val() || "";
+        });
+    }
+
+    function moveIncludeConcept(includeIndex, from, to) {
+        flushIncludeConcepts(includeIndex);
+        const list = includes[includeIndex] && includes[includeIndex].concepts;
+        if (!list || from < 0 || to < 0 || from >= list.length) {
+            return;
+        }
+        if (from === to || from + 1 === to) {
+            return;
+        }
+        const item = list.splice(from, 1)[0];
+        list.splice(to > from ? to - 1 : to, 0, item);
+        renderCompose();
+    }
+
+    function clearConceptDrag() {
+        conceptDragInclude = -1;
+        conceptDragFrom = -1;
+        conceptDropBefore = -1;
+        $("#vsd-compose tr").removeClass("is-dragging drop-before drop-after");
+    }
+
     function conceptTable(row, index) {
         const concepts = row.concepts || [];
         return '<div class="table-responsive mt-2"><table class="table table-sm align-middle mb-2">' +
-            "<thead><tr><th>Code</th><th>Display</th><th></th></tr></thead><tbody>" +
+            '<thead><tr><th class="cadmin-list-grip-col"></th><th>Code</th><th>Display</th><th></th></tr></thead>' +
+            '<tbody id="vsd-concept-rows-' + index + '">' +
             (concepts.length ? concepts.map(function (item, cIndex) {
-                return "<tr>" +
+                return '<tr draggable="true" data-include-index="' + index + '" data-cindex="' + cIndex + '">' +
+                    '<td class="cadmin-list-grip-col">' +
+                        '<span class="cadmin-list-grip" title="Drag to reorder" aria-hidden="true">' +
+                            '<i class="bi bi-grip-vertical"></i></span></td>' +
                     '<td><input class="form-control form-control-sm font-monospace" data-concept-code="' +
                         index + '" data-cindex="' + cIndex + '" value="' + esc(item.code || "") + '"></td>' +
                     '<td><input class="form-control form-control-sm" data-concept-display="' +
@@ -317,7 +418,7 @@ window.CadminValueSetDetail = (function () {
                     '<td class="text-end"><button class="btn btn-sm btn-outline-danger" type="button" data-remove-concept="' +
                         index + '" data-cindex="' + cIndex + '"><i class="bi bi-trash"></i></button></td>' +
                     "</tr>";
-            }).join("") : '<tr><td colspan="3" class="text-muted">No concepts. Add codes from this system.</td></tr>') +
+            }).join("") : '<tr><td colspan="4" class="text-muted">No concepts. Add codes from this system.</td></tr>') +
             "</tbody></table></div>" +
             '<button class="btn btn-sm btn-outline-primary" type="button" data-add-concept="' +
                 index + '">Add concept</button>';
@@ -484,6 +585,12 @@ window.CadminValueSetDetail = (function () {
     function bind() {
         const $root = $(CadminWorkspace.root());
         $root.off(".vsdetail");
+        $root.on("shown.bs.tab.vsdetail", "#vsd-pane-graph-btn", function () {
+            if (typeof CadminResourceGraph.resize === "function") {
+                CadminResourceGraph.resize();
+            }
+        });
+        $root.on("shown.bs.tab.vsdetail", "#vsd-pane-compose-btn", renderCompose);
         $root.on("click.vsdetail", "#vsd-save", function () {
             saveValueSet(function () {
                 alertMsg("success", "Value set saved.");
@@ -551,6 +658,51 @@ window.CadminValueSetDetail = (function () {
                 includes[index].concepts[cIndex].display = $(this).val();
             }
         });
+        $root.on("dragstart.vsdetail", "#vsd-compose tr[data-cindex]", function (event) {
+            if ($(event.target).closest("button, input, textarea, select, a").length) {
+                event.preventDefault();
+                return;
+            }
+            conceptDragInclude = Number($(this).attr("data-include-index"));
+            conceptDragFrom = Number($(this).attr("data-cindex"));
+            const native = event.originalEvent && event.originalEvent.dataTransfer;
+            if (native) {
+                native.effectAllowed = "move";
+                native.setData("text/plain", conceptDragInclude + ":" + conceptDragFrom);
+            }
+            $(this).addClass("is-dragging");
+        });
+        $root.on("dragover.vsdetail", "#vsd-compose tr[data-cindex]", function (event) {
+            const includeIndex = Number($(this).attr("data-include-index"));
+            if (conceptDragInclude < 0 || includeIndex !== conceptDragInclude) {
+                return;
+            }
+            event.preventDefault();
+            const native = event.originalEvent;
+            if (native && native.dataTransfer) {
+                native.dataTransfer.dropEffect = "move";
+            }
+            const rect = this.getBoundingClientRect();
+            const before = native && (native.clientY - rect.top) < rect.height / 2;
+            $("#vsd-compose tr").removeClass("drop-before drop-after");
+            $(this).addClass(before ? "drop-before" : "drop-after");
+            conceptDropBefore = Number($(this).attr("data-cindex")) + (before ? 0 : 1);
+        });
+        $root.on("drop.vsdetail", "#vsd-compose tr[data-cindex]", function (event) {
+            const includeIndex = Number($(this).attr("data-include-index"));
+            if (conceptDragInclude < 0 || includeIndex !== conceptDragInclude) {
+                return;
+            }
+            event.preventDefault();
+            const from = conceptDragFrom;
+            const to = conceptDropBefore;
+            const include = conceptDragInclude;
+            clearConceptDrag();
+            moveIncludeConcept(include, from, to);
+        });
+        $root.on("dragend.vsdetail", "#vsd-compose tr[data-cindex]", function () {
+            clearConceptDrag();
+        });
         $root.on("click.vsdetail", "#vsd-expand", expandPreview);
         $root.on("submit.vsdetail", "#vsd-validate-form", function (event) {
             event.preventDefault();
@@ -559,7 +711,6 @@ window.CadminValueSetDetail = (function () {
         $("#vsd-meta-form").on("submit", function (event) {
             event.preventDefault();
             saveValueSet(function () {
-                hideModal("vsd-meta-modal");
                 alertMsg("success", "Identity updated.");
             }, true);
         });

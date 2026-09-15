@@ -158,6 +158,7 @@ function renderValueSetList(initialQuery) {
                     "<td><code>" + esc(vs.version || "—") + "</code></td>" +
                     "<td><code>" + esc(vs.id) + "</code></td>" +
                     '<td class="text-end text-nowrap">' +
+                        CadminWorkspace.listBookmarkButton(vs) +
                         '<a class="btn btn-sm btn-outline-primary" href="#/value-sets/' +
                             encodeURIComponent(vs.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a>' +
                     "</td></tr>";

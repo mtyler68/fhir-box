@@ -1,0 +1,19 @@
+{
+  "serialNumber": "12345",
+  "_id": "441be72118f149efa841b5bac7bd8707",
+  "messageId": 1234,
+  "createTs": "2019-06-18T00:19:54.729Z",
+  "dateReceived": "2019-06-18T00:20:00.078Z",
+  "latest": {
+    "insulinTotal": 1560817200029
+  },
+  "insulinTotal": {
+    "id": "1560817200029",
+    "totalBasal": 30.46,
+    "totalBolus": 20.48,
+    "totalInsulin": 50.94,
+    "createdTimestamp": "0",
+    "createdTimestampStr": "2019-05-17T13:01:30.342 America/Los_Angeles"
+  },
+  "lastSynced": "2019-06-18T00:20:00.073Z"
+}

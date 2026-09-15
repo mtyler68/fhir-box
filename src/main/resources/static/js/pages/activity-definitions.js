@@ -116,7 +116,8 @@ function renderActivityDefinitionList() {
                         "<td>" + CadminApi.escapeHtml(CadminWorkflow.conceptCode(item.code) || "—") + "</td>" +
                         "<td>" + CadminWorkflow.publicationBadge(item.status) + "</td>" +
                         "<td><code>" + CadminApi.escapeHtml(item.id) + "</code></td>" +
-                        '<td class="text-end"><a class="btn btn-sm btn-outline-primary" href="' + href +
+                        '<td class="text-end text-nowrap">' + CadminWorkspace.listBookmarkButton(item) +
+                    '<a class="btn btn-sm btn-outline-primary" href="' + href +
                             '" title="Open"><i class="bi bi-eye"></i></a></td></tr>';
                 }).join(""));
             }).fail(function (xhr) {

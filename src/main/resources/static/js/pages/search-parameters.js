@@ -237,6 +237,7 @@ function renderSearchParameterList(initialQuery) {
                     "<td>" + statusBadge(sp.status) + "</td>" +
                     "<td><code>" + esc(sp.id) + "</code></td>" +
                     '<td class="text-end text-nowrap">' +
+                        CadminWorkspace.listBookmarkButton(sp) +
                         '<a class="btn btn-sm btn-outline-primary me-1" href="' + esc(href) +
                             '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a>' +
                         '<button class="btn btn-sm btn-outline-secondary" type="button" data-duplicate="' +

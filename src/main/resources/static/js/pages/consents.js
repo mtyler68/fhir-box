@@ -226,7 +226,8 @@ function renderConsentList() {
                     "<td>" + esc(periodLabel(consent.period)) + "</td>" +
                     "<td>" + esc(refLabel(consent.grantee)) + "</td>" +
                     "<td><code>" + esc(consent.id) + "</code></td>" +
-                    '<td class="text-end"><a class="btn btn-sm btn-outline-primary" href="#/consents/' +
+                    '<td class="text-end text-nowrap">' + CadminWorkspace.listBookmarkButton(consent) +
+                    '<a class="btn btn-sm btn-outline-primary" href="#/consents/' +
                         encodeURIComponent(consent.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a></td>' +
                     "</tr>";
             });

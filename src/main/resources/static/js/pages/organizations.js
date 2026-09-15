@@ -151,7 +151,8 @@ function renderOrganizationList(initialQuery) {
                         ? '<span class="badge text-bg-success">Active</span>'
                         : '<span class="badge text-bg-secondary">Inactive</span>') + "</td>" +
                     "<td><code>" + CadminApi.escapeHtml(org.id) + "</code></td>" +
-                    '<td class="text-end"><a class="btn btn-sm btn-outline-primary" href="#/organizations/' +
+                    '<td class="text-end text-nowrap">' + CadminWorkspace.listBookmarkButton(org) +
+                    '<a class="btn btn-sm btn-outline-primary" href="#/organizations/' +
                         encodeURIComponent(org.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a></td>' +
                     "</tr>";
             });

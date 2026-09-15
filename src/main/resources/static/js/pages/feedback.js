@@ -140,7 +140,8 @@ function renderFeedbackList() {
                     "<td>" + senderHtml + "</td>" +
                     "<td>" + esc(sentLabel(item.sent)) + "</td>" +
                     "<td><code>" + esc(item.id) + "</code></td>" +
-                    '<td class="text-end"><a class="btn btn-sm btn-outline-primary" href="#/feedback/' +
+                    '<td class="text-end text-nowrap">' + CadminWorkspace.listBookmarkButton(item) +
+                    '<a class="btn btn-sm btn-outline-primary" href="#/feedback/' +
                         encodeURIComponent(item.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a></td>' +
                     "</tr>";
             });

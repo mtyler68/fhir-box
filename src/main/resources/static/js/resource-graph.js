@@ -78,6 +78,7 @@ window.CadminResourceGraph = (function () {
     let lastGraph = null;
     let focusKey = "";
     let graphDepth = DEPTH_DEFAULT;
+    let bundleContext = { source: "graph" };
     let mountedResource = null;
     let mountedByKey = null;
     let reverseFetched = {};
@@ -1776,6 +1777,71 @@ window.CadminResourceGraph = (function () {
         return deferred.promise();
     }
 
+    function collectListResources(list, includeList) {
+        const deferred = $.Deferred();
+        const collected = [];
+        const seen = {};
+        const listKey = keyOf(list);
+        if (includeList && isFullResource(list)) {
+            collected.push(list);
+            seen[listKey] = true;
+        }
+        const refs = [];
+        ((list && list.entry) || []).forEach(function (item) {
+            if (!item || item.deleted || !item.item) {
+                return;
+            }
+            const type = CadminApi.referenceType(item.item);
+            const id = CadminApi.referenceId(item.item);
+            if (!type || !id) {
+                return;
+            }
+            const key = nodeKey(type, id);
+            if (seen[key]) {
+                return;
+            }
+            seen[key] = true;
+            refs.push({ type: type, id: id });
+        });
+        function finish() {
+            collected.sort(function (left, right) {
+                const leftKey = keyOf(left);
+                const rightKey = keyOf(right);
+                if (includeList) {
+                    if (leftKey === listKey) {
+                        return -1;
+                    }
+                    if (rightKey === listKey) {
+                        return 1;
+                    }
+                }
+                return leftKey.localeCompare(rightKey);
+            });
+            deferred.resolve(collected);
+        }
+        let pending = refs.length;
+        if (!pending) {
+            finish();
+            return deferred.promise();
+        }
+        refs.forEach(function (ref) {
+            CadminApi.fhir("/" + encodeURIComponent(ref.type) + "/" + encodeURIComponent(ref.id),
+                "GET", null, { silent: true })
+                .done(function (resource) {
+                    if (isFullResource(resource)) {
+                        collected.push(resource);
+                    }
+                })
+                .always(function () {
+                    pending -= 1;
+                    if (pending === 0) {
+                        finish();
+                    }
+                });
+        });
+        return deferred.promise();
+    }
+
     function uuid() {
         if (window.crypto && typeof crypto.randomUUID === "function") {
             return crypto.randomUUID();
@@ -1886,6 +1952,15 @@ window.CadminResourceGraph = (function () {
             return transactionBundle(resources, !!options.newIds, timestamp);
         }
         const type = kind === "searchset" ? "searchset" : "collection";
+        function modeFor(resource) {
+            if (options.allMatch) {
+                return "match";
+            }
+            if (options.matchKey) {
+                return keyOf(resource) === options.matchKey ? "match" : "include";
+            }
+            return searchMode(resource);
+        }
         const bundle = {
             resourceType: "Bundle",
             type: type,
@@ -1896,27 +1971,28 @@ window.CadminResourceGraph = (function () {
                     resource: cloneForBundle(resource)
                 };
                 if (type === "searchset") {
-                    entry.search = { mode: searchMode(resource) };
+                    entry.search = { mode: modeFor(resource) };
                 }
                 return entry;
             })
         };
         if (type === "searchset") {
             bundle.total = resources.filter(function (resource) {
-                return searchMode(resource) === "match";
+                return modeFor(resource) === "match";
             }).length;
         }
         return bundle;
     }
 
-    function bundleViewerTitle(kind) {
+    function bundleViewerTitle(kind, source) {
+        const prefix = source === "list" ? "List" : "Reference graph";
         if (kind === "searchset") {
-            return "Reference graph searchset";
+            return prefix + " searchset";
         }
         if (kind === "export") {
-            return "Reference graph transaction";
+            return prefix + " transaction";
         }
-        return "Reference graph collection";
+        return prefix + " collection";
     }
 
     function syncBundleIdOptions() {
@@ -1927,6 +2003,12 @@ window.CadminResourceGraph = (function () {
     function resetBundleModal() {
         $("#" + BUNDLE_MODAL_ID + "-type-collection").prop("checked", true);
         $("#" + BUNDLE_MODAL_ID + "-ids-keep").prop("checked", true);
+        const fromList = !!(bundleContext && bundleContext.source === "list");
+        $("#" + BUNDLE_MODAL_ID + "-include-list-wrap").toggleClass("d-none", !fromList);
+        $("#" + BUNDLE_MODAL_ID + "-include-list").prop("checked", false);
+        $("#" + BUNDLE_MODAL_ID + "-searchset-help").text(fromList
+            ? "When the List is included it is the match and items are includes; otherwise each item is a match."
+            : "The focus resource is a match; related graph resources are includes.");
         syncBundleIdOptions();
     }
 
@@ -1962,7 +2044,8 @@ window.CadminResourceGraph = (function () {
                                         '<label class="form-check-label" for="' + BUNDLE_MODAL_ID +
                                             '-type-searchset">Searchset</label>' +
                                     "</div>" +
-                                    '<div class="form-text ms-4">The focus resource is a match; related graph resources are includes.</div>' +
+                                    '<div class="form-text ms-4" id="' + BUNDLE_MODAL_ID +
+                                        '-searchset-help">The focus resource is a match; related graph resources are includes.</div>' +
                                 "</div>" +
                                 '<div class="mb-0">' +
                                     '<div class="form-check">' +
@@ -1974,6 +2057,13 @@ window.CadminResourceGraph = (function () {
                                     '<div class="form-text ms-4">Formatted as a transaction Bundle for copying these resources to a FHIR server.</div>' +
                                 "</div>" +
                             "</fieldset>" +
+                            '<div class="form-check mt-3 d-none" id="' + BUNDLE_MODAL_ID + '-include-list-wrap">' +
+                                '<input class="form-check-input" type="checkbox" id="' +
+                                    BUNDLE_MODAL_ID + '-include-list">' +
+                                '<label class="form-check-label" for="' + BUNDLE_MODAL_ID +
+                                    '-include-list">Include the List resource</label>' +
+                                '<div class="form-text">Adds this List to the bundle along with the resources it references.</div>' +
+                            "</div>" +
                             '<fieldset class="mt-3" id="' + BUNDLE_MODAL_ID + '-ids" disabled>' +
                                 '<legend class="form-label">Resource IDs</legend>' +
                                 '<div class="mb-3">' +
@@ -1992,7 +2082,7 @@ window.CadminResourceGraph = (function () {
                                         '<label class="form-check-label" for="' + BUNDLE_MODAL_ID +
                                             '-ids-uuid">Assign new IDs</label>' +
                                     "</div>" +
-                                    '<div class="form-text ms-4">POST each resource with a urn:uuid fullUrl. References between graph resources are rewritten.</div>' +
+                                    '<div class="form-text ms-4">POST each resource with a urn:uuid fullUrl. References between bundled resources are rewritten.</div>' +
                                 "</div>" +
                             "</fieldset>" +
                         "</div>" +
@@ -2006,14 +2096,28 @@ window.CadminResourceGraph = (function () {
         );
     }
 
+    function showBundleModal() {
+        ensureBundleModal();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById(BUNDLE_MODAL_ID)).show();
+    }
+
     function promptGraphBundle() {
         const shown = displayedGraph();
         if (!shown || !shown.nodes || !Object.keys(shown.nodes).length) {
             CadminApi.showToast("warning", "The reference graph has no resources yet.");
             return;
         }
-        ensureBundleModal();
-        bootstrap.Modal.getOrCreateInstance(document.getElementById(BUNDLE_MODAL_ID)).show();
+        bundleContext = { source: "graph" };
+        showBundleModal();
+    }
+
+    function promptListBundle(list, $button) {
+        if (!list || list.resourceType !== "List") {
+            CadminApi.showToast("warning", "No list is available to export.");
+            return;
+        }
+        bundleContext = { source: "list", list: list, $button: $button };
+        showBundleModal();
     }
 
     function openGraphBundle(options) {
@@ -2027,10 +2131,56 @@ window.CadminResourceGraph = (function () {
                 CadminApi.showToast("warning", "Unable to load the resources shown in the graph.");
                 return;
             }
-            CadminResourceSource.show(graphBundle(resources, options), bundleViewerTitle(options.kind));
+            CadminResourceSource.show(graphBundle(resources, options),
+                bundleViewerTitle(options.kind, "graph"));
         }).always(function () {
             $btn.prop("disabled", false);
         });
+    }
+
+    function openListBundle(context, options) {
+        options = options || {};
+        if (!window.CadminResourceSource) {
+            return;
+        }
+        const list = context && context.list;
+        const includeList = !!options.includeList;
+        const hasItems = ((list && list.entry) || []).some(function (item) {
+            return item && item.item && !item.deleted &&
+                CadminApi.referenceType(item.item) && CadminApi.referenceId(item.item);
+        });
+        if (!hasItems && !includeList) {
+            CadminApi.showToast("warning", "This list has no entries to export.");
+            return;
+        }
+        const $btn = context && context.$button;
+        if ($btn && $btn.prop) {
+            $btn.prop("disabled", true);
+        }
+        collectListResources(list, includeList).done(function (resources) {
+            if (!resources.length) {
+                CadminApi.showToast("warning", "Unable to load the list contents.");
+                return;
+            }
+            const listOptions = Object.assign({}, options, {
+                matchKey: includeList ? keyOf(list) : "",
+                allMatch: !includeList
+            });
+            CadminResourceSource.show(graphBundle(resources, listOptions),
+                bundleViewerTitle(options.kind, "list"));
+        }).always(function () {
+            if ($btn && $btn.prop) {
+                $btn.prop("disabled", false);
+            }
+        });
+    }
+
+    function openCreatedBundle(options) {
+        if (bundleContext && bundleContext.source === "list") {
+            openListBundle(bundleContext, options);
+            return;
+        }
+        openGraphBundle(options);
     }
 
     function submitGraphBundleForm(event) {
@@ -2038,17 +2188,18 @@ window.CadminResourceGraph = (function () {
         const kind = $("input[name='resource-graph-bundle-type']:checked").val() || "collection";
         const newIds = kind === "export" &&
             $("input[name='resource-graph-bundle-ids']:checked").val() === "uuid";
-        const options = { kind: kind, newIds: newIds };
+        const includeList = $("#" + BUNDLE_MODAL_ID + "-include-list").prop("checked");
+        const options = { kind: kind, newIds: newIds, includeList: includeList };
         const modalEl = document.getElementById(BUNDLE_MODAL_ID);
         const modal = modalEl && bootstrap.Modal.getInstance(modalEl);
         if (modal && $(modalEl).is(":visible")) {
             $(modalEl).one("hidden.bs.modal.resourcegraphbundleopen", function () {
-                openGraphBundle(options);
+                openCreatedBundle(options);
             });
             modal.hide();
             return;
         }
-        openGraphBundle(options);
+        openCreatedBundle(options);
     }
 
     function exportGraphSvg() {
@@ -2525,6 +2676,7 @@ window.CadminResourceGraph = (function () {
         mount: mount,
         resize: resizeNetwork,
         destroy: destroy,
-        detailHref: detailHref
+        detailHref: detailHref,
+        promptListBundle: promptListBundle
     };
 }());

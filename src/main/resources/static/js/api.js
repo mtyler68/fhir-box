@@ -1186,11 +1186,50 @@ window.CadminApi = (function ($) {
         return typeof selector === "string" ? document.querySelector(selector) : selector;
     }
 
+    function fhirSelectGroupFor(el) {
+        if (!el) {
+            return null;
+        }
+        if (el.closest) {
+            const nested = el.closest(".cadmin-fhir-select-group");
+            if (nested) {
+                return nested;
+            }
+        }
+        const next = el.nextElementSibling;
+        if (next && next.classList && next.classList.contains("cadmin-fhir-select-group")) {
+            return next;
+        }
+        const prev = el.previousElementSibling;
+        if (prev && prev.classList && prev.classList.contains("cadmin-fhir-select-group")) {
+            return prev;
+        }
+        return null;
+    }
+
+    function unwrapFhirSelectGroup(el) {
+        const group = fhirSelectGroupFor(el);
+        if (!group || !group.parentNode) {
+            return;
+        }
+        const parent = group.parentNode;
+        while (group.firstChild) {
+            const child = group.firstChild;
+            if (child.getAttribute && child.getAttribute("data-bookmark-pick") != null) {
+                group.removeChild(child);
+            } else {
+                parent.insertBefore(child, group);
+            }
+        }
+        parent.removeChild(group);
+    }
+
     function destroySelect(selector) {
         const el = selectElement(selector);
         if (el && el.tomselect) {
             el.tomselect.destroy();
         }
+        unwrapFhirSelectGroup(el);
     }
 
     function destroySelects(root) {
@@ -1199,9 +1238,7 @@ window.CadminApi = (function ($) {
             return;
         }
         Array.prototype.forEach.call(scope.querySelectorAll("select"), function (el) {
-            if (el.tomselect) {
-                el.tomselect.destroy();
-            }
+            destroySelect(el);
         });
     }
 
@@ -1414,6 +1451,223 @@ window.CadminApi = (function ($) {
         });
     }
 
+    function bookmarkIconHtml(icon) {
+        const name = String(icon || "bi-bookmark");
+        if (name.indexOf(":") !== -1) {
+            return '<iconify-icon class="me-2" icon="' + escapeHtml(name) + '" aria-hidden="true"></iconify-icon>';
+        }
+        return '<i class="bi ' + escapeHtml(name) + ' me-2" aria-hidden="true"></i>';
+    }
+
+    function workspaceBookmarks() {
+        if (window.CadminWorkspace && typeof CadminWorkspace.bookmarks === "function") {
+            return CadminWorkspace.bookmarks() || [];
+        }
+        return [];
+    }
+
+    function compatibleBookmarks(types, excludeId) {
+        const allowed = {};
+        (types || []).forEach(function (type) {
+            if (type) {
+                allowed[type] = true;
+            }
+        });
+        return workspaceBookmarks().filter(function (item) {
+            if (!item || !item.type || !item.id || !allowed[item.type]) {
+                return false;
+            }
+            return !excludeId || String(item.id) !== String(excludeId);
+        });
+    }
+
+    function ensureBookmarkPickModal() {
+        let el = document.getElementById("cadmin-bookmark-pick-modal");
+        if (el) {
+            return el;
+        }
+        el = document.createElement("div");
+        el.className = "modal fade";
+        el.id = "cadmin-bookmark-pick-modal";
+        el.tabIndex = -1;
+        el.setAttribute("aria-labelledby", "cadmin-bookmark-pick-title");
+        el.setAttribute("aria-hidden", "true");
+        el.innerHTML =
+            '<div class="modal-dialog modal-dialog-scrollable">' +
+                '<div class="modal-content">' +
+                    '<div class="modal-header">' +
+                        '<h5 class="modal-title" id="cadmin-bookmark-pick-title">Choose from bookmarks</h5>' +
+                        '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>' +
+                    "</div>" +
+                    '<div class="modal-body p-0" id="cadmin-bookmark-pick-body"></div>' +
+                    '<div class="modal-footer">' +
+                        '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>' +
+                    "</div>" +
+                "</div>" +
+            "</div>";
+        document.body.appendChild(el);
+        return el;
+    }
+
+    function applyBookmarkToSelect(el, item, valueField) {
+        const ts = el && el.tomselect;
+        if (!ts || !item || !item.id) {
+            return;
+        }
+        const title = item.title || item.id;
+        if (valueField === "url") {
+            fhir("/" + encodeURIComponent(item.type) + "/" + encodeURIComponent(item.id), "GET", null, { silent: true })
+                .done(function (resource) {
+                    if (!el.tomselect) {
+                        return;
+                    }
+                    const url = (resource && resource.url) || (item.type + "/" + item.id);
+                    el.tomselect.addOption({
+                        url: url,
+                        name: terminologyLabel(resource) || title,
+                        id: resource && resource.id ? resource.id : item.id
+                    });
+                    el.tomselect.setValue(url);
+                })
+                .fail(function () {
+                    if (!el.tomselect) {
+                        return;
+                    }
+                    const fallback = item.type + "/" + item.id;
+                    el.tomselect.addOption({ url: fallback, name: title, id: item.id });
+                    el.tomselect.setValue(fallback);
+                });
+            return;
+        }
+        const option = { id: item.id, name: title };
+        ts.addOption(option);
+        ts.setValue(item.id);
+        if (item.type === "Patient") {
+            fhir("/Patient/" + encodeURIComponent(item.id), "GET", null, { silent: true }).done(function (patient) {
+                if (!patient || !el.tomselect) {
+                    return;
+                }
+                el.tomselect.updateOption(item.id, fhirSelectItem(patient));
+            });
+        }
+    }
+
+    let bookmarkPickTarget = null;
+
+    function openBookmarkPicker(el, options) {
+        const opts = options || {};
+        const types = opts.resourceTypes || (opts.resourceType ? [opts.resourceType] : []);
+        const items = compatibleBookmarks(types, opts.excludeId);
+        const modalEl = ensureBookmarkPickModal();
+        const noun = types.length === 1
+            ? ((FHIR_SELECT_TYPES[types[0]] && FHIR_SELECT_TYPES[types[0]].noun) || String(types[0] || "resources").toLowerCase())
+            : "resources";
+        $("#cadmin-bookmark-pick-title").text("Choose bookmarked " + noun);
+        const $body = $("#cadmin-bookmark-pick-body");
+        if (!items.length) {
+            $body.html('<p class="text-muted mb-0 p-3">No bookmarked ' + escapeHtml(noun) +
+                " match this field.</p>");
+        } else {
+            $body.html('<div class="list-group list-group-flush">' + items.map(function (item) {
+                return '<button type="button" class="list-group-item list-group-item-action d-flex align-items-start" data-bookmark-choose="' +
+                    escapeHtml(item.key) + '">' +
+                    bookmarkIconHtml(item.icon) +
+                    '<span class="min-w-0">' +
+                    '<span class="d-block text-truncate">' + escapeHtml(item.title || item.key) + "</span>" +
+                    '<span class="small text-muted">' + escapeHtml(item.type) + "</span></span></button>";
+            }).join("") + "</div>");
+        }
+        bookmarkPickTarget = { el: el, options: opts, items: items };
+        const openCount = document.querySelectorAll(".modal.show").length;
+        modalEl.style.zIndex = String(1055 + (openCount + 1) * 20);
+        if (typeof bootstrap !== "undefined") {
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
+    }
+
+    function bindBookmarkPickerUi() {
+        if (bindBookmarkPickerUi.bound) {
+            return;
+        }
+        bindBookmarkPickerUi.bound = true;
+        $(document).on("click.cadminBookmarkPick", "[data-bookmark-pick]", function (event) {
+            event.preventDefault();
+            const group = this.closest(".cadmin-fhir-select-group");
+            const selectId = this.getAttribute("data-select-id");
+            let el = selectId ? document.getElementById(selectId) : null;
+            if (!el && group) {
+                el = group.querySelector("select")
+                    || (group.previousElementSibling && group.previousElementSibling.tagName === "SELECT"
+                        ? group.previousElementSibling : null);
+            }
+            const types = String(this.getAttribute("data-fhir-types") || "").split(",").filter(Boolean);
+            openBookmarkPicker(el, {
+                resourceTypes: types,
+                resourceType: types[0],
+                excludeId: this.getAttribute("data-exclude-id") || "",
+                valueField: this.getAttribute("data-value-field") || "id"
+            });
+        });
+        $(document).on("click.cadminBookmarkPick", "[data-bookmark-choose]", function () {
+            const key = this.getAttribute("data-bookmark-choose");
+            const target = bookmarkPickTarget;
+            const item = ((target && target.items) || []).find(function (entry) {
+                return entry.key === key;
+            });
+            if (target && target.el && item) {
+                applyBookmarkToSelect(target.el, item, (target.options && target.options.valueField) || "id");
+            }
+            const modalEl = document.getElementById("cadmin-bookmark-pick-modal");
+            if (modalEl && typeof bootstrap !== "undefined") {
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) {
+                    modal.hide();
+                }
+            }
+        });
+    }
+
+    function attachBookmarkPicker(el, options) {
+        const opts = options || {};
+        if (opts.bookmarkPicker === false) {
+            return;
+        }
+        const ts = el && el.tomselect;
+        if (!ts || !ts.wrapper || !ts.wrapper.parentNode) {
+            return;
+        }
+        bindBookmarkPickerUi();
+        if (el.closest && el.closest(".cadmin-fhir-select-group")) {
+            return;
+        }
+        if (ts.wrapper.closest && ts.wrapper.closest(".cadmin-fhir-select-group")) {
+            return;
+        }
+        const types = opts.resourceTypes || (opts.resourceType ? [opts.resourceType] : []);
+        const wrapper = ts.wrapper;
+        const parent = wrapper.parentNode;
+        const group = document.createElement("div");
+        group.className = "input-group cadmin-fhir-select-group";
+        parent.insertBefore(group, wrapper);
+        group.appendChild(wrapper);
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn btn-outline-secondary";
+        btn.setAttribute("data-bookmark-pick", "");
+        btn.setAttribute("data-fhir-types", types.join(","));
+        btn.setAttribute("data-value-field", opts.valueField || "id");
+        if (el.id) {
+            btn.setAttribute("data-select-id", el.id);
+        }
+        if (opts.excludeId) {
+            btn.setAttribute("data-exclude-id", String(opts.excludeId));
+        }
+        btn.title = "Choose from bookmarks";
+        btn.setAttribute("aria-label", "Choose from bookmarks");
+        btn.innerHTML = '<i class="bi bi-journal-arrow-down" aria-hidden="true"></i>';
+        group.appendChild(btn);
+    }
+
     function bindFhirSelect(selector, resourceType, options) {
         const spec = FHIR_SELECT_TYPES[resourceType] || {
             type: resourceType,
@@ -1520,6 +1774,13 @@ window.CadminApi = (function ($) {
                 });
             }
         }
+        attachBookmarkPicker(el, {
+            resourceType: spec.type,
+            resourceTypes: [spec.type],
+            excludeId: opts.excludeId,
+            valueField: "id",
+            bookmarkPicker: opts.bookmarkPicker
+        });
         return ts;
     }
 
@@ -1724,6 +1985,12 @@ window.CadminApi = (function ($) {
                 opts.onChange(value || "");
             });
         }
+        attachBookmarkPicker(el, {
+            resourceType: spec.type,
+            resourceTypes: [spec.type],
+            valueField: "url",
+            bookmarkPicker: opts.bookmarkPicker
+        });
         return ts;
     }
 

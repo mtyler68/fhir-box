@@ -186,7 +186,8 @@ function renderCareTeamList(initialQuery) {
                     "<td>" + CadminApi.escapeHtml(careTeamCategory(team)) + "</td>" +
                     "<td>" + statusBadge(team.status) + "</td>" +
                     "<td><code>" + CadminApi.escapeHtml(team.id) + "</code></td>" +
-                    '<td class="text-end"><a class="btn btn-sm btn-outline-primary" href="#/care-teams/' +
+                    '<td class="text-end text-nowrap">' + CadminWorkspace.listBookmarkButton(team) +
+                    '<a class="btn btn-sm btn-outline-primary" href="#/care-teams/' +
                         encodeURIComponent(team.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a></td>' +
                     "</tr>";
             });

@@ -119,7 +119,8 @@ function renderScheduleList() {
                         ? '<span class="badge text-bg-success">Active</span>'
                         : '<span class="badge text-bg-secondary">Inactive</span>') + "</td>" +
                     "<td><code>" + CadminApi.escapeHtml(item.id) + "</code></td>" +
-                    '<td class="text-end"><a class="btn btn-sm btn-outline-primary" href="' + href +
+                    '<td class="text-end text-nowrap">' + CadminWorkspace.listBookmarkButton(item) +
+                    '<a class="btn btn-sm btn-outline-primary" href="' + href +
                         '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a></td></tr>';
             }).join(""));
         }).fail(function (xhr) {

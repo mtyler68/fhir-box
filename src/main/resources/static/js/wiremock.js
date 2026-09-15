@@ -574,7 +574,8 @@ window.CadminWiremock = (function () {
         return rows;
     }
 
-    function queryParamPatternFromRow(row) {
+    function queryParamPatternFromRow(row, noun) {
+        const label = noun || "Query parameter";
         const matcher = (row && row.matcher) || "equalTo";
         if (matcher === "absent") {
             return { absent: true };
@@ -584,10 +585,10 @@ window.CadminWiremock = (function () {
             try {
                 parsed = JSON.parse(row.value || "{}");
             } catch (error) {
-                throw new Error("Query parameter \"" + String((row && row.name) || "") + "\" JSON is not valid.");
+                throw new Error(label + " \"" + String((row && row.name) || "") + "\" JSON is not valid.");
             }
             if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-                throw new Error("Query parameter \"" + String((row && row.name) || "") +
+                throw new Error(label + " \"" + String((row && row.name) || "") +
                     "\" JSON must be an object.");
             }
             return parsed;
@@ -600,7 +601,7 @@ window.CadminWiremock = (function () {
         return next;
     }
 
-    function queryParamsFromEntries(entries) {
+    function queryParamsFromEntries(entries, noun) {
         const grouped = [];
         const indexByName = {};
         (entries || []).forEach(function (row) {
@@ -608,7 +609,7 @@ window.CadminWiremock = (function () {
             if (!name) {
                 return;
             }
-            const pattern = queryParamPatternFromRow(row);
+            const pattern = queryParamPatternFromRow(row, noun);
             if (!Object.prototype.hasOwnProperty.call(indexByName, name)) {
                 indexByName[name] = grouped.length;
                 grouped.push({ name: name, patterns: [pattern] });
@@ -623,6 +624,73 @@ window.CadminWiremock = (function () {
                 : { hasExactly: item.patterns };
         });
         return params;
+    }
+
+    const REQUEST_HEADER_NAMES = [
+        "Accept",
+        "Accept-Charset",
+        "Accept-Encoding",
+        "Accept-Language",
+        "Authorization",
+        "Cache-Control",
+        "Content-Type",
+        "Content-Encoding",
+        "Cookie",
+        "Forwarded",
+        "Host",
+        "If-Match",
+        "If-Modified-Since",
+        "If-None-Match",
+        "If-Unmodified-Since",
+        "Origin",
+        "Prefer",
+        "Range",
+        "Referer",
+        "User-Agent",
+        "X-Requested-With",
+        "X-Request-ID",
+        "X-Correlation-ID",
+        "X-Forwarded-For",
+        "X-Forwarded-Host",
+        "X-Forwarded-Proto",
+        "Idempotency-Key"
+    ];
+    const REQUEST_HEADER_VALUE_SUGGEST = {
+        Accept: [
+            "application/json",
+            "application/fhir+json",
+            "application/xml",
+            "application/fhir+xml",
+            "application/json, application/fhir+json",
+            "*/*"
+        ],
+        "Content-Type": CONTENT_TYPE_VALUES.slice(),
+        Authorization: ["Bearer ", "Basic "],
+        Prefer: ["return=minimal", "return=representation", "respond-async"],
+        "Cache-Control": ["no-cache", "no-store", "max-age=0"],
+        "X-Requested-With": ["XMLHttpRequest"]
+    };
+
+    function requestHeaderValueListId(name) {
+        const key = String(name || "").trim().toLowerCase();
+        if (!key) {
+            return "";
+        }
+        const names = Object.keys(REQUEST_HEADER_VALUE_SUGGEST);
+        for (let i = 0; i < names.length; i++) {
+            if (names[i].toLowerCase() === key) {
+                return "wmd-req-header-values-" + names[i].replace(/[^A-Za-z0-9_-]/g, "_");
+            }
+        }
+        return "";
+    }
+
+    function requestHeaderEntries(headers) {
+        return queryParamEntries(headers);
+    }
+
+    function requestHeadersFromEntries(entries) {
+        return queryParamsFromEntries(entries, "Request header");
     }
 
     function decodeQueryComponent(value) {
@@ -729,6 +797,11 @@ window.CadminWiremock = (function () {
         queryParamValueListId: queryParamValueListId,
         queryParamSupportsCase: queryParamSupportsCase,
         queryParamEntries: queryParamEntries,
-        queryParamsFromEntries: queryParamsFromEntries
+        queryParamsFromEntries: queryParamsFromEntries,
+        REQUEST_HEADER_NAMES: REQUEST_HEADER_NAMES,
+        REQUEST_HEADER_VALUE_SUGGEST: REQUEST_HEADER_VALUE_SUGGEST,
+        requestHeaderValueListId: requestHeaderValueListId,
+        requestHeaderEntries: requestHeaderEntries,
+        requestHeadersFromEntries: requestHeadersFromEntries
     };
 }());

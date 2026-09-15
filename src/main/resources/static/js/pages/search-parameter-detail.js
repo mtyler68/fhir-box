@@ -59,6 +59,34 @@ window.CadminSearchParameterDetail = (function () {
         return '<div class="mb-3"><label class="form-label">' + label + "</label>" + control + "</div>";
     }
 
+    function fieldRow(left, right) {
+        return '<div class="row">' +
+            '<div class="col-md-6">' + left + "</div>" +
+            '<div class="col-md-6">' + right + "</div>" +
+            "</div>";
+    }
+
+    function navButton(paneId, icon, label, opts) {
+        opts = opts || {};
+        const classes = ["list-group-item", "list-group-item-action", "text-start"];
+        if (opts.active) {
+            classes.push("active");
+        }
+        if (opts.danger) {
+            classes.push("text-danger");
+        }
+        return '<button type="button" class="' + classes.join(" ") + '" id="' + paneId + '-btn" ' +
+            'data-bs-toggle="pill" data-bs-target="#' + paneId + '" role="tab" aria-controls="' + paneId +
+            '" aria-selected="' + (opts.active ? "true" : "false") + '">' +
+            '<i class="' + icon + ' me-2" aria-hidden="true"></i>' + label +
+            "</button>";
+    }
+
+    function tabPane(id, body, active) {
+        return '<div class="tab-pane fade' + (active ? " show active" : "") + '" id="' + id +
+            '" role="tabpanel" aria-labelledby="' + id + '-btn">' + body + "</div>";
+    }
+
     function optionsHtml(items, selected) {
         return items.map(function (item) {
             const code = item.code != null ? item.code : item;
@@ -206,13 +234,9 @@ window.CadminSearchParameterDetail = (function () {
         }
     }
 
-    function save(next, section) {
-        if (section === "identity") {
-            applyIdentity();
-        }
-        if (section === "definition") {
-            applyDefinition();
-        }
+    function save(next) {
+        applyIdentity();
+        applyDefinition();
         applyBehavior();
         if (!searchParameter.name || !searchParameter.code || !searchParameter.description
                 || !(searchParameter.base && searchParameter.base.length) || !searchParameter.type
@@ -223,8 +247,7 @@ window.CadminSearchParameterDetail = (function () {
         CadminApi.fhir("/SearchParameter/" + encodeURIComponent(searchParameter.id), "PUT", searchParameter)
             .done(function (updated) {
                 searchParameter = updated || searchParameter;
-                renderIdentity();
-                renderDefinition();
+                renderHeader();
                 renderBehavior();
                 CadminResourceSource.mount(function () { return searchParameter; });
                 CadminResourceGraph.mount(searchParameter);
@@ -239,142 +262,133 @@ window.CadminSearchParameterDetail = (function () {
     function render(resource) {
         searchParameter = resource;
         const $root = $(CadminWorkspace.root());
+        const label = esc(searchParameter.title || searchParameter.name || searchParameter.code || "SearchParameter");
         $root.html(
-            '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
+            '<div class="d-flex align-items-center justify-content-between mb-3">' +
                 "<div>" +
                     '<a class="small text-decoration-none" href="#/search-parameters">' +
                         '<i class="bi bi-arrow-left me-1"></i>Search parameters</a>' +
-                    '<h1 class="h3 mb-0 page-title" id="spd-title"></h1>' +
+                    '<div class="d-flex align-items-center flex-wrap gap-2">' +
+                        '<h1 class="mb-0 fs-3 page-title" id="spd-title">' + label + "</h1>" +
+                        '<span id="spd-status-badge">' + statusBadge(searchParameter.status) + "</span>" +
+                        (searchParameter.id
+                            ? '<code class="small" id="spd-fhir-id">' + esc(searchParameter.id) + "</code>"
+                            : '<code class="small d-none" id="spd-fhir-id"></code>') +
+                        CadminApi.unsavedFlagHtml() +
+                    "</div>" +
                 "</div>" +
                 '<div class="d-flex flex-wrap gap-2">' +
-                    '<button class="btn btn-primary" type="button" id="spd-save">' +
-                        '<i class="bi bi-check2 me-1"></i>Save</button>' +
-                    '<button class="btn btn-outline-danger" type="button" id="spd-delete">' +
-                        '<i class="bi bi-trash me-1"></i>Delete</button>' +
                     CadminResourceSource.button() +
                 "</div>" +
             "</div>" +
-            '<div class="card shadow mb-4">' +
-                '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                    '<h6 class="m-0">Identity</h6>' +
-                    '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#spd-identity-modal">Edit</button>' +
+            '<div class="row g-3">' +
+                '<div class="col-md-3">' +
+                    '<div class="list-group list-group-flush nav nav-pills flex-column cadmin-settings-nav" id="spd-settings-nav" role="tablist">' +
+                        navButton("spd-pane-basics", "bi bi-info-circle", "Basics", { active: true }) +
+                        navButton("spd-pane-definition", "bi bi-sliders", "Definition") +
+                        navButton("spd-pane-behavior", "bi bi-toggles", "Behavior") +
+                        navButton("spd-pane-graph", "bi bi-diagram-3", "Reference graph") +
+                        navButton("spd-pane-history", "bi bi-clock-history", "History") +
+                        navButton("spd-pane-danger", "bi bi-exclamation-triangle", "Danger zone", { danger: true }) +
+                    "</div>" +
                 "</div>" +
-                '<div class="card-body" id="spd-identity"></div>' +
-            "</div>" +
-            '<div class="card shadow mb-4">' +
-                '<div class="card-header py-3 d-flex justify-content-between align-items-center">' +
-                    '<h6 class="m-0">Definition</h6>' +
-                    '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#spd-definition-modal">Edit</button>' +
-                "</div>" +
-                '<div class="card-body" id="spd-definition"></div>' +
-            "</div>" +
-            '<div class="card shadow mb-4">' +
-                '<div class="card-header py-3"><h6 class="m-0">Behavior</h6></div>' +
-                '<div class="card-body" id="spd-behavior"></div>' +
-            "</div>" +
-            CadminResourceHistory.card() +
-            CadminResourceGraph.card() +
-            '<div class="modal fade" id="spd-identity-modal" tabindex="-1">' +
-                '<div class="modal-dialog modal-lg modal-dialog-scrollable">' +
-                    '<form class="modal-content" id="spd-identity-form">' +
-                        '<div class="modal-header"><h5 class="modal-title">Edit identity</h5>' +
-                            '<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>' +
-                        '<div class="modal-body">' +
-                            field("Title", '<input class="form-control" id="spd-title-input">') +
-                            field("Name", '<input class="form-control font-monospace" id="spd-name" required>') +
-                            field("URL", '<input class="form-control font-monospace" id="spd-url" required>') +
-                            field("Status", '<select class="form-select" id="spd-status">' +
-                                optionsHtml(statusOptions, "") + "</select>") +
-                            field("Version", '<input class="form-control" id="spd-version">') +
-                            field("Publisher", '<input class="form-control" id="spd-publisher">') +
-                            field("Description", '<textarea class="form-control" id="spd-description" rows="3" required></textarea>') +
-                            field("Purpose", '<textarea class="form-control" id="spd-purpose" rows="2"></textarea>') +
-                            field("Derived from", '<input class="form-control font-monospace" id="spd-derived" placeholder="Canonical SearchParameter URL">') +
-                            '<div class="form-check mb-0">' +
-                                '<input class="form-check-input" type="checkbox" id="spd-experimental">' +
-                                '<label class="form-check-label" for="spd-experimental">Experimental</label>' +
-                            "</div>" +
-                        "</div>" +
-                        '<div class="modal-footer">' +
-                            '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>' +
-                            '<button type="submit" class="btn btn-primary">Save</button>' +
-                        "</div>" +
-                    "</form>" +
-                "</div>" +
-            "</div>" +
-            '<div class="modal fade" id="spd-definition-modal" tabindex="-1">' +
-                '<div class="modal-dialog modal-lg modal-dialog-scrollable">' +
-                    '<form class="modal-content" id="spd-definition-form">' +
-                        '<div class="modal-header"><h5 class="modal-title">Edit definition</h5>' +
-                            '<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>' +
-                        '<div class="modal-body">' +
-                            field("Code", '<input class="form-control font-monospace" id="spd-code" required>') +
-                            field("Type", '<select class="form-select" id="spd-type">' +
-                                optionsHtml(typeOptions, "") + "</select>") +
-                            '<div class="mb-3"><label class="form-label">Base resource types</label>' +
-                                '<div class="border rounded p-2" style="max-height:16rem;overflow:auto" id="spd-base-list"></div></div>' +
-                            field("Expression", '<input class="form-control font-monospace" id="spd-expression" placeholder="FHIRPath">') +
-                            field("Processing mode", '<select class="form-select" id="spd-processing">' +
-                                optionsHtml(processingOptions, "") + "</select>") +
-                            field("Constraint", '<input class="form-control font-monospace" id="spd-constraint" placeholder="FHIRPath that must be true">') +
-                        "</div>" +
-                        '<div class="modal-footer">' +
-                            '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>' +
-                            '<button type="submit" class="btn btn-primary">Save</button>' +
-                        "</div>" +
-                    "</form>" +
+                '<div class="col-md-9">' +
+                    '<div class="tab-content">' +
+                        tabPane("spd-pane-basics",
+                            '<form id="spd-identity-form">' +
+                                '<div class="card">' +
+                                    '<div class="card-header"><h3 class="card-title">Basics</h3></div>' +
+                                    '<div class="card-body">' +
+                                        field("Title", '<input class="form-control" id="spd-title-input">') +
+                                        fieldRow(
+                                            field("Name", '<input class="form-control font-monospace" id="spd-name" required>'),
+                                            field("Status", '<select class="form-select" id="spd-status">' +
+                                                optionsHtml(statusOptions, "") + "</select>")) +
+                                        field("URL", '<input class="form-control font-monospace" id="spd-url" required>') +
+                                        fieldRow(
+                                            field("Version", '<input class="form-control" id="spd-version">'),
+                                            field("Publisher", '<input class="form-control" id="spd-publisher">')) +
+                                        field("Description", '<textarea class="form-control" id="spd-description" rows="3" required></textarea>') +
+                                        field("Purpose", '<textarea class="form-control" id="spd-purpose" rows="2"></textarea>') +
+                                        field("Derived from", '<input class="form-control font-monospace" id="spd-derived" placeholder="Canonical SearchParameter URL">') +
+                                        '<div class="form-check mb-3">' +
+                                            '<input class="form-check-input" type="checkbox" id="spd-experimental">' +
+                                            '<label class="form-check-label" for="spd-experimental">Experimental</label>' +
+                                        "</div>" +
+                                        '<button type="submit" class="btn btn-primary">Save changes</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</form>",
+                            true) +
+                        tabPane("spd-pane-definition",
+                            '<form id="spd-definition-form">' +
+                                '<div class="card">' +
+                                    '<div class="card-header"><h3 class="card-title">Definition</h3></div>' +
+                                    '<div class="card-body">' +
+                                        fieldRow(
+                                            field("Code", '<input class="form-control font-monospace" id="spd-code" required>'),
+                                            field("Type", '<select class="form-select" id="spd-type">' +
+                                                optionsHtml(typeOptions, "") + "</select>")) +
+                                        '<div class="mb-3"><label class="form-label">Base resource types</label>' +
+                                            '<div class="border rounded p-2" style="max-height:16rem;overflow:auto" id="spd-base-list"></div></div>' +
+                                        field("Expression", '<input class="form-control font-monospace" id="spd-expression" placeholder="FHIRPath">') +
+                                        fieldRow(
+                                            field("Processing mode", '<select class="form-select" id="spd-processing">' +
+                                                optionsHtml(processingOptions, "") + "</select>"),
+                                            field("Constraint", '<input class="form-control font-monospace" id="spd-constraint" placeholder="FHIRPath that must be true">')) +
+                                        '<button type="submit" class="btn btn-primary">Save changes</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</form>") +
+                        tabPane("spd-pane-behavior",
+                            '<form id="spd-behavior-form">' +
+                                '<div class="card">' +
+                                    '<div class="card-header"><h3 class="card-title">Behavior</h3></div>' +
+                                    '<div class="card-body" id="spd-behavior"></div>' +
+                                    '<div class="card-footer bg-transparent">' +
+                                        '<button type="submit" class="btn btn-primary">Save changes</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</form>") +
+                        tabPane("spd-pane-graph", CadminResourceGraph.card()) +
+                        tabPane("spd-pane-history", CadminResourceHistory.card()) +
+                        tabPane("spd-pane-danger",
+                            '<div class="card border-danger">' +
+                                '<div class="card-header bg-danger-subtle">' +
+                                    '<h3 class="card-title text-danger">Danger zone</h3>' +
+                                "</div>" +
+                                '<div class="card-body">' +
+                                    '<div class="d-flex justify-content-between align-items-start">' +
+                                        "<div>" +
+                                            '<p class="mb-0 fw-semibold text-danger">Delete this search parameter</p>' +
+                                            '<small class="text-secondary">This permanently deletes the SearchParameter resource.</small>' +
+                                        "</div>" +
+                                        '<button class="btn btn-danger" type="button" id="spd-delete">Delete</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</div>") +
+                    "</div>" +
                 "</div>" +
             "</div>"
         );
         CadminResourceSource.mount(function () { return searchParameter; });
         CadminResourceGraph.mount(searchParameter);
         CadminResourceHistory.mount(searchParameter);
-        renderIdentity();
-        renderDefinition();
+        renderHeader();
+        populateIdentity();
+        populateDefinition();
         renderBehavior();
         bind();
-        $("#spd-identity-modal").on("show.bs.modal", populateIdentity);
-        $("#spd-definition-modal").on("show.bs.modal", populateDefinition);
     }
 
-    function renderIdentity() {
+    function renderHeader() {
         $("#spd-title").text(searchParameter.title || searchParameter.name || searchParameter.code || "SearchParameter");
-        $("#spd-identity").html(
-            '<dl class="row mb-0">' +
-                '<dt class="col-sm-3">Title</dt><dd class="col-sm-9">' + esc(searchParameter.title || "—") + "</dd>" +
-                '<dt class="col-sm-3">Status</dt><dd class="col-sm-9">' + statusBadge(searchParameter.status) +
-                    (searchParameter.experimental ? ' <span class="badge text-bg-warning">Experimental</span>' : "") +
-                "</dd>" +
-                '<dt class="col-sm-3">Name</dt><dd class="col-sm-9"><code>' + esc(searchParameter.name || "—") + "</code></dd>" +
-                '<dt class="col-sm-3">URL</dt><dd class="col-sm-9"><code>' + esc(searchParameter.url || "—") + "</code></dd>" +
-                '<dt class="col-sm-3">Version</dt><dd class="col-sm-9"><code>' + esc(searchParameter.version || "—") + "</code></dd>" +
-                '<dt class="col-sm-3">Publisher</dt><dd class="col-sm-9">' + esc(searchParameter.publisher || "—") + "</dd>" +
-                '<dt class="col-sm-3">Description</dt><dd class="col-sm-9">' + esc(searchParameter.description || "—") + "</dd>" +
-                '<dt class="col-sm-3">Purpose</dt><dd class="col-sm-9">' + esc(searchParameter.purpose || "—") + "</dd>" +
-                '<dt class="col-sm-3">Derived from</dt><dd class="col-sm-9"><code>' +
-                    esc(searchParameter.derivedFrom || "—") + "</code></dd>" +
-                '<dt class="col-sm-3">ID</dt><dd class="col-sm-9"><code>' + esc(searchParameter.id) + "</code></dd>" +
-            "</dl>"
-        );
-    }
-
-    function renderDefinition() {
-        $("#spd-definition").html(
-            '<dl class="row mb-0">' +
-                '<dt class="col-sm-3">Code</dt><dd class="col-sm-9"><code>' + esc(searchParameter.code || "—") + "</code></dd>" +
-                '<dt class="col-sm-3">Type</dt><dd class="col-sm-9">' +
-                    esc(labelOf(typeOptions, searchParameter.type)) + "</dd>" +
-                '<dt class="col-sm-3">Base</dt><dd class="col-sm-9">' +
-                    esc((searchParameter.base || []).join(", ") || "—") + "</dd>" +
-                '<dt class="col-sm-3">Expression</dt><dd class="col-sm-9"><code>' +
-                    esc(searchParameter.expression || "—") + "</code></dd>" +
-                '<dt class="col-sm-3">Processing</dt><dd class="col-sm-9">' +
-                    esc(labelOf(processingOptions, searchParameter.processingMode || searchParameter.xpathUsage)) +
-                "</dd>" +
-                '<dt class="col-sm-3">Constraint</dt><dd class="col-sm-9"><code>' +
-                    esc(searchParameter.constraint || "—") + "</code></dd>" +
-            "</dl>"
-        );
+        $("#spd-status-badge").html(statusBadge(searchParameter.status));
+        if (searchParameter.id) {
+            $("#spd-fhir-id").text(searchParameter.id).removeClass("d-none");
+        } else {
+            $("#spd-fhir-id").text("").addClass("d-none");
+        }
     }
 
     function boolSelect(id, value) {
@@ -581,10 +595,10 @@ window.CadminSearchParameterDetail = (function () {
     function bind() {
         const $root = $(CadminWorkspace.root());
         $root.off(".spdetail");
-        $root.on("click.spdetail", "#spd-save", function () {
-            save(function () {
-                CadminApi.showToast("success", "Search parameter saved.");
-            }, "all");
+        $root.on("shown.bs.tab.spdetail", "#spd-pane-graph-btn", function () {
+            if (typeof CadminResourceGraph.resize === "function") {
+                CadminResourceGraph.resize();
+            }
         });
         $root.on("click.spdetail", "#spd-delete", function () {
             CadminApi.confirm("Delete this search parameter?").done(function () {
@@ -627,16 +641,20 @@ window.CadminSearchParameterDetail = (function () {
         $("#spd-identity-form").on("submit", function (event) {
             event.preventDefault();
             save(function () {
-                hideModal("spd-identity-modal");
                 CadminApi.showToast("success", "Identity updated.");
             }, "identity");
         });
         $("#spd-definition-form").on("submit", function (event) {
             event.preventDefault();
             save(function () {
-                hideModal("spd-definition-modal");
                 CadminApi.showToast("success", "Definition updated.");
             }, "definition");
+        });
+        $("#spd-behavior-form").on("submit", function (event) {
+            event.preventDefault();
+            save(function () {
+                CadminApi.showToast("success", "Behavior updated.");
+            }, "all");
         });
     }
 

@@ -242,7 +242,8 @@ function renderSubscriptionTopicList(initialQuery) {
                     "<td>" + esc(triggerResource(topic)) + "</td>" +
                     "<td>" + statusBadge(topic.status) + "</td>" +
                     "<td><code>" + esc(topic.id) + "</code></td>" +
-                    '<td class="text-end"><a class="btn btn-sm btn-outline-primary" href="#/subscription-topics/' +
+                    '<td class="text-end text-nowrap">' + CadminWorkspace.listBookmarkButton(topic) +
+                    '<a class="btn btn-sm btn-outline-primary" href="#/subscription-topics/' +
                         encodeURIComponent(topic.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a></td>' +
                     "</tr>";
             });
