@@ -517,30 +517,18 @@ window.CadminValueSetDetail = (function () {
     }
 
     function expandPreview() {
-        applyCompose();
         const $out = $("#vsd-expansion");
+        const url = ($("#vsd-url").val() || "").trim() || (valueSet && valueSet.url) || "";
+        if (!url) {
+            $out.html('<div class="text-danger">This value set has no URL to expand.</div>');
+            return;
+        }
         $out.html('<div class="text-muted">Expanding…</div>');
-        const preview = JSON.parse(JSON.stringify(valueSet));
-        delete preview.id;
-        delete preview.meta;
-        const body = {
-            resourceType: "Parameters",
-            parameter: [
-                { name: "valueSet", resource: preview },
-                { name: "count", valueInteger: 50 }
-            ]
-        };
-        CadminApi.fhir("/ValueSet/$expand", "POST", body, { silent: true }).done(showExpansion).fail(function () {
-            let path = "/ValueSet/$expand?count=50";
-            if (valueSet.url) {
-                path += "&url=" + encodeURIComponent(valueSet.url);
-            } else if (valueSet.id) {
-                path = "/ValueSet/" + encodeURIComponent(valueSet.id) + "/$expand?count=50";
-            }
-            CadminApi.fhir(path, "GET", null, { silent: true }).done(showExpansion).fail(function (xhr) {
+        CadminApi.fhir("/ValueSet/$expand?url=" + encodeURIComponent(url), "GET", null, { silent: true })
+            .done(showExpansion)
+            .fail(function (xhr) {
                 $out.html('<div class="text-danger">Expand failed (' + xhr.status + ").</div>");
             });
-        });
     }
 
     function validateCode() {

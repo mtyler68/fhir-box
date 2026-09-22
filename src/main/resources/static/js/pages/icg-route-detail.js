@@ -1,5 +1,5 @@
 window.CadminIcgRouteDetail = (function () {
-    const libraryType = "icg-route";
+    const libraryType = "gateway-route";
     const routeContentType = "application/gateway+yaml";
     const statusOptions = [
         { code: "draft", display: "Draft" },
@@ -449,11 +449,18 @@ window.CadminIcgRouteDetail = (function () {
         return editor ? editor.getValue() : ($("#ird-yaml").val() || "");
     }
 
+    function domainSnapshot() {
+        return CadminApi.selectCodings("#ird-domains").map(function (item) {
+            return (item.system || "") + "|" + item.code;
+        }).sort().join(",");
+    }
+
     function basicsSnapshot() {
         return [
             $("#ird-title-input").val() || "",
             $("#ird-status").val() || "",
             $("#ird-experimental").is(":checked") ? "1" : "0",
+            domainSnapshot(),
             markdownValue("ird-description"),
             markdownValue("ird-purpose"),
             markdownValue("ird-usage"),
@@ -581,7 +588,7 @@ window.CadminIcgRouteDetail = (function () {
         setOrDelete(library, "title", $("#ird-title-input").val());
         library.status = $("#ird-status").val() || "draft";
         library.type = {
-            coding: [{ code: libraryType, display: "ICG Route" }],
+            coding: [{ code: libraryType, display: "Gateway Route" }],
             text: libraryType
         };
         if ($("#ird-experimental").is(":checked")) {
@@ -589,6 +596,7 @@ window.CadminIcgRouteDetail = (function () {
         } else {
             delete library.experimental;
         }
+        CadminApi.applyLibraryDomainCodings(library, CadminApi.selectCodings("#ird-domains"));
         setOrDelete(library, "description", htmlToMarkdown(markdownValue("ird-description")));
         setOrDelete(library, "purpose", htmlToMarkdown(markdownValue("ird-purpose")));
         setOrDelete(library, "usage", htmlToMarkdown(markdownValue("ird-usage")));
@@ -623,7 +631,7 @@ window.CadminIcgRouteDetail = (function () {
             applyMeta();
         } else {
             library.type = {
-                coding: [{ code: libraryType, display: "ICG Route" }],
+                coding: [{ code: libraryType, display: "Gateway Route" }],
                 text: libraryType
             };
         }
@@ -662,12 +670,17 @@ window.CadminIcgRouteDetail = (function () {
 
     function render(resource) {
         destroyEditor();
+        CadminApi.destroySelects(CadminWorkspace.root());
         if (CadminApi.isLibraryType(resource, "pds-policies")) {
             window.location.hash = "#/pds-policies/" + encodeURIComponent(resource.id);
             return;
         }
         if (CadminApi.isLibraryType(resource, "camel-route")) {
             window.location.hash = "#/camel-routes/" + encodeURIComponent(resource.id);
+            return;
+        }
+        if (CadminApi.isLibraryType(resource, "easy-rule")) {
+            window.location.hash = "#/easy-rules/" + encodeURIComponent(resource.id);
             return;
         }
         if (CadminApi.isLibraryType(resource, "jolt")) {
@@ -727,6 +740,7 @@ window.CadminIcgRouteDetail = (function () {
                     '<div class="list-group list-group-flush nav nav-pills flex-column" id="ird-settings-nav" role="tablist">' +
                         navButton("ird-pane-basics", "bi bi-info-circle", "Basics", { active: true }) +
                         navButton("ird-pane-identity", "bi bi-person-vcard", "Identity and version") +
+                        navButton("ird-pane-details", "bi bi-journal-text", "Details") +
                         navButton("ird-pane-route", "bi bi-file-earmark-code", "Route") +
                         navButton("ird-pane-related", "bi bi-link-45deg", "Related") +
                         navButton("ird-pane-graph", "bi bi-diagram-3", "Reference graph") +
@@ -739,7 +753,7 @@ window.CadminIcgRouteDetail = (function () {
                         tabPane("ird-pane-basics",
                             '<form id="ird-basic-form">' +
                                 '<div class="card">' +
-                                    '<div class="card-header"><h3 class="card-title">Basic details</h3></div>' +
+                                    '<div class="card-header"><h3 class="card-title">Basics</h3></div>' +
                                     '<div class="card-body">' +
                                         field("Title", '<input class="form-control" id="ird-title-input">') +
                                         fieldRow(
@@ -748,14 +762,17 @@ window.CadminIcgRouteDetail = (function () {
                                             field("Type",
                                                 '<input class="form-control font-monospace" id="ird-type" value="' +
                                                     esc(typeCode()) + '" readonly disabled>')) +
-                                        '<div class="form-check mb-3">' +
-                                            '<input class="form-check-input" type="checkbox" id="ird-experimental">' +
-                                            '<label class="form-check-label" for="ird-experimental">Experimental</label>' +
-                                        "</div>" +
-                                        markdownField("Description", "ird-description") +
-                                        markdownField("Purpose", "ird-purpose") +
-                                        markdownField("Usage", "ird-usage") +
-                                        markdownField("Copyright", "ird-copyright") +
+                                        fieldRow(
+                                            '<div class="mb-3">' +
+                                                '<label class="form-label d-none d-md-block">&nbsp;</label>' +
+                                                '<div class="form-check d-flex align-items-center gap-2" ' +
+                                                    'style="min-height:calc(1.5em + .75rem + 2px)">' +
+                                                    '<input class="form-check-input" type="checkbox" id="ird-experimental">' +
+                                                    '<label class="form-check-label" for="ird-experimental">Experimental</label>' +
+                                                "</div>" +
+                                            "</div>",
+                                            field("Domain",
+                                                '<select class="form-select" id="ird-domains" multiple></select>')) +
                                         '<button type="submit" class="btn btn-primary">Save changes</button>' +
                                     "</div>" +
                                 "</div>" +
@@ -789,6 +806,19 @@ window.CadminIcgRouteDetail = (function () {
                                                 "</div>" +
                                             "</div>" +
                                         "</div>" +
+                                        '<button type="submit" class="btn btn-primary">Save changes</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</form>") +
+                        tabPane("ird-pane-details",
+                            '<form id="ird-details-form">' +
+                                '<div class="card">' +
+                                    '<div class="card-header"><h3 class="card-title">Details</h3></div>' +
+                                    '<div class="card-body">' +
+                                        markdownField("Description", "ird-description") +
+                                        markdownField("Purpose", "ird-purpose") +
+                                        markdownField("Usage", "ird-usage") +
+                                        markdownField("Copyright", "ird-copyright") +
                                         '<button type="submit" class="btn btn-primary">Save changes</button>' +
                                     "</div>" +
                                 "</div>" +
@@ -889,12 +919,23 @@ window.CadminIcgRouteDetail = (function () {
         }
     }
 
+    function bindDomainSelect() {
+        CadminApi.bindConceptSelect("#ird-domains", CadminApi.valueSets.gatewayRouteDomains, {
+            placeholder: "Select domains…",
+            multiple: true,
+            preload: true,
+            selected: CadminApi.libraryDomainCodings(library),
+            onChange: syncUnsavedFlag
+        });
+    }
+
     function fillBasicsForm() {
         const period = library.effectivePeriod || {};
         $("#ird-title-input").val(library.title || "");
         $("#ird-status").val(library.status || "draft");
         $("#ird-type").val(typeCode());
         $("#ird-experimental").prop("checked", !!library.experimental);
+        bindDomainSelect();
         $("#ird-url").val(library.url || "");
         $("#ird-name").val(library.name || "");
         $("#ird-version").val(library.version || "");
@@ -940,7 +981,7 @@ window.CadminIcgRouteDetail = (function () {
     function bind() {
         const $root = $(CadminWorkspace.root());
         $root.off(".irdetail");
-        $root.on("shown.bs.tab.irdetail", "#ird-pane-basics-btn", refreshMarkdownEditors);
+        $root.on("shown.bs.tab.irdetail", "#ird-pane-details-btn", refreshMarkdownEditors);
         $root.on("shown.bs.tab.irdetail", "#ird-pane-route-btn", refreshRoutePane);
         $root.on("shown.bs.tab.irdetail", "#ird-pane-graph-btn", function () {
             if (typeof CadminResourceGraph.resize === "function") {
@@ -948,7 +989,7 @@ window.CadminIcgRouteDetail = (function () {
             }
         });
         $root.on("input.irdetail change.irdetail",
-            "#ird-basic-form :input, #ird-identity-form :input", syncUnsavedFlag);
+            "#ird-basic-form :input, #ird-identity-form :input, #ird-details-form :input", syncUnsavedFlag);
         CadminApi.fillValueSetSelect("#ird-status", CadminApi.valueSets.publicationStatus, {
             fallback: statusOptions,
             selected: library.status || "draft",
@@ -961,7 +1002,7 @@ window.CadminIcgRouteDetail = (function () {
                 CadminApi.showToast("success", "ICG route saved.");
             });
         });
-        $("#ird-basic-form, #ird-identity-form").on("submit", function (event) {
+        $("#ird-basic-form, #ird-identity-form, #ird-details-form").on("submit", function (event) {
             event.preventDefault();
             saveLibrary(function () {
                 CadminApi.showToast("success", "ICG route updated.");

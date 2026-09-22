@@ -115,8 +115,49 @@ window.CadminResourceDocument = (function ($) {
     }
 
     function busy(running) {
-        $("#" + MODAL_ID + "-beautify, #" + MODAL_ID + "-validate, #" + MODAL_ID + "-submit")
+        $("#" + MODAL_ID + "-beautify, #" + MODAL_ID + "-validate, #" + MODAL_ID +
+            "-submit, #" + MODAL_ID + "-upload")
             .prop("disabled", !!running);
+    }
+
+    function setDocumentText(text) {
+        lastIssues = [];
+        $("#" + MODAL_ID + "-outcome").addClass("d-none").empty();
+        const value = text == null ? "" : String(text);
+        if (editor) {
+            editor.setValue(value);
+        } else {
+            $("#" + MODAL_ID + "-text").val(value);
+        }
+    }
+
+    function loadLocalFile(file) {
+        if (!file) {
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = function () {
+            const text = String(reader.result || "");
+            if (!text.trim()) {
+                setDocumentText("");
+                showClientError("The selected file is empty.");
+                return;
+            }
+            const resource = src.parseJson(text);
+            if (!resource || typeof resource !== "object" || Array.isArray(resource)) {
+                setDocumentText(text);
+                showClientError("The selected file is not valid JSON.");
+                return;
+            }
+            setDocumentText(src.pretty(resource));
+            if (resource.resourceType !== currentType) {
+                showClientError("resourceType must be " + currentType + ".");
+            }
+        };
+        reader.onerror = function () {
+            showClientError("Unable to read the selected file.");
+        };
+        reader.readAsText(file);
     }
 
     function runValidate() {
@@ -217,7 +258,15 @@ window.CadminResourceDocument = (function ($) {
                                 '<label class="btn btn-outline-primary" for="' + MODAL_ID + '-mode-put">' +
                                     "Update as Create (PUT)</label>" +
                             "</div>" +
-                            '<label class="form-label" for="' + MODAL_ID + '-text">FHIR document (JSON)</label>' +
+                            '<div class="d-flex align-items-center justify-content-between gap-2 mb-2">' +
+                                '<label class="form-label mb-0" for="' + MODAL_ID + '-text">FHIR document (JSON)</label>' +
+                                '<button type="button" class="btn btn-sm btn-outline-secondary" id="' +
+                                    MODAL_ID + '-upload">' +
+                                    '<i class="bi bi-upload me-1" aria-hidden="true"></i>' +
+                                    "Upload from local file</button>" +
+                                '<input type="file" class="d-none" id="' + MODAL_ID +
+                                    '-file" accept=".json,application/json,application/fhir+json,text/plain">' +
+                            "</div>" +
                             '<textarea id="' + MODAL_ID + '-text" class="form-control font-monospace" rows="16"></textarea>' +
                             '<div id="' + MODAL_ID + '-outcome" class="d-none mt-3"></div>' +
                         "</div>" +
@@ -263,6 +312,14 @@ window.CadminResourceDocument = (function ($) {
             }
         });
         $("#" + MODAL_ID + "-mode-post, #" + MODAL_ID + "-mode-put").on("change", syncSubmitLabel);
+        $("#" + MODAL_ID + "-upload").on("click", function () {
+            $("#" + MODAL_ID + "-file").trigger("click");
+        });
+        $("#" + MODAL_ID + "-file").on("change", function () {
+            const file = this.files && this.files[0];
+            this.value = "";
+            loadLocalFile(file);
+        });
         $("#" + MODAL_ID + "-beautify").on("click", runBeautify);
         $("#" + MODAL_ID + "-validate").on("click", runValidate);
         $("#" + MODAL_ID + "-submit").on("click", runSubmit);
@@ -275,14 +332,10 @@ window.CadminResourceDocument = (function ($) {
         $("#" + MODAL_ID + "-title").text("Create " + resourceType + " from FHIR document");
         $("#" + MODAL_ID + "-mode-post").prop("checked", true);
         $("#" + MODAL_ID + "-outcome").addClass("d-none").empty();
+        $("#" + MODAL_ID + "-file").val("");
         lastIssues = [];
         syncSubmitLabel();
-        const starter = src.pretty({ resourceType: resourceType });
-        if (editor) {
-            editor.setValue(starter);
-        } else {
-            $("#" + MODAL_ID + "-text").val(starter);
-        }
+        setDocumentText(src.pretty({ resourceType: resourceType }));
         const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById(MODAL_ID));
         modal.show();
     }

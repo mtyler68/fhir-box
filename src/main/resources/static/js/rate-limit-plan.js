@@ -577,7 +577,7 @@ window.CadminRateLimitPlan = (function () {
     }
 
     function loadIcgRoutes() {
-        return CadminApi.fhir("/Library?type=icg-route&_count=200&_sort=title", "GET", null, { silent: true })
+        return CadminApi.fhir("/Library?type=gateway-route&_count=200&_sort=title", "GET", null, { silent: true })
             .then(function (bundle) {
                 const seen = {};
                 const routes = [];

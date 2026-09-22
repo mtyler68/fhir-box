@@ -37,6 +37,7 @@ window.CadminApp = (function ($) {
         if ((route.name === "organizations" || route.name === "care-teams"
                 || route.name === "locations" || route.name === "pds-policies"
                 || route.name === "camel-routes"
+                || route.name === "easy-rules"
                 || route.name === "icg-routes"
                 || route.name === "jolts"
                 || route.name === "rate-limit-plans"
@@ -45,6 +46,7 @@ window.CadminApp = (function ($) {
                 || route.name === "search-parameters" || route.name === "questionnaires"
                 || route.name === "code-systems" || route.name === "value-sets"
                 || route.name === "demo-data"
+                || route.name === "expunge-all"
                 || route.name === "subscription-topics" || route.name === "subscriptions"
                 || route.name === "endpoints" || route.name === "consents"
                 || route.name === "feedback"
@@ -121,6 +123,102 @@ window.CadminApp = (function ($) {
             event.preventDefault();
             const q = $("#global-search").val();
             window.location.hash = "#/patients" + (q ? "/" + encodeURIComponent(q) : "");
+        });
+        initSidebarSearch();
+    }
+
+    function normalizeMenuText(value) {
+        return String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
+    }
+
+    function isRoleHidden($el) {
+        return $el.hasClass("admin-only") && $el.hasClass("d-none");
+    }
+
+    function menuItemSearchText($item) {
+        const label = $item.find(".nav-link p").first().text();
+        const route = String($item.attr("data-route") || "").replace(/-/g, " ");
+        return normalizeMenuText(label + " " + route);
+    }
+
+    function applySidebarFilter(query) {
+        const q = normalizeMenuText(query);
+        const $menu = $(".sidebar-menu");
+        const $empty = $("#sidebar-menu-search-empty");
+        const $clear = $("#sidebar-menu-search-clear");
+        $clear.prop("hidden", !q);
+        if (!q) {
+            $menu.children("li").removeClass("is-menu-filtered");
+            $empty.addClass("d-none");
+            return;
+        }
+        $menu.children(".nav-item").each(function () {
+            const $item = $(this);
+            if (isRoleHidden($item)) {
+                return;
+            }
+            $item.toggleClass("is-menu-filtered", menuItemSearchText($item).indexOf(q) < 0);
+        });
+        $menu.children(".nav-header").each(function () {
+            const $header = $(this);
+            if (isRoleHidden($header)) {
+                return;
+            }
+            const headerMatch = normalizeMenuText($header.text()).indexOf(q) >= 0;
+            let anyItem = false;
+            $header.nextUntil(".nav-header").each(function () {
+                const $item = $(this);
+                if (!$item.hasClass("nav-item") || isRoleHidden($item)) {
+                    return;
+                }
+                if (headerMatch) {
+                    $item.removeClass("is-menu-filtered");
+                    anyItem = true;
+                    return;
+                }
+                if (!$item.hasClass("is-menu-filtered")) {
+                    anyItem = true;
+                }
+            });
+            $header.toggleClass("is-menu-filtered", !anyItem);
+        });
+        const anyVisible = $menu.children(".nav-item").filter(function () {
+            const $item = $(this);
+            return !$item.hasClass("is-menu-filtered") && !isRoleHidden($item);
+        }).length;
+        $empty.toggleClass("d-none", anyVisible > 0);
+    }
+
+    function resetSidebarSearch() {
+        const $input = $("#sidebar-menu-search");
+        if (!$input.length) {
+            return;
+        }
+        $input.val("");
+        applySidebarFilter("");
+    }
+
+    function initSidebarSearch() {
+        const $input = $("#sidebar-menu-search");
+        if (!$input.length) {
+            return;
+        }
+        $("#sidebar-menu-search-form").on("submit", function (event) {
+            event.preventDefault();
+        });
+        $input.on("input", function () {
+            applySidebarFilter($input.val());
+        });
+        $input.on("keydown", function (event) {
+            if (event.key !== "Escape") {
+                return;
+            }
+            event.preventDefault();
+            resetSidebarSearch();
+        });
+        $("#sidebar-menu-search-clear").on("click", function () {
+            resetSidebarSearch();
+            $input.trigger("focus");
         });
     }
 

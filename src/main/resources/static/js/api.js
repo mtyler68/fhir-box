@@ -68,8 +68,19 @@ window.CadminApi = (function ($) {
     function fhir(path, method, data, options) {
         const verb = (method || "GET").toUpperCase();
         const opts = options && typeof options === "object" ? options : {};
+        const expunge = verb === "DELETE" && (opts.expunge != null
+            ? !!opts.expunge
+            : pendingDeleteExpunge);
+        if (verb === "DELETE") {
+            pendingDeleteExpunge = false;
+        }
+        let requestPath = path;
+        if (expunge) {
+            requestPath = String(path || "") + (String(path || "").indexOf("?") >= 0 ? "&" : "?") +
+                "_expunge=true";
+        }
         const request = ajax({
-            url: "/fhir" + path,
+            url: "/fhir" + requestPath,
             method: method || "GET",
             data: !data ? undefined : (typeof data === "string" ? data : JSON.stringify(data)),
             contentType: data ? "application/fhir+json" : undefined,
@@ -369,6 +380,22 @@ window.CadminApi = (function ($) {
         toast.show();
     }
 
+    let pendingDeleteExpunge = false;
+
+    function isFhirResourceDeleteConfirm(opts, title) {
+        if (opts && opts.expunge === true) {
+            return true;
+        }
+        if (opts && opts.expunge === false) {
+            return false;
+        }
+        const heading = String(title || "");
+        if (!/^Delete this /i.test(heading)) {
+            return false;
+        }
+        return !/stub mapping|logged request|OIDC client|\bnote\?/i.test(heading);
+    }
+
     function confirmDialog(messageOrOptions) {
         const opts = typeof messageOrOptions === "string"
             ? { title: messageOrOptions }
@@ -385,23 +412,24 @@ window.CadminApi = (function ($) {
             ? !!opts.danger
             : /delete|remove|expunge|reset|clear|inactivate/i.test(combined);
         const icon = opts.icon || (danger ? "warning" : "question");
+        const showExpunge = isFhirResourceDeleteConfirm(opts, title);
         const deferred = $.Deferred();
+        pendingDeleteExpunge = false;
 
-        function decide(ok) {
+        function decide(ok, extra) {
             if (ok) {
-                deferred.resolve();
+                deferred.resolve(extra || {});
             } else {
                 deferred.reject();
             }
         }
 
         if (typeof Swal === "undefined") {
-            decide(window.confirm(text ? title + "\n\n" + text : title));
+            decide(window.confirm(text ? title + "\n\n" + text : title), { expunge: false });
             return deferred.promise();
         }
-        Swal.fire({
+        const fire = {
             title: title,
-            text: text || undefined,
             icon: icon,
             showCancelButton: true,
             confirmButtonText: confirmText,
@@ -417,14 +445,84 @@ window.CadminApi = (function ($) {
                 confirmButton: danger ? "btn btn-danger" : "btn btn-primary",
                 cancelButton: "btn btn-outline-secondary"
             }
-        }).then(function (result) {
-            decide(!!result.isConfirmed);
+        };
+        if (showExpunge) {
+            fire.html = (text ? "<p class=\"mb-0\">" + escapeHtml(text) + "</p>" : "") +
+                '<div class="form-check text-start cadmin-swal-expunge' + (text ? " mt-3" : "") + '">' +
+                    '<input class="form-check-input" type="checkbox" id="cadmin-swal-expunge">' +
+                    '<label class="form-check-label" for="cadmin-swal-expunge">Expunge this resource</label>' +
+                    '<div class="form-text">Expunge removes the resource permanently, including its history. ' +
+                        "This cannot be undone.</div>" +
+                "</div>";
+            fire.preConfirm = function () {
+                const el = document.getElementById("cadmin-swal-expunge");
+                return { expunge: !!(el && el.checked) };
+            };
+        } else if (opts.html) {
+            fire.html = opts.html;
+        } else if (text) {
+            fire.text = text;
+        }
+        Swal.fire(fire).then(function (result) {
+            const extra = result && result.value && typeof result.value === "object" ? result.value : {};
+            pendingDeleteExpunge = !!(showExpunge && result.isConfirmed && extra.expunge);
+            decide(!!result.isConfirmed, extra);
         });
         return deferred.promise();
     }
 
     function escapeHtml(value) {
         return $("<div>").text(value == null ? "" : String(value)).html();
+    }
+
+    let markdownRenderer = null;
+
+    function sanitizeMarkdownHtml(html) {
+        const wrap = document.createElement("div");
+        wrap.innerHTML = html || "";
+        wrap.querySelectorAll("script,style,iframe,object,embed,form").forEach(function (el) {
+            el.remove();
+        });
+        wrap.querySelectorAll("*").forEach(function (el) {
+            Array.prototype.slice.call(el.attributes).forEach(function (attr) {
+                if (/^on/i.test(attr.name)
+                        || ((attr.name === "href" || attr.name === "src")
+                            && /^\s*javascript:/i.test(attr.value))) {
+                    el.removeAttribute(attr.name);
+                }
+            });
+        });
+        return wrap.innerHTML;
+    }
+
+    function markdownHtml(text) {
+        const raw = String(text || "");
+        if (!raw.trim()) {
+            return "";
+        }
+        if (typeof EasyMDE === "undefined") {
+            return "<p>" + escapeHtml(raw).replace(/\n/g, "<br>") + "</p>";
+        }
+        try {
+            if (!markdownRenderer) {
+                markdownRenderer = Object.create(EasyMDE.prototype);
+                markdownRenderer.options = { renderingConfig: {} };
+            }
+            if (typeof markdownRenderer.markdown === "function") {
+                return sanitizeMarkdownHtml(markdownRenderer.markdown(raw) || "");
+            }
+        } catch (ignored) {
+            /* fall through */
+        }
+        return "<p>" + escapeHtml(raw).replace(/\n/g, "<br>") + "</p>";
+    }
+
+    function markdownCell(text) {
+        const raw = String(text || "").trim();
+        if (!raw) {
+            return "—";
+        }
+        return '<div class="cadmin-md cadmin-md-compact">' + markdownHtml(raw) + "</div>";
     }
 
     function resourceLink(href, label) {
@@ -482,11 +580,22 @@ window.CadminApi = (function ($) {
         return libraryTypeCodes(resource).indexOf(code) >= 0;
     }
 
+    function isActiveEasyRuleLibrary(resource) {
+        return !!(resource && resource.status === "active" && isLibraryType(resource, "easy-rule"));
+    }
+
+    function isGatewayRouteLibrary(resource) {
+        return isLibraryType(resource, "gateway-route") || isLibraryType(resource, "icg-route");
+    }
+
     function detailHref(type, id, resource) {
         if (type === "Library" && isLibraryType(resource, "camel-route")) {
             return "#/camel-routes/" + encodeURIComponent(id);
         }
-        if (type === "Library" && isLibraryType(resource, "icg-route")) {
+        if (type === "Library" && isLibraryType(resource, "easy-rule")) {
+            return "#/easy-rules/" + encodeURIComponent(id);
+        }
+        if (type === "Library" && isGatewayRouteLibrary(resource)) {
             return "#/icg-routes/" + encodeURIComponent(id);
         }
         if (type === "Library" && isLibraryType(resource, "jolt")) {
@@ -860,7 +969,10 @@ window.CadminApi = (function ($) {
         conditionVerStatus: "http://hl7.org/fhir/ValueSet/condition-ver-status",
         conditionCategory: "http://hl7.org/fhir/ValueSet/condition-category",
         conditionSeverity: "http://hl7.org/fhir/ValueSet/condition-severity",
-        conditionCode: "http://hl7.org/fhir/ValueSet/condition-code"
+        conditionCode: "http://hl7.org/fhir/ValueSet/condition-code",
+        camelRouteDomains: "https://insulet.com/fhir/ValueSet/value-set-camel-route-domain",
+        gatewayRouteDomains: "https://insulet.com/fhir/ValueSet/value-set-gateway-route-domain",
+        easyRuleDomains: "https://insulet.com/fhir/ValueSet/easy-rule-domain"
     };
 
     const VALUE_SET_FALLBACKS = {
@@ -2039,52 +2151,90 @@ window.CadminApi = (function ($) {
         return { page: Math.floor(offset / size), size: size };
     }
 
+    function selectedConcepts(opts) {
+        const raw = (opts && opts.selected) || {};
+        if (Array.isArray(raw)) {
+            return raw.filter(function (item) { return item && item.code; });
+        }
+        const code = raw.code || (opts && opts.selectedCode) || "";
+        if (!code) {
+            return [];
+        }
+        return [{
+            code: code,
+            system: raw.system || (opts && opts.selectedSystem) || "",
+            display: raw.display || (opts && opts.selectedDisplay) || code
+        }];
+    }
+
+    function applyConceptSelection(ts, chosen) {
+        if (!ts || !chosen || !chosen.length) {
+            return;
+        }
+        chosen.forEach(function (item) {
+            ts.addOption(conceptToOption(item));
+        });
+        const ids = chosen.map(conceptOptionId);
+        const maxItems = ts.settings && ts.settings.maxItems;
+        ts.setValue(maxItems === 1 ? ids[0] : ids, true);
+    }
+
     function bindConceptSelect(selector, valueSetUrl, options) {
         const opts = options || {};
         const el = selectElement(selector);
+        const maxItems = opts.maxItems !== undefined
+            ? opts.maxItems
+            : (opts.multiple ? null : 1);
+        const multi = maxItems !== 1;
+        const chosen = selectedConcepts(opts);
+        const fallbackSystem = (chosen[0] && chosen[0].system) || opts.selectedSystem || "";
         if (!el || typeof TomSelect !== "function") {
             if (el && (opts.fallback || []).length) {
                 fillSelectOptions(el, opts.fallback, opts);
+                if (multi) {
+                    $(el).val(chosen.map(function (item) { return item.code; }));
+                }
             }
             return null;
         }
         const placeholder = opts.placeholder || "Search codes…";
-        const selected = opts.selected || {};
-        const selectedCode = selected.code || opts.selectedCode || "";
-        const selectedSystem = selected.system || opts.selectedSystem || "";
-        const selectedDisplay = selected.display || opts.selectedDisplay || selectedCode;
         destroySelect(el);
-        el.innerHTML = '<option value="">' + escapeHtml(placeholder) + "</option>";
+        if (multi) {
+            el.setAttribute("multiple", "multiple");
+            el.innerHTML = "";
+        } else {
+            el.removeAttribute("multiple");
+            el.innerHTML = '<option value="">' + escapeHtml(placeholder) + "</option>";
+        }
 
+        function attachChange(ts) {
+            if (typeof opts.onChange !== "function") {
+                return;
+            }
+            ts.on("change", function () {
+                opts.onChange(multi ? selectCodings(el, fallbackSystem) : selectCoding(el, fallbackSystem));
+            });
+        }
+
+        const plugins = multi ? ["remove_button"] : ["clear_button"];
         if (!valueSetUrl) {
             const tsLocal = new TomSelect(el, {
                 valueField: "id",
                 labelField: "name",
                 searchField: ["name", "code"],
-                maxItems: 1,
+                maxItems: maxItems,
                 options: (opts.fallback || []).map(conceptToOption),
                 maxOptions: 200,
                 persist: false,
                 create: false,
-                allowEmptyOption: opts.allowEmpty !== false,
+                hideSelected: multi,
+                allowEmptyOption: !multi && opts.allowEmpty !== false,
                 placeholder: placeholder,
-                plugins: ["clear_button"],
+                plugins: plugins,
                 dropdownParent: "body"
             });
-            if (selectedCode) {
-                const prior = conceptToOption({
-                    code: selectedCode,
-                    display: selectedDisplay,
-                    system: selectedSystem
-                });
-                tsLocal.addOption(prior);
-                tsLocal.setValue(prior.id, true);
-            }
-            if (typeof opts.onChange === "function") {
-                tsLocal.on("change", function () {
-                    opts.onChange(selectCoding(el, selectedSystem));
-                });
-            }
+            applyConceptSelection(tsLocal, chosen);
+            attachChange(tsLocal);
             return tsLocal;
         }
 
@@ -2093,15 +2243,16 @@ window.CadminApi = (function ($) {
             valueField: "id",
             labelField: "name",
             searchField: ["name", "code"],
-            maxItems: 1,
+            maxItems: maxItems,
             maxOptions: 200,
-            preload: "focus",
+            preload: opts.preload !== undefined ? opts.preload : "focus",
             loadThrottle: 300,
             persist: false,
             create: false,
-            allowEmptyOption: opts.allowEmpty !== false,
+            hideSelected: multi,
+            allowEmptyOption: !multi && opts.allowEmpty !== false,
             placeholder: placeholder,
-            plugins: ["virtual_scroll", "clear_button"],
+            plugins: ["virtual_scroll"].concat(plugins),
             dropdownParent: "body",
             firstUrl: function (query) {
                 return expandSelectPath(valueSetUrl, query, 0);
@@ -2153,50 +2304,136 @@ window.CadminApi = (function ($) {
                 }
             }
         });
-        if (selectedCode) {
-            const prior = conceptToOption({
-                code: selectedCode,
-                display: selectedDisplay,
-                system: selectedSystem
-            });
-            ts.addOption(prior);
-            ts.setValue(prior.id, true);
-        }
-        if (typeof opts.onChange === "function") {
-            ts.on("change", function () {
-                opts.onChange(selectCoding(el, selectedSystem));
-            });
-        }
+        applyConceptSelection(ts, chosen);
+        attachChange(ts);
         return ts;
     }
 
-    function selectCoding(selector, fallbackSystem) {
-        const el = selectElement(selector);
-        if (el && el.tomselect) {
-            const value = el.tomselect.getValue();
-            if (!value) {
-                return null;
-            }
-            const opt = el.tomselect.options[value];
-            if (!opt) {
-                return null;
-            }
-            return {
-                system: opt.system || fallbackSystem || "",
-                code: opt.code || "",
-                display: opt.display || opt.name || opt.code || ""
-            };
+    function codingFromOption(opt, fallbackSystem) {
+        if (!opt) {
+            return null;
         }
-        const code = (el && el.value) || "";
+        const code = opt.code || "";
         if (!code) {
             return null;
         }
-        const label = selectLabel(el);
         return {
-            system: fallbackSystem || "",
+            system: opt.system || fallbackSystem || "",
             code: code,
-            display: label && label !== code ? label : code
+            display: opt.display || opt.name || code
         };
+    }
+
+    function selectCoding(selector, fallbackSystem) {
+        const items = selectCodings(selector, fallbackSystem);
+        return items.length ? items[0] : null;
+    }
+
+    function selectCodings(selector, fallbackSystem) {
+        const el = selectElement(selector);
+        if (el && el.tomselect) {
+            let values = el.tomselect.getValue();
+            if (!Array.isArray(values)) {
+                values = values ? [values] : [];
+            }
+            return values.map(function (value) {
+                return codingFromOption(el.tomselect.options[value], fallbackSystem);
+            }).filter(Boolean);
+        }
+        if (!el) {
+            return [];
+        }
+        const options = el.multiple
+            ? Array.prototype.slice.call(el.selectedOptions || [])
+            : (el.value ? [el.options[el.selectedIndex]] : []);
+        return options.map(function (opt) {
+            if (!opt || !opt.value) {
+                return null;
+            }
+            const label = opt.text || "";
+            return {
+                system: fallbackSystem || "",
+                code: opt.value,
+                display: label && label !== opt.value ? label : opt.value
+            };
+        }).filter(Boolean);
+    }
+
+    const USAGE_CONTEXT_TYPE_SYSTEM = "http://terminology.hl7.org/CodeSystem/usage-context-type";
+    const FOCUS_USAGE_CONTEXT = {
+        system: USAGE_CONTEXT_TYPE_SYSTEM,
+        code: "focus",
+        display: "Clinical Focus"
+    };
+
+    function libraryDomainCoding(item) {
+        if (!item || !item.code) {
+            return null;
+        }
+        const coding = { code: item.code };
+        if (item.system) {
+            coding.system = item.system;
+        }
+        if (item.display) {
+            coding.display = item.display;
+        }
+        return coding;
+    }
+
+    function isFocusUsageContext(ctx) {
+        return ((ctx && ctx.code) || {}).code === "focus";
+    }
+
+    function libraryDomainCodings(library) {
+        const resource = library || {};
+        const fromFocus = [];
+        (resource.useContext || []).forEach(function (ctx) {
+            if (!isFocusUsageContext(ctx)) {
+                return;
+            }
+            (((ctx.valueCodeableConcept || {}).coding) || []).forEach(function (item) {
+                const coding = libraryDomainCoding(item);
+                if (coding) {
+                    fromFocus.push(coding);
+                }
+            });
+        });
+        if (fromFocus.length) {
+            return fromFocus;
+        }
+        const fromLegacyCode = (resource.useContext || []).map(function (ctx) {
+            return isFocusUsageContext(ctx) ? null : libraryDomainCoding(ctx && ctx.code);
+        }).filter(Boolean);
+        if (fromLegacyCode.length) {
+            return fromLegacyCode;
+        }
+        return ((resource.subjectCodeableConcept || {}).coding || []).map(libraryDomainCoding).filter(Boolean);
+    }
+
+    function applyLibraryDomainCodings(library, domains) {
+        delete library.subjectCodeableConcept;
+        delete library.subjectReference;
+        const items = (domains || []).map(libraryDomainCoding).filter(Boolean);
+        const others = (library.useContext || []).filter(function (ctx) {
+            const code = (ctx && ctx.code) || {};
+            return code.code && code.code !== "focus" && code.system === USAGE_CONTEXT_TYPE_SYSTEM;
+        });
+        if (!items.length) {
+            if (others.length) {
+                library.useContext = others;
+            } else {
+                delete library.useContext;
+            }
+            return;
+        }
+        library.useContext = others.concat([{
+            code: {
+                system: FOCUS_USAGE_CONTEXT.system,
+                code: FOCUS_USAGE_CONTEXT.code,
+                display: FOCUS_USAGE_CONTEXT.display
+            },
+            valueCodeableConcept: { coding: items }
+        }]);
     }
 
     function companionValueSetUrl(codeSystemUrl) {
@@ -2342,6 +2579,8 @@ window.CadminApi = (function ($) {
         confirm: confirmDialog,
         showFhirError: showFhirError,
         escapeHtml: escapeHtml,
+        markdownHtml: markdownHtml,
+        markdownCell: markdownCell,
         resourceLink: resourceLink,
         detailHref: detailHref,
         listHref: listHref,
@@ -2352,6 +2591,8 @@ window.CadminApi = (function ($) {
         readByIdOrUrl: readByIdOrUrl,
         libraryTypeOf: libraryTypeOf,
         isLibraryType: isLibraryType,
+        isActiveEasyRuleLibrary: isActiveEasyRuleLibrary,
+        isGatewayRouteLibrary: isGatewayRouteLibrary,
         routeParamId: routeParamId,
         referenceId: referenceId,
         referenceType: referenceType,
@@ -2386,6 +2627,9 @@ window.CadminApi = (function ($) {
         bindCodeSystemPicker: bindCodeSystemPicker,
         bindConceptSelect: bindConceptSelect,
         selectCoding: selectCoding,
+        selectCodings: selectCodings,
+        libraryDomainCodings: libraryDomainCodings,
+        applyLibraryDomainCodings: applyLibraryDomainCodings,
         flattenCodeSystemConcepts: flattenCodeSystemConcepts,
         nestCodeSystemConcepts: nestCodeSystemConcepts,
         unsavedFlagHtml: unsavedFlagHtml,

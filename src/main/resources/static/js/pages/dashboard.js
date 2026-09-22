@@ -62,6 +62,7 @@ CadminApp.register("dashboard", function () {
                         '<a class="btn btn-outline-primary me-2 mb-2" href="#/capabilities">FHIR capabilities</a>' +
                         (CadminApp.isAdmin()
                             ? '<a class="btn btn-outline-primary me-2 mb-2" href="#/demo-data">Generate demo data</a>' +
+                              '<a class="btn btn-outline-danger me-2 mb-2" href="#/expunge-all">Expunge All</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/subscription-topics">Subscription topics</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/subscriptions">Subscriptions</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/endpoints">Endpoints</a>' +
@@ -70,6 +71,7 @@ CadminApp.register("dashboard", function () {
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/healthcare-services">Healthcare services</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/pds-policies">PDS policies</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/camel-routes">Camel routes</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/easy-rules">Easy rules</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/icg-routes">ICG routes</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/jolts">Jolt</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/rate-limit-plans">Rate-limit plans</a>' +
@@ -145,7 +147,8 @@ CadminApp.register("dashboard", function () {
         { type: "SubscriptionTopic", label: "Topics", href: "#/subscription-topics", icon: "bi-bookmark-star", border: "primary", admin: true },
         { key: "pds-policies", type: "Library", search: "type=pds-policies", label: "PDS policies", href: "#/pds-policies", icon: "bi-journal-text", border: "success", admin: true },
         { key: "camel-routes", type: "Library", search: "type=camel-route", label: "Camel routes", href: "#/camel-routes", iconify: "hugeicons:camel", border: "warning", admin: true },
-        { key: "icg-routes", type: "Library", search: "type=icg-route", label: "ICG routes", href: "#/icg-routes", iconify: "mdi:routes", border: "info", admin: true },
+        { key: "easy-rules", type: "Library", search: "type=easy-rule", label: "Easy rules", href: "#/easy-rules", iconify: "mdi:script-text-outline", border: "success", admin: true },
+        { key: "icg-routes", type: "Library", search: "type=gateway-route", label: "ICG routes", href: "#/icg-routes", iconify: "mdi:routes", border: "info", admin: true },
         { key: "jolts", type: "Library", search: "type=jolt", label: "Jolt", href: "#/jolts", iconify: "mdi:code-json", border: "secondary", admin: true },
         { key: "rate-limit-plans", type: "Library", search: "type=rate-limit-plan", label: "Rate-limit plans",
             href: "#/rate-limit-plans", icon: "bi-speedometer2", border: "danger", admin: true },

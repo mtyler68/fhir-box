@@ -1,19 +1,19 @@
-CadminApp.register("jolts", function (params) {
+CadminApp.register("easy-rules", function (params) {
     const token = CadminApi.routeParamId(params);
     if (token) {
-        CadminWorkspace.openRoute("jolts", token, function (resource, $root) {
-            CadminJoltDetail.render(resource, $root);
+        CadminWorkspace.openRoute("easy-rules", token, function (resource, $root) {
+            CadminEasyRuleDetail.render(resource, $root);
         }, function () {
-            renderJoltList(token);
+            renderEasyRuleList(token);
         });
         return;
     }
-    renderJoltList("");
+    renderEasyRuleList("");
 });
 
-function renderJoltList(initialQuery) {
-    const libraryType = "jolt";
-    const specContentType = "application/jolt+json";
+function renderEasyRuleList(initialQuery) {
+    const libraryType = "easy-rule";
+    const routeContentType = "application/easy-rules+yaml";
     const statusOptions = [
         { code: "draft", display: "Draft" },
         { code: "active", display: "Active" },
@@ -24,20 +24,20 @@ function renderJoltList(initialQuery) {
     const $root = $("#app-content");
     $root.html(
         '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
-            '<h1 class="h3 mb-0 page-title">Jolt Specs</h1>' +
+            '<h1 class="h3 mb-0 page-title">Easy Rules</h1>' +
             CadminResourceDocument.splitButton({
-                label: "New Jolt spec",
-                modalTarget: "#create-jolt-modal",
+                label: "New Easy rule",
+                modalTarget: "#create-easy-rule-modal",
                 resourceType: "Library"
             }) +
         "</div>" +
-        '<div id="jolt-alert" class="alert d-none"></div>' +
+        '<div id="easy-rule-alert" class="alert d-none"></div>' +
         '<div class="card shadow mb-4">' +
             '<div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
-                '<h6 class="m-0">Spec search</h6>' +
+                '<h6 class="m-0">Rule search</h6>' +
                 '<div class="d-flex flex-wrap align-items-center gap-2">' +
-                '<form class="d-flex" id="jolt-search-form">' +
-                    '<input class="form-control form-control-sm me-2" id="jolt-query" placeholder="Title" value="' +
+                '<form class="d-flex" id="easy-rule-search-form">' +
+                    '<input class="form-control form-control-sm me-2" id="easy-rule-query" placeholder="Title" value="' +
                         CadminApi.escapeHtml(initialQuery) + '">' +
                     '<button class="btn btn-sm btn-primary" type="submit">Search</button>' +
                 "</form>" +
@@ -48,32 +48,29 @@ function renderJoltList(initialQuery) {
                 '<div class="table-responsive">' +
                     '<table class="table table-hover align-middle">' +
                         "<thead><tr><th>Title</th><th>Description</th><th>Version</th><th>Status</th><th>Name</th><th>ID</th><th></th></tr></thead>" +
-                        '<tbody id="jolt-rows"><tr><td colspan="7" class="text-muted">Loading…</td></tr></tbody>' +
+                        '<tbody id="easy-rule-rows"><tr><td colspan="7" class="text-muted">Loading…</td></tr></tbody>' +
                     "</table>" +
                 "</div>" +
-                '<div class="list-pager" id="jolt-pager"></div>' +
+                '<div class="list-pager" id="easy-rule-pager"></div>' +
             "</div>" +
         "</div>" +
-        '<div class="modal fade" id="create-jolt-modal" tabindex="-1">' +
+        '<div class="modal fade" id="create-easy-rule-modal" tabindex="-1">' +
             '<div class="modal-dialog">' +
-                '<form class="modal-content" id="create-jolt-form">' +
-                    '<div class="modal-header"><h5 class="modal-title">Create Jolt spec</h5>' +
+                '<form class="modal-content" id="create-easy-rule-form">' +
+                    '<div class="modal-header"><h5 class="modal-title">Create Easy rule</h5>' +
                         '<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>' +
                     '<div class="modal-body">' +
-                        '<div class="mb-3"><label class="form-label" for="bj-title">Title</label>' +
-                            '<input class="form-control" id="bj-title" required></div>' +
-                        '<div class="mb-3"><label class="form-label" for="bj-id">ID</label>' +
-                            '<input class="form-control font-monospace" id="bj-id" autocomplete="off" maxlength="64">' +
+                        '<div class="mb-3"><label class="form-label" for="er-title">Title</label>' +
+                            '<input class="form-control" id="er-title" required></div>' +
+                        '<div class="mb-3"><label class="form-label" for="er-id">ID</label>' +
+                            '<input class="form-control font-monospace" id="er-id" autocomplete="off" maxlength="64">' +
                             '<div class="form-text">Optional. Leave blank for a server-assigned ID.</div>' +
-                            '<div class="invalid-feedback" id="bj-id-feedback">A library with this ID already exists.</div></div>' +
-                        '<div class="mb-3"><label class="form-label" for="bj-description">Description</label>' +
-                            '<textarea class="form-control" id="bj-description" rows="3"></textarea></div>' +
-                        '<div class="mb-0"><label class="form-label" for="bj-status">Status</label>' +
-                            '<select class="form-select" id="bj-status">' +
-                                statusOptions.map(function (option) {
-                                    return '<option value="' + option.code + '">' + CadminApi.escapeHtml(option.display) + "</option>";
-                                }).join("") +
-                            "</select></div>" +
+                            '<div class="invalid-feedback" id="er-id-feedback">A library with this ID already exists.</div></div>' +
+                        '<div class="mb-3"><label class="form-label" for="er-description">Description</label>' +
+                            '<textarea class="form-control" id="er-description" rows="3"></textarea></div>' +
+                        '<div class="mb-0"><label class="form-label">Status</label>' +
+                            '<input class="form-control" value="Draft" disabled>' +
+                            '<div class="form-text">New Easy rules are created as draft.</div></div>' +
                     "</div>" +
                     '<div class="modal-footer">' +
                         '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>' +
@@ -82,19 +79,19 @@ function renderJoltList(initialQuery) {
                 "</form>" +
             "</div>" +
         "</div>" +
-        '<div class="modal fade" id="duplicate-jolt-modal" tabindex="-1">' +
+        '<div class="modal fade" id="duplicate-easy-rule-modal" tabindex="-1">' +
             '<div class="modal-dialog">' +
-                '<form class="modal-content" id="duplicate-jolt-form">' +
-                    '<div class="modal-header"><h5 class="modal-title">Duplicate Jolt spec</h5>' +
+                '<form class="modal-content" id="duplicate-easy-rule-form">' +
+                    '<div class="modal-header"><h5 class="modal-title">Duplicate Easy rule</h5>' +
                         '<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>' +
                     '<div class="modal-body">' +
-                        '<p class="mb-3">Create a new draft from <strong id="bj-dup-title"></strong>.</p>' +
-                        '<div class="mb-3"><label class="form-label" for="bj-dup-id">ID</label>' +
-                            '<input class="form-control font-monospace" id="bj-dup-id" autocomplete="off" maxlength="64">' +
+                        '<p class="mb-3">Create a new draft from <strong id="er-dup-title"></strong>.</p>' +
+                        '<div class="mb-3"><label class="form-label" for="er-dup-id">ID</label>' +
+                            '<input class="form-control font-monospace" id="er-dup-id" autocomplete="off" maxlength="64">' +
                             '<div class="form-text">Optional. Leave blank for a server-assigned ID.</div>' +
                             '<div class="invalid-feedback">A library with this ID already exists.</div></div>' +
-                        '<div class="mb-0"><label class="form-label" for="bj-dup-version">Version</label>' +
-                            '<input class="form-control" id="bj-dup-version" placeholder="1.0.1"></div>' +
+                        '<div class="mb-0"><label class="form-label" for="er-dup-version">Version</label>' +
+                            '<input class="form-control" id="er-dup-version" placeholder="1.0.1"></div>' +
                     "</div>" +
                     '<div class="modal-footer">' +
                         '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>' +
@@ -131,10 +128,10 @@ function renderJoltList(initialQuery) {
     }
 
     function slugName(title) {
-        return String(title || "jolt").toLowerCase()
+        return String(title || "easy-rule").toLowerCase()
             .replace(/[^a-z0-9]+/g, "-")
             .replace(/^-|-$/g, "")
-            .slice(0, 64) || "jolt";
+            .slice(0, 64) || "easy-rule";
     }
 
     function bumpVersion(value) {
@@ -149,28 +146,28 @@ function renderJoltList(initialQuery) {
         return text ? text + "-copy" : "1.0.0";
     }
 
-    function defaultSpec() {
-        return JSON.stringify([
-            {
-                operation: "shift",
-                spec: {
-                    "*": "&"
-                }
-            }
-        ], null, 2) + "\n";
+    function defaultYaml(title) {
+        const name = String(title || "example rule").replace(/"/g, "'");
+        return "name: " + name + "\n" +
+            "description: when the condition is true, then run the action\n" +
+            "priority: 1\n" +
+            "slang: mvel\n" +
+            "condition: \"true\"\n" +
+            "actions:\n" +
+            "  - \"System.out.println(\\\"Easy rule fired\\\");\"\n";
     }
 
     function libraryTypeConcept() {
         return {
             coding: [{
                 code: libraryType,
-                display: "Jolt"
+                display: "Easy Rule"
             }],
             text: libraryType
         };
     }
 
-    function isJoltType(library) {
+    function isEasyRuleType(library) {
         return CadminApi.isLibraryType(library, libraryType);
     }
 
@@ -224,34 +221,34 @@ function renderJoltList(initialQuery) {
         if (query) {
             path += "&title=" + encodeURIComponent(query);
         }
-        const pageSize = CadminApi.listPageSize("jolts");
+        const pageSize = CadminApi.listPageSize("easy-rules");
         CadminDeletedList.query({
             type: "Library",
             path: path,
             page: listPage,
             size: pageSize,
             filter: function (library) {
-                return !library.type || isJoltType(library);
+                return !library.type || isEasyRuleType(library);
             }
         }).done(function (bundle) {
             const entries = CadminApi.bundleResources(bundle, "Library");
-            CadminApi.renderPager("#jolt-pager", {
+            CadminApi.renderPager("#easy-rule-pager", {
                 page: listPage,
                 size: pageSize,
-                pageSizeKey: "jolts",
+                pageSizeKey: "easy-rules",
                 returned: entries.length,
                 total: bundle.total,
                 bundle: bundle,
                 onPage: function (nextPage) { load(query, nextPage); }
             });
             if (!entries.length) {
-                $("#jolt-rows").html(CadminDeletedList.emptyRow(7, "Jolt spec",
-                    "No Jolt specs found. Create one or start HAPI FHIR."));
+                $("#easy-rule-rows").html(CadminDeletedList.emptyRow(7, "Easy rule",
+                    "No Easy rules found. Create one or start HAPI FHIR."));
                 return;
             }
             const rows = entries.map(function (library) {
                 return "<tr>" +
-                    "<td>" + CadminApi.resourceLink("#/jolts/" + encodeURIComponent(library.id),
+                    "<td>" + CadminApi.resourceLink("#/easy-rules/" + encodeURIComponent(library.id),
                         library.title || library.name || "Untitled") + "</td>" +
                     "<td class=\"cadmin-md-cell\">" + CadminApi.markdownCell(library.description) + "</td>" +
                     "<td><code>" + esc(library.version || "—") + "</code></td>" +
@@ -260,71 +257,70 @@ function renderJoltList(initialQuery) {
                     "<td><code>" + esc(library.id) + "</code></td>" +
                     '<td class="text-end text-nowrap">' +
                         CadminWorkspace.listBookmarkButton(library) +
-                        '<a class="btn btn-sm btn-outline-primary me-1" href="#/jolts/' +
+                        '<a class="btn btn-sm btn-outline-primary me-1" href="#/easy-rules/' +
                             encodeURIComponent(library.id) + '" title="Open" aria-label="Open"><i class="bi bi-eye"></i></a>' +
                         '<button class="btn btn-sm btn-outline-secondary" type="button" data-duplicate="' +
                             esc(library.id) + '">Duplicate</button>' +
                     "</td>" +
                     "</tr>";
             });
-            $("#jolt-rows").html(rows.join(""));
+            $("#easy-rule-rows").html(rows.join(""));
         }).fail(function (xhr) {
-            $("#jolt-pager").empty();
-            $("#jolt-rows").html('<tr><td colspan="7" class="text-danger">Unable to load libraries from /fhir.</td></tr>');
-            CadminApi.showAlert("#jolt-alert", "danger",
+            $("#easy-rule-pager").empty();
+            $("#easy-rule-rows").html('<tr><td colspan="7" class="text-danger">Unable to load libraries from /fhir.</td></tr>');
+            CadminApi.showAlert("#easy-rule-alert", "danger",
                 "FHIR request failed (" + xhr.status + "). Is the HAPI FHIR stack running?");
         });
     }
 
-    $("#jolt-search-form").on("submit", function (event) {
+    $("#easy-rule-search-form").on("submit", function (event) {
         event.preventDefault();
-        load($("#jolt-query").val());
+        load($("#easy-rule-query").val());
     });
 
-    $("#create-jolt-modal").on("show.bs.modal", function () {
-        $("#bj-title").val("");
-        $("#bj-id").val("").removeClass("is-invalid");
-        $("#bj-description").val("");
-        $("#bj-status").val("draft");
+    $("#create-easy-rule-modal").on("show.bs.modal", function () {
+        $("#er-title").val("");
+        $("#er-id").val("").removeClass("is-invalid");
+        $("#er-description").val("");
     });
-    $("#bj-id").on("input", function () {
+    $("#er-id").on("input", function () {
         $(this).removeClass("is-invalid");
     });
 
-    $("#create-jolt-form").on("submit", function (event) {
+    $("#create-easy-rule-form").on("submit", function (event) {
         event.preventDefault();
-        const assignedId = $("#bj-id").val().trim();
-        const title = $("#bj-title").val().trim();
+        const assignedId = $("#er-id").val().trim();
+        const title = $("#er-title").val().trim();
         const resource = {
             resourceType: "Library",
-            status: $("#bj-status").val() || "draft",
+            status: "draft",
             title: title,
             name: slugName(title),
             version: "1.0.0",
             type: libraryTypeConcept(),
             content: [{
-                contentType: specContentType,
-                title: "Jolt spec",
-                data: encodeText(defaultSpec())
+                contentType: routeContentType,
+                title: "Easy rule",
+                data: encodeText(defaultYaml(title))
             }]
         };
-        const description = $("#bj-description").val().trim();
+        const description = $("#er-description").val().trim();
         if (description) {
             resource.description = description;
         }
-        ensureNewId(assignedId, $("#bj-id")).done(function () {
+        ensureNewId(assignedId, $("#er-id")).done(function () {
             saveLibrary(resource, assignedId).done(function (created, _status, xhr) {
-                const modal = bootstrap.Modal.getInstance(document.getElementById("create-jolt-modal"));
+                const modal = bootstrap.Modal.getInstance(document.getElementById("create-easy-rule-modal"));
                 if (modal) {
                     modal.hide();
                 }
                 const id = CadminApi.createdResourceId(created, xhr, "Library") || assignedId;
-                CadminApi.showToast("success", "Jolt spec created.");
+                CadminApi.showToast("success", "Easy rule created.");
                 if (id) {
-                    window.location.hash = "#/jolts/" + encodeURIComponent(id);
+                    window.location.hash = "#/easy-rules/" + encodeURIComponent(id);
                     return;
                 }
-                load($("#jolt-query").val());
+                load($("#easy-rule-query").val());
             }).fail(function (xhr) {
                 CadminApi.showToast("danger", "Create failed (" + xhr.status + ").");
             });
@@ -335,35 +331,35 @@ function renderJoltList(initialQuery) {
         const id = $(this).attr("data-duplicate");
         CadminApi.fhir("/Library/" + encodeURIComponent(id)).done(function (library) {
             duplicateSource = library;
-            $("#bj-dup-title").text(library.title || library.name || library.id);
-            $("#bj-dup-id").val("").removeClass("is-invalid");
-            $("#bj-dup-version").val(bumpVersion(library.version));
-            bootstrap.Modal.getOrCreateInstance(document.getElementById("duplicate-jolt-modal")).show();
+            $("#er-dup-title").text(library.title || library.name || library.id);
+            $("#er-dup-id").val("").removeClass("is-invalid");
+            $("#er-dup-version").val(bumpVersion(library.version));
+            bootstrap.Modal.getOrCreateInstance(document.getElementById("duplicate-easy-rule-modal")).show();
         }).fail(function (xhr) {
-            CadminApi.showAlert("#jolt-alert", "danger", "Unable to load spec (" + xhr.status + ").");
+            CadminApi.showAlert("#easy-rule-alert", "danger", "Unable to load rule (" + xhr.status + ").");
         });
     });
 
-    $("#duplicate-jolt-form").on("submit", function (event) {
+    $("#duplicate-easy-rule-form").on("submit", function (event) {
         event.preventDefault();
         if (!duplicateSource) {
             return;
         }
-        const assignedId = ($("#bj-dup-id").val() || "").trim();
-        const newVersion = ($("#bj-dup-version").val() || "").trim() || bumpVersion(duplicateSource.version);
+        const assignedId = ($("#er-dup-id").val() || "").trim();
+        const newVersion = ($("#er-dup-version").val() || "").trim() || bumpVersion(duplicateSource.version);
         const copy = cloneLibrary(duplicateSource, newVersion);
         if (copy.title) {
             copy.title = copy.title + " copy";
         }
-        ensureNewId(assignedId, $("#bj-dup-id")).done(function () {
+        ensureNewId(assignedId, $("#er-dup-id")).done(function () {
             saveLibrary(copy, assignedId).done(function () {
-                const modal = bootstrap.Modal.getInstance(document.getElementById("duplicate-jolt-modal"));
+                const modal = bootstrap.Modal.getInstance(document.getElementById("duplicate-easy-rule-modal"));
                 if (modal) {
                     modal.hide();
                 }
                 duplicateSource = null;
-                CadminApi.showToast("success", "Jolt spec duplicated.");
-                load($("#jolt-query").val());
+                CadminApi.showToast("success", "Easy rule duplicated.");
+                load($("#easy-rule-query").val());
             }).fail(function (xhr) {
                 CadminApi.showToast("danger", "Duplicate failed (" + xhr.status + ").");
             });
@@ -372,7 +368,7 @@ function renderJoltList(initialQuery) {
 
     CadminDeletedList.bind({
         type: "Library",
-        reload: function () { load($("#jolt-query").val(), 0); }
+        reload: function () { load($("#easy-rule-query").val(), 0); }
     });
 
     load(initialQuery);

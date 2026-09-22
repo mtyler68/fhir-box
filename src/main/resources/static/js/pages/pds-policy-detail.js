@@ -1338,7 +1338,11 @@ window.CadminPdsPolicyDetail = (function () {
             window.location.hash = "#/camel-routes/" + encodeURIComponent(resource.id);
             return;
         }
-        if (CadminApi.isLibraryType(resource, "icg-route")) {
+        if (CadminApi.isLibraryType(resource, "easy-rule")) {
+            window.location.hash = "#/easy-rules/" + encodeURIComponent(resource.id);
+            return;
+        }
+        if (CadminApi.isGatewayRouteLibrary(resource)) {
             window.location.hash = "#/icg-routes/" + encodeURIComponent(resource.id);
             return;
         }
@@ -1376,6 +1380,7 @@ window.CadminPdsPolicyDetail = (function () {
                     '<div class="list-group list-group-flush nav nav-pills flex-column cadmin-settings-nav" id="pd-settings-nav" role="tablist">' +
                         navButton("pd-pane-basics", "bi bi-info-circle", "Basics", { active: true }) +
                         navButton("pd-pane-identity", "bi bi-person-vcard", "Identity and version") +
+                        navButton("pd-pane-details", "bi bi-journal-text", "Details") +
                         navButton("pd-pane-policy", "bi bi-shield-lock", "Policy") +
                         navButton("pd-pane-attachments", "bi bi-paperclip", "Attachments") +
                         navButton("pd-pane-related", "bi bi-link-45deg", "Related") +
@@ -1389,7 +1394,7 @@ window.CadminPdsPolicyDetail = (function () {
                         tabPane("pd-pane-basics",
                             '<form id="pd-basic-form">' +
                                 '<div class="card">' +
-                                    '<div class="card-header"><h3 class="card-title">Basic details</h3></div>' +
+                                    '<div class="card-header"><h3 class="card-title">Basics</h3></div>' +
                                     '<div class="card-body">' +
                                         field("Title", '<input class="form-control" id="pd-title-input">') +
                                         fieldRow(
@@ -1402,10 +1407,6 @@ window.CadminPdsPolicyDetail = (function () {
                                             '<input class="form-check-input" type="checkbox" id="pd-experimental">' +
                                             '<label class="form-check-label" for="pd-experimental">Experimental</label>' +
                                         "</div>" +
-                                        field("Description", '<textarea class="form-control" id="pd-description" rows="4"></textarea>') +
-                                        field("Purpose", '<textarea class="form-control" id="pd-purpose" rows="3"></textarea>') +
-                                        field("Usage", '<textarea class="form-control" id="pd-usage" rows="3"></textarea>') +
-                                        field("Copyright", '<textarea class="form-control" id="pd-copyright" rows="2"></textarea>') +
                                         '<button type="submit" class="btn btn-primary">Save changes</button>' +
                                     "</div>" +
                                 "</div>" +
@@ -1439,6 +1440,19 @@ window.CadminPdsPolicyDetail = (function () {
                                                 "</div>" +
                                             "</div>" +
                                         "</div>" +
+                                        '<button type="submit" class="btn btn-primary">Save changes</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</form>") +
+                        tabPane("pd-pane-details",
+                            '<form id="pd-details-form">' +
+                                '<div class="card">' +
+                                    '<div class="card-header"><h3 class="card-title">Details</h3></div>' +
+                                    '<div class="card-body">' +
+                                        field("Description", '<textarea class="form-control" id="pd-description" rows="4"></textarea>') +
+                                        field("Purpose", '<textarea class="form-control" id="pd-purpose" rows="3"></textarea>') +
+                                        field("Usage", '<textarea class="form-control" id="pd-usage" rows="3"></textarea>') +
+                                        field("Copyright", '<textarea class="form-control" id="pd-copyright" rows="2"></textarea>') +
                                         '<button type="submit" class="btn btn-primary">Save changes</button>' +
                                     "</div>" +
                                 "</div>" +
@@ -1816,7 +1830,7 @@ window.CadminPdsPolicyDetail = (function () {
         const $root = $(CadminWorkspace.root());
         $root.off(".pdsdetail");
         $root.on("input.pdsdetail change.pdsdetail",
-            "#pd-policy-form :input, #pd-basic-form :input, #pd-identity-form :input", syncUnsavedFlag);
+            "#pd-policy-form :input, #pd-basic-form :input, #pd-identity-form :input, #pd-details-form :input", syncUnsavedFlag);
 
         $root.on("shown.bs.tab.pdsdetail", "#pd-pane-policy-btn", function () {
             $("#pd-policy-form .CodeMirror").each(function () {
@@ -1854,7 +1868,7 @@ window.CadminPdsPolicyDetail = (function () {
             });
         });
 
-        $("#pd-basic-form, #pd-identity-form").on("submit", function (event) {
+        $("#pd-basic-form, #pd-identity-form, #pd-details-form").on("submit", function (event) {
             event.preventDefault();
             applyLibraryMeta();
             syncYamlFromLibraryIfPresent();

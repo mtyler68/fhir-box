@@ -50,6 +50,65 @@
     font-size: 1.35rem;
 }
 
+.sidebar-search {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 0.65rem 0.85rem 0.4rem;
+    background: var(--bs-secondary-bg);
+}
+
+.sidebar-search-field {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.sidebar-search-icon {
+    position: absolute;
+    left: 0.55rem;
+    font-size: 0.8rem;
+    color: var(--bs-secondary-color);
+    pointer-events: none;
+}
+
+.sidebar-search-field .form-control {
+    padding-left: 1.75rem;
+    padding-right: 1.75rem;
+}
+
+.sidebar-search-field input[type="search"]::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.sidebar-search-clear {
+    position: absolute;
+    right: 0.15rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    background: transparent;
+    color: var(--bs-secondary-color);
+    padding: 0.2rem 0.4rem;
+    line-height: 1;
+    font-size: 0.75rem;
+}
+
+.sidebar-search-clear:hover,
+.sidebar-search-clear:focus-visible {
+    color: var(--bs-body-color);
+}
+
+.sidebar-menu > .is-menu-filtered {
+    display: none !important;
+}
+
+.sidebar-mini.sidebar-collapse .app-sidebar:not(:hover) .sidebar-search {
+    display: none;
+}
+
 .navbar-search-field {
     position: relative;
     display: flex;
@@ -442,7 +501,8 @@ body.layout-fixed .app-main {
     text-align: center;
 }
 
-.camel-route-editor.CodeMirror {
+.camel-route-editor.CodeMirror,
+.easy-rule-editor.CodeMirror {
     height: 36rem;
     min-height: 0;
     padding: 0;
@@ -452,7 +512,8 @@ body.layout-fixed .app-main {
     font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
-.camel-route-editor .CodeMirror-scroll {
+.camel-route-editor .CodeMirror-scroll,
+.easy-rule-editor .CodeMirror-scroll {
     min-height: 0;
 }
 
@@ -592,6 +653,77 @@ body.layout-fixed .app-main {
     color: var(--bs-secondary-color);
 }
 
+.cadmin-md-cell {
+    vertical-align: top;
+    max-width: 28rem;
+}
+
+.cadmin-md {
+    overflow-wrap: anywhere;
+}
+
+.cadmin-md > :first-child {
+    margin-top: 0;
+}
+
+.cadmin-md > :last-child {
+    margin-bottom: 0;
+}
+
+.cadmin-md pre,
+.cadmin-md code {
+    background: var(--bs-tertiary-bg);
+}
+
+.cadmin-md pre {
+    padding: 0.5rem 0.65rem;
+    border-radius: var(--bs-border-radius);
+    overflow: auto;
+}
+
+.cadmin-md pre code {
+    background: transparent;
+    padding: 0;
+}
+
+.cadmin-md code {
+    padding: 0.1em 0.35em;
+    border-radius: 0.25rem;
+}
+
+.cadmin-md blockquote {
+    border-left: 0.25rem solid var(--bs-border-color);
+    padding-left: 0.65rem;
+    margin: 0 0 0.4rem;
+    color: var(--bs-secondary-color);
+}
+
+.cadmin-md-compact {
+    font-size: 0.875rem;
+}
+
+.cadmin-md-compact p,
+.cadmin-md-compact ul,
+.cadmin-md-compact ol {
+    margin-bottom: 0.35rem;
+}
+
+.cadmin-md-compact ul,
+.cadmin-md-compact ol {
+    padding-left: 1.15rem;
+}
+
+.cadmin-md-compact h1,
+.cadmin-md-compact h2,
+.cadmin-md-compact h3,
+.cadmin-md-compact h4,
+.cadmin-md-compact h5,
+.cadmin-md-compact h6 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0.35rem 0;
+}
+
 .camel-route-split > [class*="col-"] {
     display: flex;
 }
@@ -609,11 +741,13 @@ body.layout-fixed .app-main {
     flex-direction: column;
 }
 
-.camel-route-yaml-tools {
+.camel-route-yaml-tools,
+.easy-rule-yaml-tools {
     flex: 0 0 auto;
 }
 
-.camel-route-yaml-tools .form-select {
+.camel-route-yaml-tools .form-select,
+.easy-rule-yaml-tools .form-select {
     width: auto;
     min-width: 10rem;
 }
@@ -1849,6 +1983,14 @@ body:not(.cadmin-has-fhir-resource) [data-target-list-add] {
 
 .cadmin-swal-text {
     font-size: 0.95rem;
+}
+
+.cadmin-swal-expunge {
+    text-align: left;
+}
+
+.cadmin-swal-expunge .form-text {
+    max-width: 22rem;
 }
 
 .cadmin-swal-actions {

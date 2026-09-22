@@ -558,6 +558,18 @@ class CadminGatewayApplicationTests {
 
     @Test
     @WithMockUser(username = "clinician", roles = {"USER"})
+    void systemExpungeIsForbiddenForNonAdmin() {
+        webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
+                .post()
+                .uri("/fhir/$expunge")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"resourceType\":\"Parameters\"}")
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    @WithMockUser(username = "clinician", roles = {"USER"})
     void patientExpungeIsForbiddenForNonAdmin() {
         webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
                 .post()

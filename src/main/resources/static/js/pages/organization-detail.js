@@ -458,6 +458,13 @@ window.CadminOrganizationDetail = (function () {
                                     "Also delete all resources that depend on this organization" +
                                 "</label>" +
                             "</div>" +
+                            '<div class="form-check mt-3">' +
+                                '<input class="form-check-input" type="checkbox" id="od-delete-expunge">' +
+                                '<label class="form-check-label" for="od-delete-expunge">' +
+                                    "Expunge this resource</label>" +
+                                '<div class="form-text">Expunge removes the resource permanently, including its history. ' +
+                                    "This cannot be undone.</div>" +
+                            "</div>" +
                         "</div>" +
                         '<div class="modal-footer">' +
                             '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>' +
@@ -1291,12 +1298,14 @@ window.CadminOrganizationDetail = (function () {
 
         $("#od-delete-modal").on("show.bs.modal", function () {
             $("#od-delete-cascade").prop("checked", false);
+            $("#od-delete-expunge").prop("checked", false);
         });
 
         $root.on("click.orgdetail", "#od-delete-confirm", function () {
             const cascade = $("#od-delete-cascade").is(":checked");
+            const expunge = $("#od-delete-expunge").is(":checked");
             const path = "/Organization/" + encodeURIComponent(org.id) + (cascade ? "?_cascade=delete" : "");
-            CadminApi.fhir(path, "DELETE").done(function () {
+            CadminApi.fhir(path, "DELETE", null, { expunge: expunge }).done(function () {
                 hideModal("od-delete-modal");
                 alertMsg("success", cascade
                     ? "Organization and dependent resources deleted."

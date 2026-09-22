@@ -1,0 +1,42 @@
+name: cadmin-elasticsearch
+
+services:
+  hapi-elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.5
+    container_name: cadmin-hapi-elasticsearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      cluster.name: hapi-es
+      xpack.security.enabled: "false"
+      xpack.security.http.ssl.enabled: "false"
+      xpack.license.self_generated.type: basic
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - "9200:9200"
+    volumes:
+      - hapi-elasticsearch:/usr/share/elasticsearch/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:9200/_cluster/health | grep -qE '\"status\":\"(green|yellow)\"'"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - fhir-box-network-link
+
+volumes:
+  hapi-elasticsearch:
+
+networks:
+  fhir-box-network-link:
+    external: true
+    name: fhir-box-network

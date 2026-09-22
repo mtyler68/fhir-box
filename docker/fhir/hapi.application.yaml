@@ -1,4 +1,8 @@
 spring:
+  autoconfigure:
+    exclude: []
+  elasticsearch:
+    uris: http://hapi-elasticsearch:9200
   datasource:
     url: jdbc:postgresql://hapi-fhir-postgres:5432/hapi
     username: admin
@@ -7,7 +11,27 @@ spring:
   jpa:
     properties:
       hibernate.dialect: ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgresDialect
-      hibernate.search.enabled: false
+      hibernate.search.enabled: true
+      hibernate.search.schema_management.strategy: CREATE
+      hibernate.search.backend.type: elasticsearch
+      hibernate.search.backend.protocol: http
+      hibernate.search.backend.hosts: hapi-elasticsearch:9200
+      hibernate.search.backend.analysis.configurer: ca.uhn.fhir.jpa.search.HapiHSearchAnalysisConfigurers$HapiElasticsearchAnalysisConfigurer
+      hibernate.search.backend.schema_management.settings_file: ca/uhn/fhir/jpa/elastic/index-settings.json
+      hibernate.search.backend.schema_management.minimal_required_status: yellow
+      hibernate.search.backend.schema_management.minimal_required_status_wait_timeout: 10000
+
+elasticsearch:
+  enabled: true
+  rest_url: hapi-elasticsearch:9200
+  protocol: http
+  required_index_status: YELLOW
+  schema_management_strategy: CREATE
+
+management:
+  health:
+    elasticsearch:
+      enabled: false
 
 hapi:
   fhir:
@@ -20,6 +44,7 @@ hapi:
     expunge_enabled: true
     delete_expunge_enabled: true
     openapi_enabled: true
+    search_index_full_text_enabled: true
     subscription:
       resthook_enabled: true
     cors:

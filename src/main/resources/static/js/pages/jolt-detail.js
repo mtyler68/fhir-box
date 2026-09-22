@@ -1517,7 +1517,11 @@ window.CadminJoltDetail = (function () {
             window.location.hash = "#/camel-routes/" + encodeURIComponent(resource.id);
             return;
         }
-        if (CadminApi.isLibraryType(resource, "icg-route")) {
+        if (CadminApi.isLibraryType(resource, "easy-rule")) {
+            window.location.hash = "#/easy-rules/" + encodeURIComponent(resource.id);
+            return;
+        }
+        if (CadminApi.isGatewayRouteLibrary(resource)) {
             window.location.hash = "#/icg-routes/" + encodeURIComponent(resource.id);
             return;
         }
@@ -1564,6 +1568,7 @@ window.CadminJoltDetail = (function () {
                     '<div class="list-group list-group-flush nav nav-pills flex-column cadmin-settings-nav" id="bjd-settings-nav" role="tablist">' +
                         navButton("bjd-pane-basics", "bi bi-info-circle", "Basics", { active: true }) +
                         navButton("bjd-pane-identity", "bi bi-person-vcard", "Identity and version") +
+                        navButton("bjd-pane-details", "bi bi-journal-text", "Details") +
                         navButton("bjd-pane-spec", "bi bi-braces", "Specification") +
                         navButton("bjd-pane-samples", "bi bi-collection", "Samples") +
                         navButton("bjd-pane-related", "bi bi-link-45deg", "Related") +
@@ -1577,7 +1582,7 @@ window.CadminJoltDetail = (function () {
                         tabPane("bjd-pane-basics",
                             '<form id="bjd-basic-form">' +
                                 '<div class="card">' +
-                                    '<div class="card-header"><h3 class="card-title">Basic details</h3></div>' +
+                                    '<div class="card-header"><h3 class="card-title">Basics</h3></div>' +
                                     '<div class="card-body">' +
                                         field("Title", '<input class="form-control" id="bjd-title-input">') +
                                         fieldRow(
@@ -1590,10 +1595,6 @@ window.CadminJoltDetail = (function () {
                                             '<input class="form-check-input" type="checkbox" id="bjd-experimental">' +
                                             '<label class="form-check-label" for="bjd-experimental">Experimental</label>' +
                                         "</div>" +
-                                        field("Description", '<textarea class="form-control" id="bjd-description" rows="4"></textarea>') +
-                                        field("Purpose", '<textarea class="form-control" id="bjd-purpose" rows="3"></textarea>') +
-                                        field("Usage", '<textarea class="form-control" id="bjd-usage" rows="3"></textarea>') +
-                                        field("Copyright", '<textarea class="form-control" id="bjd-copyright" rows="2"></textarea>') +
                                         '<button type="submit" class="btn btn-primary">Save changes</button>' +
                                     "</div>" +
                                 "</div>" +
@@ -1627,6 +1628,19 @@ window.CadminJoltDetail = (function () {
                                                 "</div>" +
                                             "</div>" +
                                         "</div>" +
+                                        '<button type="submit" class="btn btn-primary">Save changes</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</form>") +
+                        tabPane("bjd-pane-details",
+                            '<form id="bjd-details-form">' +
+                                '<div class="card">' +
+                                    '<div class="card-header"><h3 class="card-title">Details</h3></div>' +
+                                    '<div class="card-body">' +
+                                        field("Description", '<textarea class="form-control" id="bjd-description" rows="4"></textarea>') +
+                                        field("Purpose", '<textarea class="form-control" id="bjd-purpose" rows="3"></textarea>') +
+                                        field("Usage", '<textarea class="form-control" id="bjd-usage" rows="3"></textarea>') +
+                                        field("Copyright", '<textarea class="form-control" id="bjd-copyright" rows="2"></textarea>') +
                                         '<button type="submit" class="btn btn-primary">Save changes</button>' +
                                     "</div>" +
                                 "</div>" +
@@ -1932,7 +1946,7 @@ window.CadminJoltDetail = (function () {
             clearOpDrag();
         });
         $root.on("input.bjdetail change.bjdetail",
-            "#bjd-spec-form :input, #bjd-samples-form :input, #bjd-basic-form :input, #bjd-identity-form :input",
+            "#bjd-spec-form :input, #bjd-samples-form :input, #bjd-basic-form :input, #bjd-identity-form :input, #bjd-details-form :input",
             syncUnsavedFlag);
         $root.on("input.bjdetail", "#bjd-sample-title", function () {
             if (selectedSample >= 0 && samples[selectedSample]) {
@@ -2020,7 +2034,7 @@ window.CadminJoltDetail = (function () {
                 CadminApi.showToast("success", "Jolt samples saved.");
             }, false, "samples");
         });
-        $root.on("submit.bjdetail", "#bjd-basic-form, #bjd-identity-form", function (event) {
+        $root.on("submit.bjdetail", "#bjd-basic-form, #bjd-identity-form, #bjd-details-form", function (event) {
             event.preventDefault();
             saveLibrary(function () {
                 CadminApi.showToast("success", "Identity updated.");

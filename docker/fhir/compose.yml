@@ -1,5 +1,8 @@
 name: cadmin-fhir
 
+include:
+  - path: ../elasticsearch/compose.yml
+
 services:
   hapi-fhir-postgres:
     image: postgres:16-alpine
@@ -29,6 +32,8 @@ services:
     depends_on:
       hapi-fhir-postgres:
         condition: service_healthy
+      hapi-elasticsearch:
+        condition: service_healthy
     ports:
       - "8081:8080"
     environment:
@@ -37,7 +42,13 @@ services:
       SPRING_DATASOURCE_PASSWORD: admin
       SPRING_DATASOURCE_DRIVERCLASSNAME: org.postgresql.Driver
       SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgresDialect
-      SPRING_JPA_PROPERTIES_HIBERNATE_SEARCH_ENABLED: "false"
+      SPRING_JPA_PROPERTIES_HIBERNATE_SEARCH_ENABLED: "true"
+      SPRING_JPA_PROPERTIES_HIBERNATE_SEARCH_BACKEND_TYPE: elasticsearch
+      SPRING_JPA_PROPERTIES_HIBERNATE_SEARCH_BACKEND_HOSTS: hapi-elasticsearch:9200
+      SPRING_JPA_PROPERTIES_HIBERNATE_SEARCH_BACKEND_PROTOCOL: http
+      SPRING_JPA_PROPERTIES_HIBERNATE_SEARCH_BACKEND_SCHEMA_MANAGEMENT_SETTINGS_FILE: ca/uhn/fhir/jpa/elastic/index-settings.json
+      SPRING_ELASTICSEARCH_URIS: http://hapi-elasticsearch:9200
+      SPRING_CONFIG_ADDITIONAL_LOCATION: optional:file:/app/config/application.yaml
     volumes:
       - ./hapi.application.yaml:/app/config/application.yaml:ro
     healthcheck:

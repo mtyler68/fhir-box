@@ -194,7 +194,8 @@ window.CadminResourceHistory = (function () {
             const isCurrent = vid && currentVid && vid === currentVid;
             const canView = !!(entry && entry.resource) || (action !== "DELETE" && vid);
             const canDiff = canView && !isCurrent;
-            const canRollback = canView && !isCurrent;
+            const locked = window.CadminApi && CadminApi.isActiveEasyRuleLibrary(mounted);
+            const canRollback = canView && !isCurrent && !locked;
             const viewBtn = '<button class="btn btn-sm btn-outline-secondary" type="button"' +
                 (canView ? ' data-history-view="' + index + '"' : " disabled") +
                 ' title="View JSON" aria-label="View JSON">' +
@@ -203,9 +204,12 @@ window.CadminResourceHistory = (function () {
                 (canDiff ? ' data-history-diff="' + index + '"' : " disabled") +
                 ' title="Diff with current" aria-label="Diff with current">' +
                 '<i class="bi bi-file-diff" aria-hidden="true"></i></button>';
+            const rollbackTitle = locked
+                ? "An active Easy rule can only change status."
+                : (isCurrent ? "Already the current version" : "Roll back to this version");
             const rollbackBtn = '<button class="btn btn-sm btn-outline-secondary" type="button"' +
                 (canRollback ? ' data-history-rollback="' + index + '"' : " disabled") +
-                ' title="' + (isCurrent ? "Already the current version" : "Roll back to this version") +
+                ' title="' + esc(rollbackTitle) +
                 '" aria-label="Roll back to this version">' +
                 '<i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i></button>';
             return "<tr>" +
@@ -705,6 +709,10 @@ window.CadminResourceHistory = (function () {
     function rollbackAt(index) {
         const entry = entries[index];
         if (!entry || !mounted || !mounted.resourceType || !mounted.id) {
+            return;
+        }
+        if (window.CadminApi && CadminApi.isActiveEasyRuleLibrary(mounted)) {
+            CadminApi.showToast("danger", "An active Easy rule can only change status.");
             return;
         }
         const vid = versionId(entry);

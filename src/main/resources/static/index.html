@@ -156,6 +156,20 @@
             </a>
         </div>
         <div class="sidebar-wrapper">
+            <div class="sidebar-search" id="sidebar-menu-search-wrap">
+                <form id="sidebar-menu-search-form" role="search">
+                    <label class="visually-hidden" for="sidebar-menu-search">Filter menu</label>
+                    <div class="sidebar-search-field">
+                        <i class="bi bi-search sidebar-search-icon" aria-hidden="true"></i>
+                        <input type="search" class="form-control form-control-sm" id="sidebar-menu-search"
+                               placeholder="Search menu…" autocomplete="off" spellcheck="false">
+                        <button type="button" class="sidebar-search-clear" id="sidebar-menu-search-clear"
+                                aria-label="Clear menu search" hidden>
+                            <i class="bi bi-x-lg" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </form>
+            </div>
             <nav class="mt-2">
                 <ul class="nav sidebar-menu flex-column" data-lte-toggle="treeview" role="menu" data-accordion="false">
                     <li class="nav-item" data-route="dashboard">
@@ -252,6 +266,9 @@
                     <li class="nav-item admin-only" data-route="camel-routes">
                         <a class="nav-link" href="#/camel-routes"><iconify-icon class="nav-icon" icon="hugeicons:camel" aria-hidden="true"></iconify-icon><p>Camel Routes</p></a>
                     </li>
+                    <li class="nav-item admin-only" data-route="easy-rules">
+                        <a class="nav-link" href="#/easy-rules"><iconify-icon class="nav-icon" icon="mdi:script-text-outline" aria-hidden="true"></iconify-icon><p>Easy Rules</p></a>
+                    </li>
                     <li class="nav-item admin-only" data-route="icg-routes">
                         <a class="nav-link" href="#/icg-routes"><iconify-icon class="nav-icon" icon="mdi:routes" aria-hidden="true"></iconify-icon><p>ICG Routes</p></a>
                     </li>
@@ -313,7 +330,12 @@
                     <li class="nav-item admin-only" data-route="demo-data">
                         <a class="nav-link" href="#/demo-data"><i class="nav-icon bi bi-magic"></i><p>Demo data</p></a>
                     </li>
+                    <li class="nav-item admin-only" data-route="expunge-all">
+                        <a class="nav-link" href="#/expunge-all"><i class="nav-icon bi bi-eraser"></i><p>Expunge All</p></a>
+                    </li>
                 </ul>
+                <p class="sidebar-search-empty text-muted small px-3 d-none mb-0" id="sidebar-menu-search-empty">
+                    No matching items</p>
             </nav>
         </div>
     </aside>
@@ -431,6 +453,8 @@
 <script src="/js/pages/pds-policies.js"></script>
 <script src="/js/pages/camel-route-detail.js"></script>
 <script src="/js/pages/camel-routes.js"></script>
+<script src="/js/pages/easy-rule-detail.js"></script>
+<script src="/js/pages/easy-rules.js"></script>
 <script src="/js/pages/icg-route-detail.js"></script>
 <script src="/js/pages/icg-routes.js"></script>
 <script src="/js/pages/jolt-detail.js"></script>
@@ -462,6 +486,7 @@
 <script src="/js/pages/capabilities.js"></script>
 <script src="/js/demo-data-generators.js"></script>
 <script src="/js/pages/demo-data.js"></script>
+<script src="/js/pages/expunge-all.js"></script>
 <script src="/js/pages/users.js"></script>
 <script src="/js/pages/settings.js"></script>
 <script src="/js/pages/oidc-token.js"></script>

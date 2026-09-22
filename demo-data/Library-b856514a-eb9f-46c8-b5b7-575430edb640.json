@@ -12,11 +12,11 @@
   "type": {
     "coding": [
       {
-        "code": "icg-route",
-        "display": "ICG Route"
+        "code": "gateway-route",
+        "display": "Gateway Route"
       }
     ],
-    "text": "icg-route"
+    "text": "gateway-route"
   },
   "content": [
     {

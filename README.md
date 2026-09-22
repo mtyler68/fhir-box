@@ -12,7 +12,7 @@ Security is switchable:
 ## Requirements
 
 - Java 21+
-- Docker and Docker Compose v2 (for Keycloak, HAPI FHIR, and WireMock)
+- Docker and Docker Compose v2 (for Keycloak, HAPI FHIR, Elasticsearch, and WireMock)
 - Maven Wrapper is included (`./mvnw`)
 
 ````shell
@@ -68,8 +68,11 @@ docker compose -f docker/fhir/compose.yml up -d
 | FHIR API (via HAPI) | http://localhost:8081/fhir |
 | FHIR API (via gateway) | http://localhost:8080/fhir |
 | PostgreSQL | localhost:5432 (`admin` / `admin`, database `hapi`) |
+| Elasticsearch | http://localhost:9200 |
 
 HAPI assigns **UUID** resource IDs (`hapi.fhir.server_id_strategy: UUID`). Recreate the Postgres volume after changing `fhir_version` or the ID strategy.
+
+Hibernate Search is on and uses Elasticsearch (`hibernate.search.backend.type: elasticsearch`), including HAPI’s ngram index settings (`ca/uhn/fhir/jpa/elastic/index-settings.json`). Full-text `_content` and `_text` searches are enabled (`hapi.fhir.search_index_full_text_enabled`). Recreate the HAPI container after changing this YAML. If a previous start failed while creating indexes, recreate the Elasticsearch volume too (`docker compose -f docker/elasticsearch/compose.yml down -v && docker compose -f docker/fhir/compose.yml up -d`). Resources written before Search was enabled need a HAPI `$reindex` to appear in those indexes.
 
 REST-hook subscription processing is on (`hapi.fhir.subscription.resthook_enabled`). After changing `docker/fhir/hapi.application.yaml`, restart the HAPI container (`docker compose -f docker/fhir/compose.yml up -d --force-recreate hapi-fhir`). Subscription endpoints must be reachable from that container (for WireMock on the host, use `http://host.docker.internal:9090/...`).
 
@@ -120,7 +123,7 @@ export CADMIN_OIDC_CLIENT_SECRET=cadmin-gateway-secret
 docker compose up -d
 ```
 
-That include file starts FHIR, Keycloak, and WireMock together. Run the gateway on the host so the browser, Spring, and Keycloak all share `localhost` hostnames.
+That include file starts FHIR (with Elasticsearch), Keycloak, WireMock, and Redis together. Run the gateway on the host so the browser, Spring, and Keycloak all share `localhost` hostnames.
 
 ## WireMock
 
@@ -190,14 +193,15 @@ FHIR Box authors FHIR `Library` resources with custom `type` codes. Admins manag
 | --- | --- | --- |
 | `pds-policies` | Policy YAML (`application/x-policy+x-yaml`) | **PDS Policies** |
 | `camel-route` | Camel YAML (`application/camel+yaml`) | **Camel Routes** |
-| `icg-route` | Spring Cloud Gateway YAML (`application/gateway+yaml`) | **ICG Routes** |
+| `easy-rule` | Easy Rules YAML (`application/easy-rules+yaml`) | **Easy Rules** |
+| `gateway-route` | Spring Cloud Gateway YAML (`application/gateway+yaml`) | **ICG Routes** |
 | `jolt` | Jolt transform JSON (`application/jolt+json`) and optional samples (`application/jolt-samples+json`) | **Jolt** |
 
 The Jolt editor **Transform** action posts `{ "input", "spec" }` to `POST /jolt/$transform` on this gateway (same contract as FHIR Chief) and does not call FHIR Chief.
 
 ## Integrator Connect Gateway
 
-Integrator Connect Gateway is a sibling Spring Cloud Gateway (`../integrator-connect-gateway`) that polls FHIR `Library` resources with `type=icg-route` and deploys their YAML as live HTTP routes. Author those libraries in FHIR Box under **ICG Routes**. The Integrations page **Integrator Connect Gateway** shows what is currently deployed.
+Integrator Connect Gateway is a sibling Spring Cloud Gateway (`../integrator-connect-gateway`) that polls FHIR `Library` resources with `type=gateway-route` and deploys their YAML as live HTTP routes. Author those libraries in FHIR Box under **ICG Routes**. The Integrations page **Integrator Connect Gateway** shows what is currently deployed.
 
 | Service | URL / port |
 | --- | --- |

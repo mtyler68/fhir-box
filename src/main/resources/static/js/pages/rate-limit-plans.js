@@ -285,7 +285,7 @@ function renderRateLimitPlanList(initialQuery) {
                 return "<tr>" +
                     "<td>" + CadminApi.resourceLink("#/rate-limit-plans/" + encodeURIComponent(library.id),
                         library.title || library.name || "Untitled") + "</td>" +
-                    "<td>" + esc(library.description || "—") + "</td>" +
+                    "<td class=\"cadmin-md-cell\">" + CadminApi.markdownCell(library.description) + "</td>" +
                     "<td><code>" + esc(planTier(library)) + "</code></td>" +
                     "<td><code>" + esc(library.version || "—") + "</code></td>" +
                     "<td>" + statusBadge(library.status) + "</td>" +

@@ -38,7 +38,7 @@ function renderIcg() {
         '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
             "<div>" +
                 '<h1 class="h3 mb-1 page-title">Integrator Connect Gateway</h1>' +
-                '<p class="text-muted mb-0">Live Spring Cloud Gateway routes deployed from <code>icg-route</code> libraries. Updates every 2 seconds.</p>' +
+                '<p class="text-muted mb-0">Live Spring Cloud Gateway routes deployed from <code>gateway-route</code> libraries. Updates every 2 seconds.</p>' +
             "</div>" +
             '<div class="d-flex flex-wrap gap-2">' +
                 '<a class="btn btn-outline-primary" href="#/icg-routes">' +
@@ -183,7 +183,7 @@ function renderIcg() {
         if (!slice.length) {
             $("#icg-rows").html(icg.emptyRow(8, query
                 ? "No routes match this search."
-                : "No ICG routes deployed. Activate an icg-route library."));
+                : "No ICG routes deployed. Activate a gateway-route library."));
             return;
         }
         $("#icg-rows").html(slice.map(function (route) {

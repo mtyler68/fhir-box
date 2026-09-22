@@ -663,7 +663,7 @@ window.CadminRateLimitPlanDetail = (function () {
     }
 
     function loadIcgRoutes() {
-        return CadminApi.fhir("/Library?type=icg-route&_count=200&_sort=title", "GET", null, { silent: true })
+        return CadminApi.fhir("/Library?type=gateway-route&_count=200&_sort=title", "GET", null, { silent: true })
             .then(function (bundle) {
                 const seen = {};
                 const routes = [];
@@ -1102,7 +1102,11 @@ window.CadminRateLimitPlanDetail = (function () {
             window.location.hash = "#/camel-routes/" + encodeURIComponent(resource.id);
             return;
         }
-        if (CadminApi.isLibraryType(resource, "icg-route")) {
+        if (CadminApi.isLibraryType(resource, "easy-rule")) {
+            window.location.hash = "#/easy-rules/" + encodeURIComponent(resource.id);
+            return;
+        }
+        if (CadminApi.isGatewayRouteLibrary(resource)) {
             window.location.hash = "#/icg-routes/" + encodeURIComponent(resource.id);
             return;
         }
@@ -1137,6 +1141,7 @@ window.CadminRateLimitPlanDetail = (function () {
                     '<div class="list-group list-group-flush nav nav-pills flex-column" id="rlp-settings-nav" role="tablist">' +
                         navButton("rlp-pane-basics", "bi bi-info-circle", "Basics", { active: true }) +
                         navButton("rlp-pane-identity", "bi bi-person-vcard", "Identity and version") +
+                        navButton("rlp-pane-details", "bi bi-journal-text", "Details") +
                         navButton("rlp-pane-plan", "bi bi-speedometer2", "Plan") +
                         navButton("rlp-pane-summary", "bi bi-clipboard-data", "Summary") +
                         navButton("rlp-pane-related", "bi bi-link-45deg", "Related") +
@@ -1150,7 +1155,7 @@ window.CadminRateLimitPlanDetail = (function () {
                         tabPane("rlp-pane-basics",
                             '<form id="rlp-basic-form">' +
                                 '<div class="card">' +
-                                    '<div class="card-header"><h3 class="card-title">Basic details</h3></div>' +
+                                    '<div class="card-header"><h3 class="card-title">Basics</h3></div>' +
                                     '<div class="card-body">' +
                                         field("Title", '<input class="form-control" id="rlp-title-input">') +
                                         fieldRow(
@@ -1163,10 +1168,6 @@ window.CadminRateLimitPlanDetail = (function () {
                                             '<input class="form-check-input" type="checkbox" id="rlp-experimental">' +
                                             '<label class="form-check-label" for="rlp-experimental">Experimental</label>' +
                                         "</div>" +
-                                        markdownField("Description", "rlp-description") +
-                                        markdownField("Purpose", "rlp-purpose") +
-                                        markdownField("Usage", "rlp-usage") +
-                                        markdownField("Copyright", "rlp-copyright") +
                                         '<button type="submit" class="btn btn-primary">Save changes</button>' +
                                     "</div>" +
                                 "</div>" +
@@ -1200,6 +1201,19 @@ window.CadminRateLimitPlanDetail = (function () {
                                                 "</div>" +
                                             "</div>" +
                                         "</div>" +
+                                        '<button type="submit" class="btn btn-primary">Save changes</button>' +
+                                    "</div>" +
+                                "</div>" +
+                            "</form>") +
+                        tabPane("rlp-pane-details",
+                            '<form id="rlp-details-form">' +
+                                '<div class="card">' +
+                                    '<div class="card-header"><h3 class="card-title">Details</h3></div>' +
+                                    '<div class="card-body">' +
+                                        markdownField("Description", "rlp-description") +
+                                        markdownField("Purpose", "rlp-purpose") +
+                                        markdownField("Usage", "rlp-usage") +
+                                        markdownField("Copyright", "rlp-copyright") +
                                         '<button type="submit" class="btn btn-primary">Save changes</button>' +
                                     "</div>" +
                                 "</div>" +
@@ -1360,7 +1374,7 @@ window.CadminRateLimitPlanDetail = (function () {
     function bind() {
         const $root = $(CadminWorkspace.root());
         $root.off(".rlpdetail");
-        $root.on("shown.bs.tab.rlpdetail", "#rlp-pane-basics-btn", refreshMarkdownEditors);
+        $root.on("shown.bs.tab.rlpdetail", "#rlp-pane-details-btn", refreshMarkdownEditors);
         $root.on("shown.bs.tab.rlpdetail", "#rlp-pane-summary-btn", function () {
             harvestPlan();
             renderSummary();
@@ -1371,14 +1385,14 @@ window.CadminRateLimitPlanDetail = (function () {
             }
         });
         $root.on("input.rlpdetail change.rlpdetail",
-            "#rlp-basic-form :input, #rlp-identity-form :input, #rlp-plan-form :input", syncUnsavedFlag);
+            "#rlp-basic-form :input, #rlp-identity-form :input, #rlp-details-form :input, #rlp-plan-form :input", syncUnsavedFlag);
         CadminApi.fillValueSetSelect($page("#rlp-status"), CadminApi.valueSets.publicationStatus, {
             fallback: statusOptions,
             onConcepts: function () {
                 syncUnsavedFlag();
             }
         });
-        $root.on("submit.rlpdetail", "#rlp-basic-form, #rlp-identity-form", function (event) {
+        $root.on("submit.rlpdetail", "#rlp-basic-form, #rlp-identity-form, #rlp-details-form", function (event) {
             event.preventDefault();
             saveLibrary(function () {
                 CadminApi.showToast("success", "Rate-limit plan updated.");

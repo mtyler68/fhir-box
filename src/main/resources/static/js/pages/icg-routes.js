@@ -12,7 +12,7 @@ CadminApp.register("icg-routes", function (params) {
 });
 
 function renderIcgRouteList(initialQuery) {
-    const libraryType = "icg-route";
+    const libraryType = "gateway-route";
     const routeContentType = "application/gateway+yaml";
     const statusOptions = [
         { code: "draft", display: "Draft" },
@@ -131,10 +131,10 @@ function renderIcgRouteList(initialQuery) {
     }
 
     function slugName(title) {
-        return String(title || "icg-route").toLowerCase()
+        return String(title || "gateway-route").toLowerCase()
             .replace(/[^a-z0-9]+/g, "-")
             .replace(/^-|-$/g, "")
-            .slice(0, 64) || "icg-route";
+            .slice(0, 64) || "gateway-route";
     }
 
     function bumpVersion(value) {
@@ -163,14 +163,14 @@ function renderIcgRouteList(initialQuery) {
         return {
             coding: [{
                 code: libraryType,
-                display: "ICG Route"
+                display: "Gateway Route"
             }],
             text: libraryType
         };
     }
 
     function isIcgType(library) {
-        return CadminApi.isLibraryType(library, libraryType);
+        return CadminApi.isGatewayRouteLibrary(library);
     }
 
     function ensureNewId(id, $field) {
@@ -270,7 +270,7 @@ function renderIcgRouteList(initialQuery) {
                 return "<tr>" +
                     "<td>" + CadminApi.resourceLink("#/icg-routes/" + encodeURIComponent(library.id),
                         library.title || library.name || "Untitled") + "</td>" +
-                    "<td>" + esc(library.description || "—") + "</td>" +
+                    "<td class=\"cadmin-md-cell\">" + CadminApi.markdownCell(library.description) + "</td>" +
                     "<td><code>" + esc(library.version || "—") + "</code></td>" +
                     "<td>" + statusBadge(library.status) + "</td>" +
                     "<td><code>" + esc(library.name || "—") + "</code></td>" +

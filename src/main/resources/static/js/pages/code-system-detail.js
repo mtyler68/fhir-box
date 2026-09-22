@@ -102,6 +102,7 @@ window.CadminCodeSystemDetail = (function () {
         const version = $("#csd-version").val().trim();
         const publisher = $("#csd-publisher").val().trim();
         const description = $("#csd-description").val().trim();
+        const valueSet = CadminApi.selectValue("#csd-valueset").trim();
         codeSystem.status = $("#csd-status").val() || "draft";
         codeSystem.content = $("#csd-content").val() || "complete";
         if (name) {
@@ -129,6 +130,11 @@ window.CadminCodeSystemDetail = (function () {
         } else {
             delete codeSystem.description;
         }
+        if (valueSet) {
+            codeSystem.valueSet = valueSet;
+        } else {
+            delete codeSystem.valueSet;
+        }
     }
 
     function applyConcepts() {
@@ -142,25 +148,86 @@ window.CadminCodeSystemDetail = (function () {
         }
     }
 
+    function bumpCodeSystemVersion(value) {
+        const text = String(value || "").trim();
+        const match = text.match(/^(\d+)\.(\d+)\.(\d+)/);
+        if (match) {
+            return match[1] + "." + match[2] + "." + (Number(match[3]) + 1);
+        }
+        if (/^\d+$/.test(text)) {
+            return String(Number(text) + 1);
+        }
+        return text ? text + "-1" : "1.0.1";
+    }
+
+    function payloadForSave(resource) {
+        const payload = JSON.parse(JSON.stringify(resource));
+        delete payload.text;
+        if (payload.meta) {
+            delete payload.meta.versionId;
+            delete payload.meta.lastUpdated;
+            if (!Object.keys(payload.meta).length) {
+                delete payload.meta;
+            }
+        }
+        return payload;
+    }
+
+    function isTermVersionConflict(xhr) {
+        const text = String((xhr && (xhr.responseText || (xhr.responseJSON && JSON.stringify(xhr.responseJSON)))) || "");
+        return /idx_codesystem_and_ver|HAPI-2223|trm_codesystem_ver/i.test(text);
+    }
+
+    function putCodeSystem(payload, options) {
+        return CadminApi.fhir(
+            "/CodeSystem/" + encodeURIComponent(codeSystem.id),
+            "PUT",
+            payload,
+            options
+        );
+    }
+
+    function applySaved(updated) {
+        codeSystem = updated || codeSystem;
+        conceptRows = CadminApi.flattenCodeSystemConcepts(codeSystem.concept);
+        renderHeader();
+        renderConcepts();
+        $("#csd-version").val(codeSystem.version || "");
+        CadminResourceSource.mount(function () { return codeSystem; });
+        CadminResourceGraph.mount(codeSystem);
+    }
+
     function saveCodeSystem(next, withMeta) {
         if (withMeta) {
             applyMeta();
         }
         applyConcepts();
-        CadminApi.fhir("/CodeSystem/" + encodeURIComponent(codeSystem.id), "PUT", codeSystem)
-            .done(function (updated) {
-                codeSystem = updated || codeSystem;
-                conceptRows = CadminApi.flattenCodeSystemConcepts(codeSystem.concept);
-                renderHeader();
-                renderConcepts();
-                CadminResourceSource.mount(function () { return codeSystem; });
-                CadminResourceGraph.mount(codeSystem);
-                if (next) {
-                    next();
-                }
-            }).fail(function (xhr) {
+        const payload = payloadForSave(codeSystem);
+        putCodeSystem(payload, { silent: true }).done(function (updated) {
+            applySaved(updated);
+            if (next) {
+                next();
+            }
+        }).fail(function (xhr) {
+            if (!isTermVersionConflict(xhr)) {
+                CadminApi.showFhirError(xhr, { title: "Update code system failed" });
                 fail("Update code system", xhr);
+                return;
+            }
+            const bumped = bumpCodeSystemVersion(codeSystem.version);
+            const retry = payloadForSave(codeSystem);
+            retry.version = bumped;
+            putCodeSystem(retry).done(function (updated) {
+                codeSystem.version = bumped;
+                applySaved(updated);
+                if (next) {
+                    next("Code system saved. Version was incremented to " + bumped +
+                        " because HAPI already had this URL and version in its terminology index.");
+                }
+            }).fail(function (retryXhr) {
+                fail("Update code system", retryXhr);
             });
+        });
     }
 
     function render(resource) {
@@ -209,6 +276,10 @@ window.CadminCodeSystemDetail = (function () {
                                             field("Status", '<select class="form-select" id="csd-status">' +
                                                 optionsHtml(statusOptions, "") + "</select>")) +
                                         field("URL", '<input class="form-control font-monospace" id="csd-url">') +
+                                        field("Value set",
+                                            '<select class="form-select" id="csd-valueset"></select>' +
+                                            '<div class="form-text">Canonical ValueSet that describes the entire code system. ' +
+                                            "Search existing value sets or enter a URL.</div>") +
                                         fieldRow(
                                             field("Content", '<select class="form-select" id="csd-content">' +
                                                 optionsHtml(contentOptions, "") + "</select>"),
@@ -282,6 +353,12 @@ window.CadminCodeSystemDetail = (function () {
         $("#csd-version").val(codeSystem.version || "");
         $("#csd-publisher").val(codeSystem.publisher || "");
         $("#csd-description").val(codeSystem.description || "");
+        CadminApi.bindValueSetPicker("#csd-valueset", {
+            selectedUrl: codeSystem.valueSet || "",
+            selectedLabel: codeSystem.valueSet || "",
+            placeholder: "Search or enter a value set URL…",
+            create: true
+        });
         CadminApi.fillValueSetSelect("#csd-status", CadminApi.valueSets.publicationStatus, {
             fallback: statusOptions,
             selected: codeSystem.status || "draft"
@@ -376,8 +453,8 @@ window.CadminCodeSystemDetail = (function () {
             }
         });
         $root.on("click.csdetail", "#csd-save", function () {
-            saveCodeSystem(function () {
-                alertMsg("success", "Code system saved.");
+            saveCodeSystem(function (message) {
+                alertMsg("success", message || "Code system saved.");
             });
         });
         $root.on("click.csdetail", "#csd-delete", function () {
@@ -450,8 +527,8 @@ window.CadminCodeSystemDetail = (function () {
         });
         $("#csd-meta-form").on("submit", function (event) {
             event.preventDefault();
-            saveCodeSystem(function () {
-                alertMsg("success", "Identity updated.");
+            saveCodeSystem(function (message) {
+                alertMsg("success", message || "Identity updated.");
             }, true);
         });
     }

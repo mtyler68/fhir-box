@@ -2,6 +2,8 @@ window.CadminLibraryRelated = (function () {
     const SEARCH_PATH = "/Library?_elements=id,name,title,url,type,version,status,relatedArtifact&_count=100";
     const TYPE_LABELS = {
         "camel-route": "Camel Route",
+        "easy-rule": "Easy Rule",
+        "gateway-route": "Gateway Route",
         "icg-route": "ICG Route",
         "jolt": "Jolt",
         "rate-limit-plan": "Rate-limit plan",
@@ -343,16 +345,32 @@ window.CadminLibraryRelated = (function () {
             "</td><td>" + esc(relationshipLabel(item.relationship)) + "</td>";
     }
 
+    function isReadOnly() {
+        return CadminApi.isActiveEasyRuleLibrary(mounted);
+    }
+
+    function activeEditError() {
+        return "An active Easy rule can only change status.";
+    }
+
+    function syncReadOnlyUi() {
+        const locked = isReadOnly();
+        $("#library-related-card [data-library-related-add]")
+            .toggleClass("d-none", locked)
+            .prop("disabled", locked);
+    }
+
     function relatedRowHtml(item) {
-        return "<tr>" + cellsHtml(item) +
-            '<td class="text-end text-nowrap">' +
-                '<button class="btn btn-sm btn-outline-secondary me-1" type="button" data-library-related-edit="' +
-                    item.artifactIndex + '" title="Edit" aria-label="Edit">' +
-                    '<i class="bi bi-pencil" aria-hidden="true"></i></button>' +
+        const actions = isReadOnly()
+            ? ""
+            : '<button class="btn btn-sm btn-outline-secondary me-1" type="button" data-library-related-edit="' +
+                item.artifactIndex + '" title="Edit" aria-label="Edit">' +
+                '<i class="bi bi-pencil" aria-hidden="true"></i></button>' +
                 '<button class="btn btn-sm btn-outline-danger" type="button" data-library-related-remove="' +
-                    item.artifactIndex + '" title="Remove" aria-label="Remove">' +
-                    '<i class="bi bi-trash" aria-hidden="true"></i></button>' +
-            "</td></tr>";
+                item.artifactIndex + '" title="Remove" aria-label="Remove">' +
+                '<i class="bi bi-trash" aria-hidden="true"></i></button>';
+        return "<tr>" + cellsHtml(item) +
+            '<td class="text-end text-nowrap">' + actions + "</td></tr>";
     }
 
     function referencedRowHtml(item) {
@@ -366,9 +384,11 @@ window.CadminLibraryRelated = (function () {
         }
         if (!items.length) {
             tbody.innerHTML = emptyRow(6, "No related FHIR libraries.");
+            syncReadOnlyUi();
             return;
         }
         tbody.innerHTML = items.map(relatedRowHtml).join("");
+        syncReadOnlyUi();
     }
 
     function renderReferencedRows(items) {
@@ -567,6 +587,10 @@ window.CadminLibraryRelated = (function () {
         if (!mounted || !mounted.id || saving) {
             return;
         }
+        if (isReadOnly()) {
+            CadminApi.showToast("danger", activeEditError());
+            return;
+        }
         saving = true;
         if (artifacts && artifacts.length) {
             mounted.relatedArtifact = artifacts;
@@ -594,6 +618,10 @@ window.CadminLibraryRelated = (function () {
 
     function openEditor(index) {
         if (!mounted || !mounted.id) {
+            return;
+        }
+        if (isReadOnly()) {
+            CadminApi.showToast("danger", activeEditError());
             return;
         }
         editingIndex = index;
@@ -672,6 +700,10 @@ window.CadminLibraryRelated = (function () {
     }
 
     function removeAt(index) {
+        if (isReadOnly()) {
+            CadminApi.showToast("danger", activeEditError());
+            return;
+        }
         const artifacts = currentArtifacts();
         const artifact = artifacts[index];
         if (!artifact) {
@@ -717,6 +749,7 @@ window.CadminLibraryRelated = (function () {
     function mount(library) {
         bindOnce();
         mounted = library || null;
+        syncReadOnlyUi();
         reload();
     }
 
@@ -726,6 +759,7 @@ window.CadminLibraryRelated = (function () {
         if (!mounted || mounted.resourceType !== "Library" || !mounted.id) {
             renderEmpty("library-related-rows", "No related libraries.", 6);
             renderEmpty("library-referenced-rows", "Not referenced by other libraries.", 5);
+            syncReadOnlyUi();
             return;
         }
         renderEmpty("library-related-rows", "Loading…", 6);

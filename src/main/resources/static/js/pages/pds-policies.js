@@ -365,7 +365,7 @@ function renderPdsPolicyList(initialQuery) {
             const rows = entries.map(function (library) {
                 return "<tr>" +
                     "<td>" + CadminApi.resourceLink("#/pds-policies/" + encodeURIComponent(library.id), library.title || library.name || "Untitled") + "</td>" +
-                    "<td>" + esc(library.description || "—") + "</td>" +
+                    "<td class=\"cadmin-md-cell\">" + CadminApi.markdownCell(library.description) + "</td>" +
                     "<td><code>" + esc(library.version || "—") + "</code></td>" +
                     "<td>" + statusBadge(library.status) + "</td>" +
                     "<td><code>" + esc(library.name || "—") + "</code></td>" +

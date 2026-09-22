@@ -81,7 +81,7 @@ function renderCodeSystemList(initialQuery) {
                             "</select></div>" +
                         '<div class="mb-3"><label class="form-label" for="cs-url">URL</label>' +
                             '<input class="form-control font-monospace" id="cs-url" name="url" ' +
-                            'placeholder="https://cadmin.io/fhir/CodeSystem/example"></div>' +
+                            'placeholder="https://insulet.com/fhir/CodeSystem/example"></div>' +
                         '<div class="mb-3"><label class="form-label" for="cs-version">Version</label>' +
                             '<input class="form-control" id="cs-version" name="version" value="1.0.0" autocomplete="off"></div>' +
                         '<div class="form-check mb-3">' +
@@ -89,10 +89,13 @@ function renderCodeSystemList(initialQuery) {
                             '<label class="form-check-label" for="cs-companion-vs">' +
                             "Also create a ValueSet that includes this code system</label>" +
                         "</div>" +
-                        '<div class="mb-0"><label class="form-label" for="cs-vs-id">Value set ID</label>' +
+                        '<div class="mb-3"><label class="form-label" for="cs-vs-id">Value set ID</label>' +
                             '<input class="form-control font-monospace" id="cs-vs-id" name="valueSetId" autocomplete="off" maxlength="64">' +
                             '<div class="form-text">Optional. Leave blank for a server-assigned ID. Provide an ID to create and manage a known catalog value set that forms can bind to by that identity.</div>' +
                             '<div class="invalid-feedback" id="cs-vs-id-feedback">A value set with this ID already exists.</div></div>' +
+                        '<div class="mb-0"><label class="form-label" for="cs-vs-url">Value set URL</label>' +
+                            '<input class="form-control font-monospace" id="cs-vs-url" name="valueSetUrl" autocomplete="off" ' +
+                            'placeholder="https://insulet.com/fhir/ValueSet/example"></div>' +
                     "</div>" +
                     '<div class="modal-footer">' +
                         '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>' +
@@ -138,11 +141,16 @@ function renderCodeSystemList(initialQuery) {
 
     function defaultUrl(title, id) {
         const slug = String(id || "").trim() || slugName(title);
-        return "https://cadmin.io/fhir/CodeSystem/" + slug;
+        return "https://insulet.com/fhir/CodeSystem/" + slug;
+    }
+
+    function defaultValueSetUrl(vsId) {
+        return "https://insulet.com/fhir/ValueSet/" + String(vsId || "").trim();
     }
 
     let listPage = 0;
     let urlTouched = false;
+    let vsUrlTouched = false;
 
     function load(query, page) {
         listPage = typeof page === "number" ? page : 0;
@@ -205,11 +213,19 @@ function renderCodeSystemList(initialQuery) {
         }
     }
 
-    function syncValueSetIdField() {
+    function syncDefaultValueSetUrl() {
+        if (!vsUrlTouched) {
+            $("#cs-vs-url").val(defaultValueSetUrl($("#cs-vs-id").val()));
+        }
+    }
+
+    function syncValueSetFields() {
         const on = $("#cs-companion-vs").is(":checked");
-        $("#cs-vs-id").prop("disabled", !on);
+        $("#cs-vs-id, #cs-vs-url").prop("disabled", !on);
         if (!on) {
             $("#cs-vs-id").removeClass("is-invalid");
+        } else {
+            syncDefaultValueSetUrl();
         }
     }
 
@@ -219,7 +235,7 @@ function renderCodeSystemList(initialQuery) {
         if (!value) {
             return deferred.resolve("").promise();
         }
-        CadminApi.fhir("/" + resourceType + "/" + encodeURIComponent(value)).done(function () {
+        CadminApi.fhir("/" + resourceType + "/" + encodeURIComponent(value), "GET", null, { silent: true }).done(function () {
             $field.addClass("is-invalid");
             CadminApi.showToast("danger", "A " + noun + " with ID \"" + value + "\" already exists.");
             deferred.reject();
@@ -241,22 +257,28 @@ function renderCodeSystemList(initialQuery) {
     });
     $("#cs-vs-id").on("input", function () {
         $("#cs-vs-id").removeClass("is-invalid");
+        syncDefaultValueSetUrl();
     });
     $("#cs-url").on("input", function () {
         urlTouched = !!$(this).val();
     });
-    $("#cs-companion-vs").on("change", syncValueSetIdField);
+    $("#cs-vs-url").on("input", function () {
+        vsUrlTouched = !!$(this).val() && $(this).val() !== defaultValueSetUrl($("#cs-vs-id").val());
+    });
+    $("#cs-companion-vs").on("change", syncValueSetFields);
 
     $("#create-codesystem-modal").on("show.bs.modal", function () {
         urlTouched = false;
+        vsUrlTouched = false;
         $("#cs-title").val("");
         $("#cs-id").val("").removeClass("is-invalid");
         $("#cs-vs-id").val("").removeClass("is-invalid");
         $("#cs-url").val("");
+        $("#cs-vs-url").val("");
         $("#cs-status").val("draft");
         $("#cs-version").val("1.0.0");
         $("#cs-companion-vs").prop("checked", true);
-        syncValueSetIdField();
+        syncValueSetFields();
     });
 
     function finishCreate(id, message) {
@@ -277,6 +299,9 @@ function renderCodeSystemList(initialQuery) {
         const canonical = (created && created.url) || resource.url;
         const withValueSet = $("#cs-companion-vs").is(":checked");
         const vsId = withValueSet ? $("#cs-vs-id").val().trim() : "";
+        const vsUrl = withValueSet
+            ? ($("#cs-vs-url").val().trim() || defaultValueSetUrl(vsId))
+            : "";
         if (!withValueSet || !canonical) {
             finishCreate(id, "Code system created.");
             return;
@@ -286,7 +311,7 @@ function renderCodeSystemList(initialQuery) {
             status: resource.status,
             title: resource.title,
             name: resource.name,
-            url: CadminApi.companionValueSetUrl(canonical),
+            url: vsUrl || CadminApi.companionValueSetUrl(canonical),
             version: resource.version,
             compose: { include: [{ system: canonical }] }
         };
@@ -326,6 +351,9 @@ function renderCodeSystemList(initialQuery) {
         const assignedId = $("#cs-id").val().trim();
         const withValueSet = $("#cs-companion-vs").is(":checked");
         const vsId = withValueSet ? $("#cs-vs-id").val().trim() : "";
+        const vsUrl = withValueSet
+            ? ($("#cs-vs-url").val().trim() || defaultValueSetUrl(vsId))
+            : "";
         const url = $("#cs-url").val().trim() || defaultUrl(title, assignedId);
         const resource = {
             resourceType: "CodeSystem",
@@ -337,6 +365,9 @@ function renderCodeSystemList(initialQuery) {
             version: $("#cs-version").val().trim() || "1.0.0",
             concept: []
         };
+        if (vsUrl) {
+            resource.valueSet = vsUrl;
+        }
         ensureNewId("CodeSystem", assignedId, $("#cs-id"), "code system").then(function () {
             if (!withValueSet) {
                 return $.Deferred().resolve().promise();
