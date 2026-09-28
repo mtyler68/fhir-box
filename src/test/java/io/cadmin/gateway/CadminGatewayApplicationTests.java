@@ -326,6 +326,15 @@ class CadminGatewayApplicationTests {
     }
 
     @Test
+    void pagesAllowCrossOriginReferrerForMapTiles() {
+        webTestClient.get()
+                .uri("/login.html")
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().valueEquals("Referrer-Policy", "strict-origin-when-cross-origin");
+    }
+
+    @Test
     void geocodeRequiresAuthentication() {
         webTestClient.get()
                 .uri("/api/geocode?q=Portland")

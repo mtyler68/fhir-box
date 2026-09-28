@@ -38,6 +38,7 @@ window.CadminApp = (function ($) {
                 || route.name === "locations" || route.name === "pds-policies"
                 || route.name === "camel-routes"
                 || route.name === "easy-rules"
+                || route.name === "rule-sets"
                 || route.name === "icg-routes"
                 || route.name === "jolts"
                 || route.name === "rate-limit-plans"

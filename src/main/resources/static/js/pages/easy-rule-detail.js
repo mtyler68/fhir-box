@@ -802,6 +802,10 @@ window.CadminEasyRuleDetail = (function () {
             window.location.hash = "#/jolts/" + encodeURIComponent(resource.id);
             return;
         }
+        if (CadminApi.isLibraryType(resource, "rule-set")) {
+            window.location.hash = "#/rule-sets/" + encodeURIComponent(resource.id);
+            return;
+        }
         if (CadminApi.isLibraryType(resource, "rate-limit-plan")) {
             window.location.hash = "#/rate-limit-plans/" + encodeURIComponent(resource.id);
             return;

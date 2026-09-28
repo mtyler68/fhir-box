@@ -3,6 +3,7 @@ window.CadminLibraryRelated = (function () {
     const TYPE_LABELS = {
         "camel-route": "Camel Route",
         "easy-rule": "Easy Rule",
+        "rule-set": "Rule Set",
         "gateway-route": "Gateway Route",
         "icg-route": "ICG Route",
         "jolt": "Jolt",

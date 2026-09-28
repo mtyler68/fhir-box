@@ -595,6 +595,9 @@ window.CadminApi = (function ($) {
         if (type === "Library" && isLibraryType(resource, "easy-rule")) {
             return "#/easy-rules/" + encodeURIComponent(id);
         }
+        if (type === "Library" && isLibraryType(resource, "rule-set")) {
+            return "#/rule-sets/" + encodeURIComponent(id);
+        }
         if (type === "Library" && isGatewayRouteLibrary(resource)) {
             return "#/icg-routes/" + encodeURIComponent(id);
         }
@@ -972,7 +975,8 @@ window.CadminApi = (function ($) {
         conditionCode: "http://hl7.org/fhir/ValueSet/condition-code",
         camelRouteDomains: "https://insulet.com/fhir/ValueSet/value-set-camel-route-domain",
         gatewayRouteDomains: "https://insulet.com/fhir/ValueSet/value-set-gateway-route-domain",
-        easyRuleDomains: "https://insulet.com/fhir/ValueSet/easy-rule-domain"
+        easyRuleDomains: "https://insulet.com/fhir/ValueSet/easy-rule-domain",
+        joltDomains: "https://insulet.com/fhir/ValueSet/jolt-transformer-domain"
     };
 
     const VALUE_SET_FALLBACKS = {

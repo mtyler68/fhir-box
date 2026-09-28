@@ -194,8 +194,10 @@ FHIR Box authors FHIR `Library` resources with custom `type` codes. Admins manag
 | `pds-policies` | Policy YAML (`application/x-policy+x-yaml`) | **PDS Policies** |
 | `camel-route` | Camel YAML (`application/camel+yaml`) | **Camel Routes** |
 | `easy-rule` | Easy Rules YAML (`application/easy-rules+yaml`) | **Easy Rules** |
+| `rule-set` | Lure engine parameters JSON (`application/rule-set+json`) | **Rule Sets** |
 | `gateway-route` | Spring Cloud Gateway YAML (`application/gateway+yaml`) | **ICG Routes** |
 | `jolt` | Jolt transform JSON (`application/jolt+json`) and optional samples (`application/jolt-samples+json`) | **Jolt** |
+| `rate-limit-plan` | ICG client quotas JSON (`application/icg-rate-limit+json`) | **Rate-limit plans** |
 
 The Jolt editor **Transform** action posts `{ "input", "spec" }` to `POST /jolt/$transform` on this gateway (same contract as FHIR Chief) and does not call FHIR Chief.
 
@@ -220,6 +222,122 @@ Override the Integrator Connect Gateway origin:
 ```bash
 export CADMIN_ICG_URI=http://localhost:8480
 ```
+
+## Client rate limiting
+
+Integrator Connect Gateway (ICG) rate-limits **OIDC clients**, not people. FHIR Box authors the policy; ICG polls FHIR, caches the current policy per client, and consumes tokens from Redis (or an in-memory store) on each request. Do not use Spring Cloud Gateway `RequestRateLimiter` for this.
+
+```mermaid
+flowchart LR
+  subgraph author ["FHIR Box"]
+    Plan["Library type=rate-limit-plan"]
+    Org["Organization"]
+    Tier["DocumentReference type=rate-limit-tier status=current"]
+    Plan -->|"copy JSON onto org"| Tier
+    Org --> Tier
+  end
+  FHIR[(HAPI FHIR)]
+  Plan --> FHIR
+  Tier --> FHIR
+  Client["OIDC client"] -->|JWT| ICG
+  ICG -->|"poll current tiers"| FHIR
+  ICG -->|"Bucket4j keys"| Redis[(Redis)]
+```
+
+### What you author
+
+Two FHIR resources, both using the same JSON content type `application/icg-rate-limit+json`.
+
+| Resource | Type code | Role | UI |
+| --- | --- | --- | --- |
+| `Library` | `rate-limit-plan` | Reusable template (defaults, groups, dedicated endpoints) | **Libraries → Rate-limit plans** |
+| `DocumentReference` | `rate-limit-tier` | Per-organization assignment, bound to one OIDC client | Organization **Rate-limit tiers**, or **Libraries → Rate-limit tiers** |
+
+A plan is a template. A **tier** is a live copy of that JSON assigned to an organization. ICG only enforces a tier when:
+
+- `DocumentReference.status` is `current` (Box marks sibling org tiers `superseded` when you activate one)
+- `DocumentReference.type` or `category` is `rate-limit-tier`
+- An identifier exists with system `https://insulet.com/fhir/identifier/oidc/client-id`
+- The attachment is valid JSON with a required `policyVersion`
+
+Creating a tier from an organization copies an **active** plan library (or a custom JSON body), sets `subject`/`custodian` to that organization, and stamps the org’s OIDC client id when Box is in OIDC mode. The source library is recorded on extension `https://insulet.com/fhir/StructureDefinition/rate-limit-plan-source`.
+
+### Policy JSON
+
+```json
+{
+  "tier": "gold",
+  "policyVersion": "1.0.0",
+  "defaults": { "requestsPerMinute": 60, "requestsPerDay": 10000 },
+  "groups": {
+    "clinical-read": {
+      "requestsPerMinute": 40,
+      "requestsPerDay": 5000,
+      "endpoints": ["patient_search", "patient_read"]
+    }
+  },
+  "endpoints": {
+    "jolt_ratings": { "requestsPerMinute": 10, "requestsPerDay": 500 }
+  }
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `tier` | Label only (for example `gold`). Not used in the Redis key. |
+| `policyVersion` | Required. Part of every Redis key. Bump it when limits change so counters start over. Box prompts to increment on save if rates changed. |
+| `defaults` | Limits for routes that are not in a group or dedicated endpoint list, and for group/endpoint rows that “use defaults” (those rows omit numbers in JSON). |
+| `groups` | Named pools. All listed ICG route ids share **one** bucket. A route id may appear only once in the whole plan. |
+| `endpoints` | Dedicated pools. Each listed ICG route id gets its own bucket. |
+| `requestsPerMinute` / `requestsPerDay` | Typical quotas. Must satisfy **rps ≤ rpm ≤ rpd** for whichever fields are set. |
+| `requestsPerSecond` | Optional. Omitted unless the “Limit requests per second” switch is on. |
+
+A value of `0` on any set window denies every request immediately. Unset windows are not enforced.
+
+### How a request is limited
+
+1. The ICG route YAML must include the `ClientRateLimit` filter. ICG does not inject it automatically.
+
+```yaml
+- id: patient_read
+  uri: https://httpbin.org
+  predicates:
+    - Path=/Patient/**
+  filters:
+    - StripPrefix=0
+    - ClientRateLimit=patient_read,30,2000
+```
+
+Shortcut arguments are `endpoint`, `requestsPerMinute`, `requestsPerDay`, optional `requestsPerSecond`. `endpoint` defaults to the Gateway route id. YAML numbers apply **only** when ICG has no cached FHIR policy for that client.
+
+2. ICG polls `DocumentReference?type=rate-limit-tier` on the same interval as route libraries (default 30s). `status=current` documents are parsed into an in-memory map keyed by OIDC client id. Anything else evicts that client from the cache.
+
+3. On each request, ICG resolves the client id from the JWT: `azp`, then `client_id`, then `preferred_username` when it starts with `service-account-` (prefix stripped). In local (permit-all) mode, JWT is skipped and `X-ICG-Client-Id` is used instead.
+
+4. The route id is matched against the policy: **group** (shared pool) first, then **dedicated endpoint**, otherwise **defaults** as an unlisted endpoint bucket.
+
+5. Bucket4j consumes **one token from every configured window** (second, minute, and/or day). Refill is interval-based: the full capacity is restored at the end of each window. Counters live in Redis at:
+
+```text
+icg:rl:{clientId}:{policyVersion}:group:{groupId}
+icg:rl:{clientId}:{policyVersion}:endpoint:{routeId}
+```
+
+### Fail-closed vs skip
+
+| Mode | No client id | No cached policy | Over quota | Store down |
+| --- | --- | --- | --- | --- |
+| OIDC | **403** Client identity is required | **403** Rate limit policy is required | **429** + `Retry-After` | **503** |
+| Local | Pass through (unless `X-ICG-Client-Id` is set) | Pass through (unless YAML fallback rates are present) | **429** + `Retry-After` | **503** |
+
+Successful and throttled responses also set `X-RateLimit-Remaining` and `X-RateLimit-Limit` (the tightest configured window: second, else minute, else day).
+
+### Watching live usage
+
+- **Integrator Connect Gateway** (`#/icg`) lists cached policies as OIDC rate-limit clients.
+- `#/icg/clients/{clientId}` polls `GET /icg/status/rate-limits/{clientId}` every 2 seconds for remaining tokens. Unused buckets report full capacity.
+
+Set `icg.rate-limit.store=redis` (ICG default) and start Redis (`docker/redis/compose.yml` via the FHIR Box stack, or `ICG_REDIS_URI`). `memory` is for tests only: counters do not survive restarts and are not shared across ICG instances.
 
 ## Configuration
 

@@ -72,6 +72,7 @@ CadminApp.register("dashboard", function () {
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/pds-policies">PDS policies</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/camel-routes">Camel routes</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/easy-rules">Easy rules</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/rule-sets">Rule sets</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/icg-routes">ICG routes</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/jolts">Jolt</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/rate-limit-plans">Rate-limit plans</a>' +
@@ -148,6 +149,7 @@ CadminApp.register("dashboard", function () {
         { key: "pds-policies", type: "Library", search: "type=pds-policies", label: "PDS policies", href: "#/pds-policies", icon: "bi-journal-text", border: "success", admin: true },
         { key: "camel-routes", type: "Library", search: "type=camel-route", label: "Camel routes", href: "#/camel-routes", iconify: "hugeicons:camel", border: "warning", admin: true },
         { key: "easy-rules", type: "Library", search: "type=easy-rule", label: "Easy rules", href: "#/easy-rules", iconify: "mdi:script-text-outline", border: "success", admin: true },
+        { key: "rule-sets", type: "Library", search: "type=rule-set", label: "Rule sets", href: "#/rule-sets", iconify: "mdi:format-list-group", border: "success", admin: true },
         { key: "icg-routes", type: "Library", search: "type=gateway-route", label: "ICG routes", href: "#/icg-routes", iconify: "mdi:routes", border: "info", admin: true },
         { key: "jolts", type: "Library", search: "type=jolt", label: "Jolt", href: "#/jolts", iconify: "mdi:code-json", border: "secondary", admin: true },
         { key: "rate-limit-plans", type: "Library", search: "type=rate-limit-plan", label: "Rate-limit plans",

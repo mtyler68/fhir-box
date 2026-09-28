@@ -1365,6 +1365,7 @@ window.CadminJoltDetail = (function () {
         } else {
             delete library.experimental;
         }
+        CadminApi.applyLibraryDomainCodings(library, CadminApi.selectCodings("#bjd-domains"));
         setOrDelete(library, "description", $page("#bjd-description").val());
         setOrDelete(library, "purpose", $page("#bjd-purpose").val());
         setOrDelete(library, "usage", $page("#bjd-usage").val());
@@ -1521,6 +1522,10 @@ window.CadminJoltDetail = (function () {
             window.location.hash = "#/easy-rules/" + encodeURIComponent(resource.id);
             return;
         }
+        if (CadminApi.isLibraryType(resource, "rule-set")) {
+            window.location.hash = "#/rule-sets/" + encodeURIComponent(resource.id);
+            return;
+        }
         if (CadminApi.isGatewayRouteLibrary(resource)) {
             window.location.hash = "#/icg-routes/" + encodeURIComponent(resource.id);
             return;
@@ -1591,10 +1596,17 @@ window.CadminJoltDetail = (function () {
                                             field("Type",
                                                 '<input class="form-control font-monospace" id="bjd-type" value="' +
                                                     esc(typeCode()) + '" readonly disabled>')) +
-                                        '<div class="form-check mb-3">' +
-                                            '<input class="form-check-input" type="checkbox" id="bjd-experimental">' +
-                                            '<label class="form-check-label" for="bjd-experimental">Experimental</label>' +
-                                        "</div>" +
+                                        fieldRow(
+                                            '<div class="mb-3">' +
+                                                '<label class="form-label d-none d-md-block">&nbsp;</label>' +
+                                                '<div class="form-check d-flex align-items-center gap-2" ' +
+                                                    'style="min-height:calc(1.5em + .75rem + 2px)">' +
+                                                    '<input class="form-check-input" type="checkbox" id="bjd-experimental">' +
+                                                    '<label class="form-check-label" for="bjd-experimental">Experimental</label>' +
+                                                "</div>" +
+                                            "</div>",
+                                            field("Domain",
+                                                '<select class="form-select" id="bjd-domains" multiple></select>')) +
                                         '<button type="submit" class="btn btn-primary">Save changes</button>' +
                                     "</div>" +
                                 "</div>" +
@@ -1809,6 +1821,16 @@ window.CadminJoltDetail = (function () {
         }
     }
 
+    function bindDomainSelect() {
+        CadminApi.bindConceptSelect("#bjd-domains", CadminApi.valueSets.joltDomains, {
+            placeholder: "Select domains…",
+            multiple: true,
+            preload: true,
+            selected: CadminApi.libraryDomainCodings(library),
+            onChange: syncUnsavedFlag
+        });
+    }
+
     function fillBasicsForm() {
         const period = library.effectivePeriod || {};
         $page("#bjd-title-input").val(library.title || "");
@@ -1816,6 +1838,7 @@ window.CadminJoltDetail = (function () {
         $page("#bjd-status").val(library.status || "draft");
         $page("#bjd-type").val(typeCode());
         $page("#bjd-experimental").prop("checked", !!library.experimental);
+        bindDomainSelect();
         $page("#bjd-version").val(library.version || "");
         $page("#bjd-description").val(library.description || "");
         $page("#bjd-purpose").val(library.purpose || "");

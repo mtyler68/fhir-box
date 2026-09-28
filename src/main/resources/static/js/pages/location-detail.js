@@ -201,9 +201,11 @@ window.CadminLocationDetail = (function () {
             return;
         }
         map = L.map(el).setView([coords.lat, coords.lng], 16);
-        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-            maxZoom: 19,
-            attribution: "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a>"
+        L.tileLayer("https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png", {
+            subdomains: "abc",
+            maxZoom: 20,
+            attribution: "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> "
+                + "contributors, Tiles <a href=\"https://www.openstreetmap.fr/\">OSM France</a>"
         }).addTo(map);
         const address = formatAddress(loc.address);
         const popup = address !== "—"

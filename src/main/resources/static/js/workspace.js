@@ -16,6 +16,7 @@ window.CadminWorkspace = (function ($) {
         "pds-policies": { type: "Library", path: "/Library/", icon: "bi-journal-text", listLabel: "PDS Policies" },
         "camel-routes": { type: "Library", path: "/Library/", icon: "hugeicons:camel", listLabel: "Camel Routes" },
         "easy-rules": { type: "Library", path: "/Library/", icon: "mdi:script-text-outline", listLabel: "Easy Rules" },
+        "rule-sets": { type: "Library", path: "/Library/", icon: "mdi:format-list-group", listLabel: "Rule Sets" },
         "icg-routes": { type: "Library", path: "/Library/", icon: "mdi:routes", listLabel: "ICG Routes" },
         jolts: { type: "Library", path: "/Library/", icon: "mdi:code-json", listLabel: "Jolt" },
         "rate-limit-plans": { type: "Library", path: "/Library/", icon: "bi-speedometer2",
@@ -65,6 +66,7 @@ window.CadminWorkspace = (function ($) {
         "value-sets": "Value sets",
         "camel-routes": "Camel Routes",
         "easy-rules": "Easy Rules",
+        "rule-sets": "Rule Sets",
         "icg-routes": "ICG Routes",
         jolts: "Jolt",
         "rate-limit-plans": "Rate-limit plans",
@@ -332,6 +334,7 @@ window.CadminWorkspace = (function ($) {
         "pds-policies": true,
         "camel-routes": true,
         "easy-rules": true,
+        "rule-sets": true,
         "icg-routes": true,
         jolts: true,
         "rate-limit-plans": true,
@@ -1516,6 +1519,14 @@ window.CadminWorkspace = (function ($) {
         if (window.CadminIcgRouteDetail && typeof CadminIcgRouteDetail.reveal === "function"
                 && pane.querySelector("#ird-yaml")) {
             CadminIcgRouteDetail.reveal(tab && tab.resource);
+        }
+        if (window.CadminEasyRuleDetail && typeof CadminEasyRuleDetail.reveal === "function"
+                && pane.querySelector("#erd-yaml")) {
+            CadminEasyRuleDetail.reveal(tab && tab.resource);
+        }
+        if (window.CadminRuleSetDetail && typeof CadminRuleSetDetail.reveal === "function"
+                && pane.querySelector("#rsd-engine-form")) {
+            CadminRuleSetDetail.reveal(tab && tab.resource);
         }
         if (window.CadminJoltDetail && typeof CadminJoltDetail.reveal === "function"
                 && pane.querySelector("#bjd-spec-form")) {

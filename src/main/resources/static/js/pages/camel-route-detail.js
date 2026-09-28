@@ -689,6 +689,10 @@ window.CadminCamelRouteDetail = (function () {
             window.location.hash = "#/easy-rules/" + encodeURIComponent(resource.id);
             return;
         }
+        if (CadminApi.isLibraryType(resource, "rule-set")) {
+            window.location.hash = "#/rule-sets/" + encodeURIComponent(resource.id);
+            return;
+        }
         if (CadminApi.isLibraryType(resource, "jolt")) {
             window.location.hash = "#/jolts/" + encodeURIComponent(resource.id);
             return;
