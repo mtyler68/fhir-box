@@ -42,12 +42,15 @@ window.CadminIcgRouteDetail = (function () {
     const hintWords = [
         "id", "uri", "predicates", "filters", "order", "metadata",
         "Path", "Host", "Method", "Header", "Query", "Cookie", "After", "Before",
-        "Between", "RemoteAddr", "Weight", "ReadBody",
+        "Between", "RemoteAddr", "XForwardedRemoteAddr", "Weight", "ReadBody", "Version",
+        "CloudFoundryRouteService",
         "StripPrefix", "PrefixPath", "SetPath", "RewritePath", "AddRequestHeader",
         "AddResponseHeader", "RemoveRequestHeader", "RemoveResponseHeader",
         "SetStatus", "Retry", "PreserveHostHeader", "RequestRateLimiter",
+        "CircuitBreaker", "TokenRelay", "LocalResponseCache",
         "JoltTransform", "version",
         "ClientRateLimit", "endpoint", "requestsPerMinute", "requestsPerDay", "requestsPerSecond",
+        "RequireQueryParam", "paramName",
         "name", "args", "pattern", "parts", "regexp", "replacement"
     ];
     const markdownFields = ["ird-description", "ird-purpose", "ird-usage", "ird-copyright"];
@@ -443,10 +446,27 @@ window.CadminIcgRouteDetail = (function () {
     function destroyEditor() {
         destroyMarkdownEditors();
         destroyYamlEditor();
+        if (window.CadminIcgRouteDesigner) {
+            CadminIcgRouteDesigner.destroy();
+        }
     }
 
     function editorValue() {
         return editor ? editor.getValue() : ($("#ird-yaml").val() || "");
+    }
+
+    function setRouteYaml(text) {
+        if (editor) {
+            editor.setValue(text || "");
+        } else {
+            $("#ird-yaml").val(text || "");
+        }
+    }
+
+    function applyDesignerYaml() {
+        if (window.CadminIcgRouteDesigner && typeof CadminIcgRouteDesigner.applyToYaml === "function") {
+            CadminIcgRouteDesigner.applyToYaml();
+        }
     }
 
     function domainSnapshot() {
@@ -514,6 +534,18 @@ window.CadminIcgRouteDetail = (function () {
         if (!/(^|\n)\s*-?\s*(id|uri|predicates|routes)\s*:/.test(source)) {
             return "YAML should define a Spring Cloud Gateway route with id, uri, and predicates.";
         }
+        if (window.CadminIcgRouteDesigner && typeof CadminIcgRouteDesigner.parseYaml === "function") {
+            const parsed = CadminIcgRouteDesigner.parseYaml(source);
+            if (parsed.error) {
+                return parsed.error;
+            }
+            const missing = (parsed.routes || []).find(function (route) {
+                return !String(route.id || "").trim() || !String(route.uri || "").trim();
+            });
+            if (missing) {
+                return "Each route needs an id and uri.";
+            }
+        }
         return "";
     }
 
@@ -570,7 +602,12 @@ window.CadminIcgRouteDetail = (function () {
         });
         editor.getWrapperElement().classList.add("camel-route-editor");
         editor.setSize("100%", "36rem");
-        editor.on("change", syncUnsavedFlag);
+        editor.on("change", function () {
+            if (window.CadminIcgRouteDesigner && CadminIcgRouteDesigner.isApplying()) {
+                return;
+            }
+            syncUnsavedFlag();
+        });
         editor.on("inputRead", function (cm, change) {
             if (change.text.length !== 1 || !/^[A-Za-z]$/.test(change.text[0])) {
                 return;
@@ -636,6 +673,7 @@ window.CadminIcgRouteDetail = (function () {
             };
         }
         if (withYaml) {
+            applyDesignerYaml();
             const yaml = editorValue();
             const problem = validateYaml(yaml);
             if (problem) {
@@ -745,6 +783,7 @@ window.CadminIcgRouteDetail = (function () {
                         navButton("ird-pane-basics", "bi bi-info-circle", "Basics", { active: true }) +
                         navButton("ird-pane-identity", "bi bi-person-vcard", "Identity and version") +
                         navButton("ird-pane-details", "bi bi-journal-text", "Details") +
+                        navButton("ird-pane-designer", "bi bi-sliders", "Route Designer") +
                         navButton("ird-pane-route", "bi bi-file-earmark-code", "Route") +
                         navButton("ird-pane-related", "bi bi-link-45deg", "Related") +
                         navButton("ird-pane-graph", "bi bi-diagram-3", "Reference graph") +
@@ -827,6 +866,13 @@ window.CadminIcgRouteDetail = (function () {
                                     "</div>" +
                                 "</div>" +
                             "</form>") +
+                        tabPane("ird-pane-designer",
+                            '<div id="ird-designer-host" class="icg-route-designer"></div>' +
+            '<p class="small text-muted mt-2 mb-0">' +
+                "Edits write expanded Spring Cloud Gateway YAML " +
+                "(<code>name</code> / <code>args</code>). Shortcut forms on the Route tab still parse. " +
+                "ICG filters: <code>JoltTransform</code>, <code>ClientRateLimit</code>, " +
+                "<code>RequireQueryParam</code>.</p>") +
                         tabPane("ird-pane-route",
                             '<div class="d-flex flex-column gap-3">' +
                                 '<div class="card" id="icg-route-yaml-card">' +
@@ -878,6 +924,18 @@ window.CadminIcgRouteDetail = (function () {
         mountMarkdownEditors();
         fillMarkdownFields();
         mountEditor(readYaml() || templates[0].yaml);
+        if (window.CadminIcgRouteDesigner) {
+            CadminIcgRouteDesigner.mount("#ird-designer-host", {
+                getYaml: editorValue,
+                setYaml: setRouteYaml,
+                onChange: syncUnsavedFlag,
+                onSave: function () {
+                    saveLibrary(function () {
+                        CadminApi.showToast("success", "ICG route saved.");
+                    });
+                }
+            });
+        }
         markEditorClean();
         markBasicsClean();
         bind();
@@ -909,6 +967,9 @@ window.CadminIcgRouteDetail = (function () {
             }
         }
         refreshMarkdownEditors();
+        if (window.CadminIcgRouteDesigner) {
+            CadminIcgRouteDesigner.syncFromYaml(editorValue());
+        }
         syncUnsavedFlag();
     }
 
@@ -970,6 +1031,9 @@ window.CadminIcgRouteDetail = (function () {
             } else {
                 $("#ird-yaml").val(match.yaml);
             }
+            if (window.CadminIcgRouteDesigner) {
+                CadminIcgRouteDesigner.syncFromYaml(match.yaml);
+            }
         }
         if (editor && editor.getValue().trim()) {
             CadminApi.confirm({
@@ -986,7 +1050,15 @@ window.CadminIcgRouteDetail = (function () {
         const $root = $(CadminWorkspace.root());
         $root.off(".irdetail");
         $root.on("shown.bs.tab.irdetail", "#ird-pane-details-btn", refreshMarkdownEditors);
-        $root.on("shown.bs.tab.irdetail", "#ird-pane-route-btn", refreshRoutePane);
+        $root.on("shown.bs.tab.irdetail", "#ird-pane-designer-btn", function () {
+            if (window.CadminIcgRouteDesigner) {
+                CadminIcgRouteDesigner.syncFromYaml(editorValue());
+            }
+        });
+        $root.on("shown.bs.tab.irdetail", "#ird-pane-route-btn", function () {
+            applyDesignerYaml();
+            refreshRoutePane();
+        });
         $root.on("shown.bs.tab.irdetail", "#ird-pane-graph-btn", function () {
             if (typeof CadminResourceGraph.resize === "function") {
                 CadminResourceGraph.resize();

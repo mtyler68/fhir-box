@@ -273,15 +273,89 @@ window.CadminOrganizationDetail = (function () {
         return '<div class="mb-3"><label class="form-label">' + label + "</label>" + control + "</div>";
     }
 
+    function tabButton(id, label, active) {
+        return '<li class="nav-item" role="presentation">' +
+            '<button class="nav-link' + (active ? " active" : "") + '" id="' + id + '-btn" data-bs-toggle="tab" ' +
+            'data-bs-target="#' + id + '" type="button" role="tab" aria-controls="' + id +
+            '" aria-selected="' + (active ? "true" : "false") + '">' + label + "</button></li>";
+    }
+
+    function tabPane(id, body, active) {
+        return '<div class="tab-pane fade' + (active ? " show active" : "") + '" id="' + id +
+            '" role="tabpanel" aria-labelledby="' + id + '-btn">' + body + "</div>";
+    }
+
+    function initials(resource) {
+        const words = String((resource && resource.name) || "").trim().split(/\s+/).filter(Boolean);
+        if (!words.length) {
+            return "?";
+        }
+        if (words.length === 1) {
+            return words[0].slice(0, 2).toUpperCase();
+        }
+        return (words[0].charAt(0) + words[1].charAt(0)).toUpperCase();
+    }
+
+    function primaryTelecom(system) {
+        const match = orgTelecomList().find(function (item) {
+            return item.system === system && item.value;
+        });
+        return match ? match.value : "";
+    }
+
+    function setStat(key, value) {
+        const el = document.getElementById("od-stat-" + key);
+        if (el) {
+            el.textContent = value == null ? "—" : String(value);
+        }
+    }
+
+    function renderProfile() {
+        $("#od-initials").text(initials(org));
+        $("#od-profile-name").text(org.name || "Unnamed");
+        $("#od-crumb-name").text(org.name || "Organization");
+        const parts = [
+            conceptLabel(org.type) !== "—" ? conceptLabel(org.type) : "",
+            org.active !== false ? "Active" : "Inactive"
+        ].filter(Boolean);
+        $("#od-subtitle").text(parts.join(" · "));
+        setStat("ids", otherIdentifiers().length);
+        $("#od-about-type").text(conceptLabel(org.type));
+        const partOf = org.partOf
+            ? (refId(org.partOf)
+                ? '<a href="#/organizations/' + encodeURIComponent(refId(org.partOf)) + '">' +
+                    esc(refLabel(org.partOf)) + "</a>"
+                : esc(refLabel(org.partOf)))
+            : "—";
+        $("#od-about-partof").html(partOf);
+        const address = orgAddress();
+        const place = address
+            ? [address.city, address.state].filter(Boolean).join(", ") || formatAddress(address)
+            : "";
+        $("#od-about-location").text(place || "—");
+        $("#od-about-alias").text((org.alias || []).join(", ") || "—");
+        const contact = [primaryTelecom("phone"), primaryTelecom("email")].filter(Boolean).join(" · ");
+        $("#od-about-contact").html(
+            (contact ? esc(contact) + "<br>" : "") +
+            "<code>" + esc(org.id) + "</code>"
+        );
+    }
+
     function render(resource, $el) {
         org = resource;
         $page = $el && $el.length ? $el : $(CadminWorkspace.root());
         const $root = $page;
         $root.html(
-            '<div class="d-sm-flex align-items-center justify-content-between mb-4">' +
+            '<div class="d-flex align-items-center justify-content-between mb-3">' +
                 "<div>" +
-                    '<a class="small text-decoration-none" href="#/organizations"><i class="bi bi-arrow-left me-1"></i>Organizations</a>' +
-                    '<h1 class="h3 mb-0 page-title">' + esc(org.name || "Organization") + "</h1>" +
+                    '<nav aria-label="breadcrumb">' +
+                        '<ol class="breadcrumb mb-1">' +
+                            '<li class="breadcrumb-item"><a href="#/organizations">Organizations</a></li>' +
+                            '<li class="breadcrumb-item active" aria-current="page" id="od-crumb-name">' +
+                                esc(org.name || "Organization") + "</li>" +
+                        "</ol>" +
+                    "</nav>" +
+                    '<h1 class="h3 mb-0 page-title">Organization</h1>' +
                 "</div>" +
                 '<div class="d-flex flex-wrap gap-2">' +
                     '<button class="btn btn-outline-danger" type="button" id="od-delete" data-bs-toggle="modal" data-bs-target="#od-delete-modal">' +
@@ -289,41 +363,110 @@ window.CadminOrganizationDetail = (function () {
                     CadminResourceSource.button() +
                 "</div>" +
             "</div>" +
-            editCard("Basic details", "org-basic-details", "#od-basic-modal") +
             '<div class="row">' +
-                '<div class="col-lg-6">' + card("Identifiers", "org-id-rows",
-                    ["System", "Value", ""], "#od-id-modal", "Add") + "</div>" +
-                (isOidcMode()
-                    ? '<div class="col-lg-6">' + editCard("OIDC client", "org-oidc", "#od-oidc-modal") + "</div>"
-                    : "") +
+                '<div class="col-md-3">' +
+                    '<div class="card card-primary card-outline mb-4">' +
+                        '<div class="card-body box-profile">' +
+                            '<div class="text-center">' +
+                                '<div class="profile-initials mb-3" id="od-initials">' +
+                                    esc(initials(org)) + "</div>" +
+                            "</div>" +
+                            '<h3 class="profile-username text-center mb-1" id="od-profile-name">' +
+                                esc(org.name || "Unnamed") + "</h3>" +
+                            '<p class="text-muted text-center mb-2" id="od-subtitle"></p>' +
+                            '<ul class="list-group list-group-unbordered mb-3">' +
+                                '<li class="list-group-item">' +
+                                    "<b>Identifiers</b> <span class=\"float-end\" id=\"od-stat-ids\">0</span></li>" +
+                                '<li class="list-group-item">' +
+                                    "<b>Locations</b> <span class=\"float-end\" id=\"od-stat-locations\">0</span></li>" +
+                                '<li class="list-group-item">' +
+                                    "<b>Practitioners</b> <span class=\"float-end\" id=\"od-stat-roles\">0</span></li>" +
+                                '<li class="list-group-item">' +
+                                    "<b>Affiliations</b> <span class=\"float-end\" id=\"od-stat-affils\">0</span></li>" +
+                            "</ul>" +
+                            '<button class="btn btn-primary w-100" type="button" data-bs-toggle="modal" ' +
+                                'data-bs-target="#od-basic-modal">Edit details</button>' +
+                        "</div>" +
+                    "</div>" +
+                    '<div class="card mb-4">' +
+                        '<div class="card-header"><h3 class="card-title">About</h3></div>' +
+                        '<div class="card-body">' +
+                            "<strong><i class=\"bi bi-building me-1\"></i> Type</strong>" +
+                            '<p class="text-muted" id="od-about-type">—</p><hr>' +
+                            "<strong><i class=\"bi bi-diagram-3 me-1\"></i> Part of</strong>" +
+                            '<p class="text-muted" id="od-about-partof">—</p><hr>' +
+                            "<strong><i class=\"bi bi-geo-alt me-1\"></i> Location</strong>" +
+                            '<p class="text-muted" id="od-about-location">—</p><hr>' +
+                            "<strong><i class=\"bi bi-tags me-1\"></i> Alias</strong>" +
+                            '<p class="text-muted" id="od-about-alias">—</p><hr>' +
+                            "<strong><i class=\"bi bi-person-vcard me-1\"></i> Contact</strong>" +
+                            '<p class="text-muted mb-0" id="od-about-contact">—</p>' +
+                        "</div>" +
+                    "</div>" +
+                "</div>" +
+                '<div class="col-md-9">' +
+                    '<div class="card">' +
+                        '<div class="card-header p-2">' +
+                            '<ul class="nav nav-pills" role="tablist">' +
+                                tabButton("od-tab-details", "Details", true) +
+                                tabButton("od-tab-network", "Network", false) +
+                                tabButton("od-tab-care", "Care", false) +
+                                tabButton("od-tab-limits", "Limits", false) +
+                                tabButton("od-tab-graph", "Graph", false) +
+                                tabButton("od-tab-history", "History", false) +
+                            "</ul>" +
+                        "</div>" +
+                        '<div class="card-body">' +
+                            '<div class="tab-content">' +
+                                tabPane("od-tab-details",
+                                    editCard("Basic details", "org-basic-details", "#od-basic-modal") +
+                                    '<div class="row">' +
+                                        '<div class="' + (isOidcMode() ? "col-lg-6" : "col-12") + '">' +
+                                            card("Identifiers", "org-id-rows",
+                                                ["System", "Value", ""], "#od-id-modal", "Add") + "</div>" +
+                                        (isOidcMode()
+                                            ? '<div class="col-lg-6">' +
+                                                editCard("OIDC client", "org-oidc", "#od-oidc-modal") + "</div>"
+                                            : "") +
+                                    "</div>" +
+                                    card("Contacts", "org-contact-rows",
+                                        ["Purpose", "Name", "Telecom", ""], "#od-contact-modal", "Add"),
+                                    true) +
+                                tabPane("od-tab-network",
+                                    '<div class="row">' +
+                                        '<div class="col-lg-6">' + card("Sub-organizations", "org-child-rows",
+                                            ["Name", "Type", "Status", ""], "#od-child-modal", "Add") + "</div>" +
+                                        '<div class="col-lg-6">' + card("Locations", "org-location-rows",
+                                            ["Name", "Status", "Address", ""], "#od-location-modal", "Add") + "</div>" +
+                                    "</div>" +
+                                    '<div class="row">' +
+                                        '<div class="col-lg-6">' + card("Organization affiliations", "org-affil-rows",
+                                            ["Organization", "Role", "Status", ""], "#od-affil-modal", "Add") + "</div>" +
+                                        '<div class="col-lg-6">' + card("Endpoints", "org-endpoint-rows",
+                                            ["Name", "Type", "Address", "Status", ""], "#od-endpoint-modal", "Add",
+                                            '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#od-ep-attach-modal">Attach</button>') +
+                                        "</div>" +
+                                    "</div>",
+                                    false) +
+                                tabPane("od-tab-care",
+                                    '<div class="row">' +
+                                        '<div class="col-lg-6">' + card("Practitioners", "org-role-rows",
+                                            ["Practitioner", "Role", "Status", ""], "#od-role-modal", "Add") + "</div>" +
+                                        '<div class="col-lg-6">' + card("Healthcare services", "org-service-rows",
+                                            ["Name", "Type", "Status", ""], "#od-service-modal", "Add") + "</div>" +
+                                    "</div>",
+                                    false) +
+                                tabPane("od-tab-limits",
+                                    card("Rate-limit tiers", "org-tier-rows",
+                                        ["Title", "Tier", "Status", "OIDC client", "Source", ""], "#od-tier-modal", "Add"),
+                                    false) +
+                                tabPane("od-tab-graph", CadminResourceGraph.card(), false) +
+                                tabPane("od-tab-history", CadminResourceHistory.card(), false) +
+                            "</div>" +
+                        "</div>" +
+                    "</div>" +
+                "</div>" +
             "</div>" +
-            '<div class="row">' +
-                '<div class="col-lg-6">' + card("Sub-organizations", "org-child-rows",
-                    ["Name", "Type", "Status", ""], "#od-child-modal", "Add") + "</div>" +
-                '<div class="col-lg-6">' + card("Locations", "org-location-rows",
-                    ["Name", "Status", "Address", ""], "#od-location-modal", "Add") + "</div>" +
-            "</div>" +
-            '<div class="row">' +
-                '<div class="col-lg-6">' + card("Organization affiliations", "org-affil-rows",
-                    ["Organization", "Role", "Status", ""], "#od-affil-modal", "Add") + "</div>" +
-                '<div class="col-lg-6">' + card("Endpoints", "org-endpoint-rows",
-                    ["Name", "Type", "Address", "Status", ""], "#od-endpoint-modal", "Add",
-                    '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#od-ep-attach-modal">Attach</button>') + "</div>" +
-            "</div>" +
-            '<div class="row">' +
-                '<div class="col-lg-6">' + card("Contacts", "org-contact-rows",
-                    ["Purpose", "Name", "Telecom", ""], "#od-contact-modal", "Add") + "</div>" +
-                '<div class="col-lg-6">' + card("Practitioners", "org-role-rows",
-                    ["Practitioner", "Role", "Status", ""], "#od-role-modal", "Add") + "</div>" +
-            "</div>" +
-            '<div class="row">' +
-                '<div class="col-lg-6">' + card("Healthcare services", "org-service-rows",
-                    ["Name", "Type", "Status", ""], "#od-service-modal", "Add") + "</div>" +
-            "</div>" +
-            card("Rate-limit tiers", "org-tier-rows",
-                ["Title", "Tier", "Status", "OIDC client", "Source", ""], "#od-tier-modal", "Add") +
-            CadminResourceHistory.card() +
-            CadminResourceGraph.card() +
             modal("od-basic-modal", "Edit basic details",
                 field("Name", '<input class="form-control" id="od-name" required>') +
                 '<div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="od-active">' +
@@ -541,7 +684,7 @@ window.CadminOrganizationDetail = (function () {
                 '<dt class="col-sm-3">ID</dt><dd class="col-sm-9"><code>' + esc(org.id) + "</code></dd>" +
             "</dl>"
         );
-        $(".page-title").first().text(org.name || "Organization");
+        renderProfile();
     }
 
     function isManagedOidcIdentifier(identifier) {
@@ -573,6 +716,7 @@ window.CadminOrganizationDetail = (function () {
 
     function renderIdentifiers() {
         const rows = otherIdentifiers();
+        setStat("ids", rows.length);
         if (!rows.length) {
             $("#org-id-rows").html(emptyRow(3, "No identifiers."));
             return;
@@ -726,6 +870,7 @@ window.CadminOrganizationDetail = (function () {
     function loadLocations() {
         CadminApi.fhir("/Location?organization=" + encodeURIComponent(org.id) + "&_count=50&_sort=name").done(function (bundle) {
             const rows = bundleResources(bundle);
+            setStat("locations", rows.length);
             if (!rows.length) {
                 $("#org-location-rows").html(emptyRow(4, "No locations."));
                 return;
@@ -740,6 +885,7 @@ window.CadminOrganizationDetail = (function () {
                     "</tr>";
             }).join(""));
         }).fail(function (xhr) {
+            setStat("locations", 0);
             $("#org-location-rows").html(emptyRow(4, "Unable to load locations."));
             fail("Load locations", xhr);
         });
@@ -762,6 +908,7 @@ window.CadminOrganizationDetail = (function () {
             CadminApi.fhir("/OrganizationAffiliation?participating-organization=" + id + "&_count=50")
         ).done(function (primaryRes, participatingRes) {
             const rows = mergeAffiliations(primaryRes[0], participatingRes[0]);
+            setStat("affils", rows.length);
             if (!rows.length) {
                 $("#org-affil-rows").html(emptyRow(4, "No affiliations."));
                 return;
@@ -784,6 +931,7 @@ window.CadminOrganizationDetail = (function () {
                     "</tr>";
             }).join(""));
         }).fail(function (xhr) {
+            setStat("affils", 0);
             $("#org-affil-rows").html(emptyRow(4, "Unable to load affiliations."));
             fail("Load affiliations", xhr);
         });
@@ -974,9 +1122,11 @@ window.CadminOrganizationDetail = (function () {
                 }
             });
             if (!roles.length) {
+                setStat("roles", 0);
                 $("#org-role-rows").html(emptyRow(4, "No practitioners with roles."));
                 return;
             }
+            setStat("roles", roles.length);
             $("#org-role-rows").html(roles.map(function (role) {
                 const prId = refId(role.practitioner);
                 const practitioner = practitioners[prId] || {};
@@ -998,6 +1148,7 @@ window.CadminOrganizationDetail = (function () {
                     "</tr>";
             }).join(""));
         }).fail(function (xhr) {
+            setStat("roles", 0);
             $("#org-role-rows").html(emptyRow(4, "Unable to load practitioners."));
             fail("Load practitioners", xhr);
         });
@@ -1281,6 +1432,12 @@ window.CadminOrganizationDetail = (function () {
     function bindForms() {
         const $root = $(CadminWorkspace.root());
         $root.off(".orgdetail");
+
+        $root.on("shown.bs.tab.orgdetail", "#od-tab-graph-btn", function () {
+            if (typeof CadminResourceGraph.resize === "function") {
+                CadminResourceGraph.resize();
+            }
+        });
 
         $root.on("click.orgdetail", "[data-edit-role]", function () {
             const id = $(this).attr("data-edit-role");

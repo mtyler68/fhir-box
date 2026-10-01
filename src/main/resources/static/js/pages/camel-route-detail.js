@@ -215,7 +215,19 @@ window.CadminCamelRouteDetail = (function () {
             const prefix = word.toLowerCase();
             const asProperty = isYamlPropertyPosition(line, start);
             const colonAlready = /^\s*:/.test(line.slice(cursor.ch));
-            const list = hintWords.filter(function (item) {
+            const C = window.CadminCamelYamlCatalog;
+            const words = hintWords.concat(
+                C ? Object.keys(C.processors || {}) : [],
+                C ? Object.keys(C.documents || {}) : [],
+                C ? (C.expressions || []) : [],
+                C ? (C.dataFormats || []) : []
+            );
+            const seen = {};
+            const list = words.filter(function (item) {
+                if (seen[item]) {
+                    return false;
+                }
+                seen[item] = true;
                 return !prefix || item.toLowerCase().indexOf(prefix) === 0;
             }).map(function (item) {
                 if (!asProperty || colonAlready) {
@@ -441,10 +453,27 @@ window.CadminCamelRouteDetail = (function () {
     function destroyEditor() {
         destroyMarkdownEditors();
         destroyYamlEditor();
+        if (window.CadminCamelRouteDesigner) {
+            CadminCamelRouteDesigner.destroy();
+        }
     }
 
     function editorValue() {
         return editor ? editor.getValue() : ($("#crd-yaml").val() || "");
+    }
+
+    function setRouteYaml(text) {
+        if (editor) {
+            editor.setValue(text || "");
+        } else {
+            $("#crd-yaml").val(text || "");
+        }
+    }
+
+    function applyDesignerYaml() {
+        if (window.CadminCamelRouteDesigner && typeof CadminCamelRouteDesigner.applyToYaml === "function") {
+            CadminCamelRouteDesigner.applyToYaml();
+        }
     }
 
     function domainSnapshot() {
@@ -512,6 +541,15 @@ window.CadminCamelRouteDetail = (function () {
         if (!/(^|\n)\s*-?\s*(route|from|rest)\s*:/.test(source)) {
             return "YAML should define a Camel route, from, or rest block.";
         }
+        if (window.CadminCamelRouteDesigner && typeof CadminCamelRouteDesigner.syncFromYaml === "function") {
+            try {
+                if (typeof jsyaml !== "undefined") {
+                    jsyaml.load(source);
+                }
+            } catch (err) {
+                return (err && err.message) || "Invalid YAML.";
+            }
+        }
         return "";
     }
 
@@ -568,7 +606,12 @@ window.CadminCamelRouteDetail = (function () {
         });
         editor.getWrapperElement().classList.add("camel-route-editor");
         editor.setSize("100%", "36rem");
-        editor.on("change", syncUnsavedFlag);
+        editor.on("change", function () {
+            if (window.CadminCamelRouteDesigner && CadminCamelRouteDesigner.isApplying()) {
+                return;
+            }
+            syncUnsavedFlag();
+        });
         editor.on("inputRead", function (cm, change) {
             if (change.text.length !== 1 || !/^[A-Za-z]$/.test(change.text[0])) {
                 return;
@@ -639,6 +682,7 @@ window.CadminCamelRouteDetail = (function () {
             };
         }
         if (withYaml) {
+            applyDesignerYaml();
             const yaml = editorValue();
             const problem = validateYaml(yaml);
             if (problem) {
@@ -749,6 +793,7 @@ window.CadminCamelRouteDetail = (function () {
                         navButton("crd-pane-basics", "bi bi-info-circle", "Basics", { active: true }) +
                         navButton("crd-pane-identity", "bi bi-person-vcard", "Identity and version") +
                         navButton("crd-pane-details", "bi bi-journal-text", "Details") +
+                        navButton("crd-pane-designer", "bi bi-sliders", "Route Designer") +
                         navButton("crd-pane-route", "bi bi-file-earmark-code", "Route") +
                         navButton("crd-pane-related", "bi bi-link-45deg", "Related") +
                         navButton("crd-pane-graph", "bi bi-diagram-3", "Reference graph") +
@@ -831,6 +876,15 @@ window.CadminCamelRouteDetail = (function () {
                                     "</div>" +
                                 "</div>" +
                             "</form>") +
+                        tabPane("crd-pane-designer",
+                            '<div id="crd-designer-host" class="camel-route-designer"></div>' +
+                            (window.CadminCamelRouteGraph
+                                ? CadminCamelRouteGraph.card({ prefix: "crd-designer", editable: true })
+                                : "") +
+                            '<p class="small text-muted mt-2 mb-0">' +
+                                "Designer writes Camel YAML DSL from Apache Camel 4.10 " +
+                                "(processors, REST, expressions, and component URIs). " +
+                                "Click the graph to select a node; use graph buttons to add, move, or remove steps.</p>") +
                         tabPane("crd-pane-route",
                             '<div class="d-flex flex-column gap-3">' +
                                 '<div class="card" id="camel-route-yaml-card">' +
@@ -883,6 +937,18 @@ window.CadminCamelRouteDetail = (function () {
         mountMarkdownEditors();
         fillMarkdownFields();
         mountEditor(readYaml() || templates[0].yaml);
+        if (window.CadminCamelRouteDesigner) {
+            CadminCamelRouteDesigner.mount("#crd-designer-host", {
+                getYaml: editorValue,
+                setYaml: setRouteYaml,
+                onChange: syncUnsavedFlag,
+                onSave: function () {
+                    saveLibrary(function () {
+                        CadminApi.showToast("success", "Camel route saved.");
+                    });
+                }
+            });
+        }
         mountRouteGraph();
         markEditorClean();
         markBasicsClean();
@@ -1041,6 +1107,9 @@ window.CadminCamelRouteDetail = (function () {
             if (window.CadminCamelRouteGraph) {
                 CadminCamelRouteGraph.refresh();
             }
+            if (window.CadminCamelRouteDesigner) {
+                CadminCamelRouteDesigner.syncFromYaml(match.yaml);
+            }
         }
         if (editor && editor.getValue().trim()) {
             CadminApi.confirm({
@@ -1057,7 +1126,17 @@ window.CadminCamelRouteDetail = (function () {
         const $root = $(CadminWorkspace.root());
         $root.off(".crdetail");
         $root.on("shown.bs.tab.crdetail", "#crd-pane-details-btn", refreshMarkdownEditors);
-        $root.on("shown.bs.tab.crdetail", "#crd-pane-route-btn", refreshRoutePane);
+        $root.on("shown.bs.tab.crdetail", "#crd-pane-designer-btn", function () {
+            if (window.CadminCamelRouteDesigner) {
+                CadminCamelRouteDesigner.syncFromYaml(editorValue());
+                CadminCamelRouteDesigner.mountGraph();
+            }
+        });
+        $root.on("shown.bs.tab.crdetail", "#crd-pane-route-btn", function () {
+            applyDesignerYaml();
+            mountRouteGraph();
+            refreshRoutePane();
+        });
         $root.on("shown.bs.tab.crdetail", "#crd-pane-graph-btn", function () {
             if (typeof CadminResourceGraph.resize === "function") {
                 CadminResourceGraph.resize();

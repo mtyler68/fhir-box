@@ -16,11 +16,35 @@ window.CadminCamelRouteGraph = (function () {
     let sizeWait = null;
     let sourceFn = null;
     let onNodeClick = null;
+    let onSelect = null;
+    let onAdd = null;
+    let onDelete = null;
+    let onMove = null;
+    let hostPrefix = "camel-route";
+    let editable = false;
+    let selectedPathKey = "";
     let refreshTimer = 0;
     let lastYaml = null;
     let lastGraph = null;
     let lastCanvasSize = "";
     let ignoreResize = false;
+
+    function ids() {
+        return {
+            card: hostPrefix + "-graph-card",
+            graph: hostPrefix + "-graph",
+            status: hostPrefix + "-graph-status",
+            refresh: hostPrefix + "-graph-refresh",
+            add: hostPrefix + "-graph-add",
+            remove: hostPrefix + "-graph-remove",
+            up: hostPrefix + "-graph-up",
+            down: hostPrefix + "-graph-down"
+        };
+    }
+
+    function pathKey(path) {
+        return Array.isArray(path) ? path.join("/") : String(path || "");
+    }
 
     function esc(value) {
         return CadminApi.escapeHtml(value);
@@ -96,17 +120,35 @@ window.CadminCamelRouteGraph = (function () {
         });
     }
 
-    function card() {
-        return '<div class="card h-100" id="camel-route-graph-card">' +
+    function card(opts) {
+        opts = opts || {};
+        const prefix = opts.prefix || "camel-route";
+        const edit = !!opts.editable;
+        return '<div class="card h-100" id="' + prefix + '-graph-card">' +
             '<div class="card-header">' +
                 '<h3 class="card-title">' +
                     '<iconify-icon class="me-1" icon="hugeicons:camel" aria-hidden="true"></iconify-icon>' +
                     "Route graph</h3>" +
                 '<div class="card-tools">' +
-                    '<span class="small text-muted me-2 d-none" id="camel-route-graph-status"></span>' +
-                    '<span class="small text-muted d-none d-lg-inline me-2">Scroll to zoom · drag to pan</span>' +
-                    '<button class="btn btn-sm btn-outline-secondary" type="button" id="camel-route-graph-refresh" ' +
-                        'title="Refresh graph" aria-label="Refresh graph">' +
+                    '<span class="small text-muted me-2 d-none" id="' + prefix + '-graph-status"></span>' +
+                    (edit
+                        ? '<div class="btn-group btn-group-sm flex-grow-0 me-2" role="group" aria-label="Edit graph">' +
+                            '<button class="btn btn-outline-primary" type="button" id="' + prefix +
+                                '-graph-add" title="Add step after selected">' +
+                                '<i class="bi bi-plus-lg"></i></button>' +
+                            '<button class="btn btn-outline-secondary" type="button" id="' + prefix +
+                                '-graph-up" title="Move selected up">' +
+                                '<i class="bi bi-arrow-up"></i></button>' +
+                            '<button class="btn btn-outline-secondary" type="button" id="' + prefix +
+                                '-graph-down" title="Move selected down">' +
+                                '<i class="bi bi-arrow-down"></i></button>' +
+                            '<button class="btn btn-outline-danger" type="button" id="' + prefix +
+                                '-graph-remove" title="Remove selected">' +
+                                '<i class="bi bi-trash"></i></button>' +
+                        "</div>"
+                        : '<span class="small text-muted d-none d-lg-inline me-2">Scroll to zoom · drag to pan</span>') +
+                    '<button class="btn btn-sm btn-outline-secondary" type="button" id="' + prefix +
+                        '-graph-refresh" title="Refresh graph" aria-label="Refresh graph">' +
                         '<i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button>' +
                     '<button type="button" class="btn btn-tool" data-lte-toggle="card-maximize" title="Maximize" aria-label="Maximize">' +
                         '<i data-lte-icon="maximize" class="bi bi-fullscreen"></i>' +
@@ -115,13 +157,13 @@ window.CadminCamelRouteGraph = (function () {
                 "</div>" +
             "</div>" +
             '<div class="card-body p-0">' +
-                '<div id="camel-route-graph" class="camel-route-graph"></div>' +
+                '<div id="' + prefix + '-graph" class="camel-route-graph"></div>' +
             "</div>" +
         "</div>";
     }
 
     function setStatus(message, isError) {
-        const el = document.getElementById("camel-route-graph-status");
+        const el = document.getElementById(ids().status);
         if (!el) {
             return;
         }
@@ -449,7 +491,7 @@ window.CadminCamelRouteGraph = (function () {
         const usedLines = {};
         let seq = 0;
 
-        function addNode(kind, body, level) {
+        function addNode(kind, body, level, path, bodyPath) {
             seq += 1;
             const id = "crn-" + seq;
             const yamlLine = locateYamlLine(yamlLines, usedLines, kind, body);
@@ -464,6 +506,9 @@ window.CadminCamelRouteGraph = (function () {
                 level: typeof level === "number" ? level : 0,
                 endpointUri: FROM_KINDS[kind] || TO_KINDS[kind] ? uriOf(body) : "",
                 yamlLine: yamlLine,
+                path: path || [],
+                bodyPath: bodyPath || path || [],
+                pathKey: pathKey(bodyPath || path),
                 font: { multi: true, face: "inherit", size: 13 }
             };
             nodes.push(node);
@@ -498,157 +543,168 @@ window.CadminCamelRouteGraph = (function () {
             });
         }
 
-        function walkSteps(steps, predecessors) {
+        function walkSteps(steps, predecessors, ownerPath) {
             let current = asList(predecessors);
-            asList(steps).forEach(function (step) {
+            asList(steps).forEach(function (step, index) {
                 const parsed = stepParts(step);
                 if (!parsed) {
                     return;
                 }
                 const kind = parsed.kind;
                 const body = parsed.body;
+                const stepPath = ownerPath.concat(["steps", index]);
+                const bodyPath = stepPath.concat([kind]);
                 if (kind === "choice") {
-                    current = walkChoice(body, current);
+                    current = walkChoice(body, current, stepPath, bodyPath);
                     return;
                 }
                 if (kind === "doTry" || kind === "try") {
-                    current = walkTry(body, current);
+                    current = walkTry(body, current, stepPath, bodyPath);
                     return;
                 }
                 if (kind === "multicast") {
-                    current = walkMulticast(body, current);
+                    current = walkMulticast(body, current, stepPath, bodyPath);
                     return;
                 }
-                const id = addNode(kind, body, nextLevel(current));
+                const id = addNode(kind, body, nextLevel(current), stepPath, bodyPath);
                 link(current, id);
                 const nested = childSteps(body);
-                current = nested.length ? walkSteps(nested, [id]) : [id];
+                current = nested.length ? walkSteps(nested, [id], bodyPath) : [id];
             });
             return current;
         }
 
-        function walkChoice(body, predecessors) {
-            const choiceId = addNode("choice", body || {}, nextLevel(predecessors));
+        function walkChoice(body, predecessors, stepPath, bodyPath) {
+            const choiceId = addNode("choice", body || {}, nextLevel(predecessors), stepPath, bodyPath);
             link(predecessors, choiceId);
             const tails = [];
-            asList(body && body.when).forEach(function (when) {
-                const whenId = addNode("when", when, nextLevel([choiceId]));
+            asList(body && body.when).forEach(function (when, index) {
+                const whenPath = bodyPath.concat(["when", index]);
+                const whenId = addNode("when", when, nextLevel([choiceId]), whenPath, whenPath);
                 link(choiceId, whenId, "when");
                 let next = childSteps(when);
                 if (!next.length && when && (when.to || when.uri)) {
                     next = [{ to: when.to || when.uri }];
                 }
-                const whenTails = next.length ? walkSteps(next, [whenId]) : [whenId];
+                const whenTails = next.length ? walkSteps(next, [whenId], whenPath) : [whenId];
                 tails.push.apply(tails, whenTails);
             });
             if (body && body.otherwise != null) {
                 const other = body.otherwise;
-                const otherId = addNode("otherwise", other, nextLevel([choiceId]));
+                const otherPath = bodyPath.concat(["otherwise"]);
+                const otherId = addNode("otherwise", other, nextLevel([choiceId]), otherPath, otherPath);
                 link(choiceId, otherId, "otherwise");
                 const otherSteps = childSteps(other);
-                const otherTails = otherSteps.length ? walkSteps(otherSteps, [otherId]) : [otherId];
+                const otherTails = otherSteps.length ? walkSteps(otherSteps, [otherId], otherPath) : [otherId];
                 tails.push.apply(tails, otherTails);
             }
             return tails.length ? tails : [choiceId];
         }
 
-        function walkTry(body, predecessors) {
-            const tryId = addNode("doTry", body || {}, nextLevel(predecessors));
+        function walkTry(body, predecessors, stepPath, bodyPath) {
+            const tryId = addNode("doTry", body || {}, nextLevel(predecessors), stepPath, bodyPath);
             link(predecessors, tryId);
-            const tails = walkSteps(childSteps(body), [tryId]);
-            asList(body && (body.doCatch || body.catch)).forEach(function (caught) {
-                const catchId = addNode("doCatch", caught, nextLevel([tryId]));
+            const tails = walkSteps(childSteps(body), [tryId], bodyPath);
+            asList(body && (body.doCatch || body.catch)).forEach(function (caught, index) {
+                const catchKey = body && body.doCatch ? "doCatch" : "catch";
+                const catchPath = bodyPath.concat([catchKey, index]);
+                const catchId = addNode("doCatch", caught, nextLevel([tryId]), catchPath, catchPath);
                 link(tryId, catchId, "catch");
-                walkSteps(childSteps(caught), [catchId]);
+                walkSteps(childSteps(caught), [catchId], catchPath);
             });
             if (body && (body.doFinally || body.finally)) {
+                const finKey = body.doFinally ? "doFinally" : "finally";
                 const fin = body.doFinally || body.finally;
-                const finId = addNode("doFinally", fin, nextLevel([tryId]));
+                const finPath = bodyPath.concat([finKey]);
+                const finId = addNode("doFinally", fin, nextLevel([tryId]), finPath, finPath);
                 link(tryId, finId, "finally");
-                walkSteps(childSteps(fin), [finId]);
+                walkSteps(childSteps(fin), [finId], finPath);
             }
             return tails.length ? tails : [tryId];
         }
 
-        function walkMulticast(body, predecessors) {
-            const multiId = addNode("multicast", body || {}, nextLevel(predecessors));
+        function walkMulticast(body, predecessors, stepPath, bodyPath) {
+            const multiId = addNode("multicast", body || {}, nextLevel(predecessors), stepPath, bodyPath);
             link(predecessors, multiId);
             const tails = [];
             const branches = childSteps(body);
             if (branches.length) {
-                const ended = walkSteps(branches, [multiId]);
+                const ended = walkSteps(branches, [multiId], bodyPath);
                 tails.push.apply(tails, ended);
             }
-            asList(body && body.to).forEach(function (target) {
+            asList(body && body.to).forEach(function (target, index) {
+                const toPath = bodyPath.concat(["to", index]);
                 const toId = addNode("to", typeof target === "string" ? target : target,
-                    nextLevel([multiId]));
+                    nextLevel([multiId]), toPath, toPath);
                 link(multiId, toId);
                 tails.push(toId);
             });
             return tails.length ? tails : [multiId];
         }
 
-        function walkFrom(fromBody, level) {
-            const fromId = addNode("from", fromBody, typeof level === "number" ? level : 0);
+        function walkFrom(fromBody, level, fromPath) {
+            const fromId = addNode("from", fromBody, typeof level === "number" ? level : 0, fromPath, fromPath);
             const steps = typeof fromBody === "object" ? childSteps(fromBody) : [];
             if (steps.length) {
-                walkSteps(steps, [fromId]);
+                walkSteps(steps, [fromId], fromPath);
             }
             return fromId;
         }
 
-        function walkRoute(route) {
+        function walkRoute(route, routePath) {
             if (!route || typeof route !== "object") {
                 return;
             }
             let start = null;
             if (route.id) {
-                start = addNode("route", route, 0);
+                start = addNode("route", route, 0, routePath, routePath);
             }
             if (route.from != null) {
-                const fromId = walkFrom(route.from, start ? 1 : 0);
+                const fromId = walkFrom(route.from, start ? 1 : 0, routePath.concat(["from"]));
                 if (start) {
                     link(start, fromId);
                 }
             }
         }
 
-        function walkRest(rest) {
+        function walkRest(rest, restPath) {
             if (!rest || typeof rest !== "object") {
                 return;
             }
-            const restId = addNode("rest", rest, 0);
+            const restId = addNode("rest", rest, 0, restPath, restPath);
             REST_METHODS.forEach(function (method) {
                 if (rest[method] == null) {
                     return;
                 }
-                asList(rest[method]).forEach(function (verb) {
-                    const methodId = addNode(method, verb, 1);
+                asList(rest[method]).forEach(function (verb, index) {
+                    const methodPath = restPath.concat([method, index]);
+                    const methodId = addNode(method, verb, 1, methodPath, methodPath);
                     link(restId, methodId, method.toUpperCase());
                     const to = typeof verb === "string" ? verb : uriOf(verb);
                     if (to) {
-                        const toId = addNode("to", to, 2);
+                        const toPath = methodPath.concat(["to"]);
+                        const toId = addNode("to", to, 2, toPath, toPath);
                         link(methodId, toId);
                     }
                 });
             });
         }
 
-        flattenDefs(value).forEach(function (item) {
+        flattenDefs(value).forEach(function (item, index) {
             if (item.route != null) {
-                walkRoute(item.route);
+                walkRoute(item.route, [index, "route"]);
                 return;
             }
             if (item.from != null && item.steps == null && !item.rest) {
-                walkFrom(item.from);
+                walkFrom(item.from, 0, [index, "from"]);
                 return;
             }
             if (item.rest != null) {
-                walkRest(item.rest);
+                walkRest(item.rest, [index, "rest"]);
                 return;
             }
             if (item.id != null && item.from != null) {
-                walkRoute(item);
+                walkRoute(item, [index]);
             }
         });
 
@@ -842,7 +898,7 @@ window.CadminCamelRouteGraph = (function () {
     }
 
     function emptyMessage(text) {
-        const el = document.getElementById("camel-route-graph");
+        const el = document.getElementById(ids().graph);
         if (!el) {
             return;
         }
@@ -904,7 +960,7 @@ window.CadminCamelRouteGraph = (function () {
         if (!network) {
             return;
         }
-        const el = document.getElementById("camel-route-graph");
+        const el = document.getElementById(ids().graph);
         if (!el || !el.clientWidth || !el.clientHeight) {
             return;
         }
@@ -990,6 +1046,7 @@ window.CadminCamelRouteGraph = (function () {
         network.once("afterDrawing", function () {
             finishLayout(false);
             observe();
+            applySelection();
         });
         network.on("hoverNode", function () {
             el.style.cursor = "pointer";
@@ -998,7 +1055,7 @@ window.CadminCamelRouteGraph = (function () {
             el.style.cursor = "";
         });
         network.on("click", function (params) {
-            if (!params.nodes || params.nodes.length !== 1 || typeof onNodeClick !== "function") {
+            if (!params.nodes || params.nodes.length !== 1) {
                 return;
             }
             const id = params.nodes[0];
@@ -1012,18 +1069,24 @@ window.CadminCamelRouteGraph = (function () {
                     return false;
                 });
             }
-            if (!node) {
+            if (!node && network) {
                 node = network.body.data.nodes.get(id);
             }
-            if (!node || typeof node.yamlLine !== "number") {
+            if (!node) {
                 return;
             }
-            onNodeClick(node.yamlLine, node);
+            selectedPathKey = node.pathKey || "";
+            if (typeof onSelect === "function") {
+                onSelect(node);
+            }
+            if (typeof onNodeClick === "function" && typeof node.yamlLine === "number") {
+                onNodeClick(node.yamlLine, node);
+            }
         });
     }
 
     function draw(graph) {
-        const el = document.getElementById("camel-route-graph");
+        const el = document.getElementById(ids().graph);
         if (!el || typeof vis === "undefined" || !vis.Network) {
             return;
         }
@@ -1032,7 +1095,7 @@ window.CadminCamelRouteGraph = (function () {
     }
 
     function observe() {
-        const el = document.getElementById("camel-route-graph");
+        const el = document.getElementById(ids().graph);
         if (!el || typeof ResizeObserver === "undefined") {
             return;
         }
@@ -1047,7 +1110,7 @@ window.CadminCamelRouteGraph = (function () {
             window.requestAnimationFrame(resize);
         });
         observer.observe(el);
-        const card = document.getElementById("camel-route-graph-card");
+        const card = document.getElementById(ids().card);
         if (card) {
             observer.observe(card);
         }
@@ -1097,20 +1160,73 @@ window.CadminCamelRouteGraph = (function () {
         }, 280);
     }
 
+    function findNodeByPath(key) {
+        if (!key || !lastGraph || !lastGraph.nodes) {
+            return null;
+        }
+        let found = null;
+        lastGraph.nodes.some(function (item) {
+            if (item.pathKey === key) {
+                found = item;
+                return true;
+            }
+            return false;
+        });
+        return found;
+    }
+
+    function applySelection() {
+        if (!network || !selectedPathKey) {
+            return;
+        }
+        const node = findNodeByPath(selectedPathKey);
+        if (node) {
+            network.selectNodes([node.id]);
+        }
+    }
+
     function bind() {
-        const $card = $("#camel-route-graph-card");
+        const names = ids();
+        const $card = $("#" + names.card);
         $card.off(".crgraph");
-        $card.on("click.crgraph", "#camel-route-graph-refresh", function () {
+        $card.on("click.crgraph", "#" + names.refresh, function () {
             lastYaml = null;
             refresh();
+        });
+        $card.on("click.crgraph", "#" + names.add, function () {
+            if (typeof onAdd === "function") {
+                onAdd(findNodeByPath(selectedPathKey));
+            }
+        });
+        $card.on("click.crgraph", "#" + names.remove, function () {
+            if (typeof onDelete === "function") {
+                onDelete(findNodeByPath(selectedPathKey));
+            }
+        });
+        $card.on("click.crgraph", "#" + names.up, function () {
+            if (typeof onMove === "function") {
+                onMove(findNodeByPath(selectedPathKey), -1);
+            }
+        });
+        $card.on("click.crgraph", "#" + names.down, function () {
+            if (typeof onMove === "function") {
+                onMove(findNodeByPath(selectedPathKey), 1);
+            }
         });
     }
 
     function mount(getYaml, options) {
         destroy();
         options = options || {};
+        hostPrefix = options.prefix || "camel-route";
+        editable = !!options.editable;
+        selectedPathKey = options.selectedPathKey || "";
         sourceFn = typeof getYaml === "function" ? getYaml : function () { return ""; };
         onNodeClick = typeof options.onNodeClick === "function" ? options.onNodeClick : null;
+        onSelect = typeof options.onSelect === "function" ? options.onSelect : null;
+        onAdd = typeof options.onAdd === "function" ? options.onAdd : null;
+        onDelete = typeof options.onDelete === "function" ? options.onDelete : null;
+        onMove = typeof options.onMove === "function" ? options.onMove : null;
         bind();
         refresh();
     }
@@ -1120,10 +1236,17 @@ window.CadminCamelRouteGraph = (function () {
             window.clearTimeout(refreshTimer);
             refreshTimer = 0;
         }
-        $("#camel-route-graph-card").off(".crgraph");
+        $("#" + ids().card).off(".crgraph");
         destroyNetwork();
         sourceFn = null;
         onNodeClick = null;
+        onSelect = null;
+        onAdd = null;
+        onDelete = null;
+        onMove = null;
+        hostPrefix = "camel-route";
+        editable = false;
+        selectedPathKey = "";
         lastYaml = null;
         lastGraph = null;
         lastCanvasSize = "";
@@ -1137,6 +1260,10 @@ window.CadminCamelRouteGraph = (function () {
         scheduleRefresh: scheduleRefresh,
         reformat: reformat,
         resize: resize,
+        selectPath: function (path) {
+            selectedPathKey = pathKey(path);
+            applySelection();
+        },
         destroy: destroy
     };
 }());
