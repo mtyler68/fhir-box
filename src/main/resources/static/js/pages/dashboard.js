@@ -71,6 +71,7 @@ CadminApp.register("dashboard", function () {
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/healthcare-services">Healthcare services</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/pds-policies">PDS policies</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/camel-routes">Camel routes</a>' +
+                              '<a class="btn btn-outline-primary me-2 mb-2" href="#/proto-specs">Protobuf specs</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/easy-rules">Easy rules</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/rule-sets">Rule sets</a>' +
                               '<a class="btn btn-outline-primary me-2 mb-2" href="#/icg-routes">ICG routes</a>' +
@@ -148,6 +149,7 @@ CadminApp.register("dashboard", function () {
         { type: "SubscriptionTopic", label: "Topics", href: "#/subscription-topics", icon: "bi-bookmark-star", border: "primary", admin: true },
         { key: "pds-policies", type: "Library", search: "type=pds-policies", label: "PDS policies", href: "#/pds-policies", icon: "bi-journal-text", border: "success", admin: true },
         { key: "camel-routes", type: "Library", search: "type=camel-route", label: "Camel routes", href: "#/camel-routes", iconify: "hugeicons:camel", border: "warning", admin: true },
+        { key: "proto-specs", type: "Library", search: "type=proto-spec", label: "Protobuf specs", href: "#/proto-specs", iconify: "mdi:protocol", border: "primary", admin: true },
         { key: "easy-rules", type: "Library", search: "type=easy-rule", label: "Easy rules", href: "#/easy-rules", iconify: "mdi:script-text-outline", border: "success", admin: true },
         { key: "rule-sets", type: "Library", search: "type=rule-set", label: "Rule sets", href: "#/rule-sets", iconify: "mdi:format-list-group", border: "success", admin: true },
         { key: "icg-routes", type: "Library", search: "type=gateway-route", label: "ICG routes", href: "#/icg-routes", iconify: "mdi:routes", border: "info", admin: true },

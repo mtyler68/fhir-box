@@ -15,6 +15,8 @@ window.CadminWorkspace = (function ($) {
             listLabel: "Healthcare services" },
         "pds-policies": { type: "Library", path: "/Library/", icon: "bi-journal-text", listLabel: "PDS Policies" },
         "camel-routes": { type: "Library", path: "/Library/", icon: "hugeicons:camel", listLabel: "Camel Routes" },
+        "proto-specs": { type: "Library", path: "/Library/", icon: "mdi:protocol",
+            listLabel: "Protobuf Specs" },
         "easy-rules": { type: "Library", path: "/Library/", icon: "mdi:script-text-outline", listLabel: "Easy Rules" },
         "rule-sets": { type: "Library", path: "/Library/", icon: "mdi:format-list-group", listLabel: "Rule Sets" },
         "icg-routes": { type: "Library", path: "/Library/", icon: "mdi:routes", listLabel: "ICG Routes" },
@@ -65,6 +67,7 @@ window.CadminWorkspace = (function ($) {
         "code-systems": "Code systems",
         "value-sets": "Value sets",
         "camel-routes": "Camel Routes",
+        "proto-specs": "Protobuf Specs",
         "easy-rules": "Easy Rules",
         "rule-sets": "Rule Sets",
         "icg-routes": "ICG Routes",
@@ -333,6 +336,7 @@ window.CadminWorkspace = (function ($) {
         "healthcare-services": true,
         "pds-policies": true,
         "camel-routes": true,
+        "proto-specs": true,
         "easy-rules": true,
         "rule-sets": true,
         "icg-routes": true,
@@ -1515,6 +1519,10 @@ window.CadminWorkspace = (function ($) {
         if (window.CadminCamelRouteDetail && typeof CadminCamelRouteDetail.reveal === "function"
                 && pane.querySelector("#crd-yaml")) {
             CadminCamelRouteDetail.reveal(tab && tab.resource);
+        }
+        if (window.CadminProtobufSpecDetail && typeof CadminProtobufSpecDetail.reveal === "function"
+                && pane.querySelector("#psd-proto")) {
+            CadminProtobufSpecDetail.reveal(tab && tab.resource);
         }
         if (window.CadminIcgRouteDetail && typeof CadminIcgRouteDetail.reveal === "function"
                 && pane.querySelector("#ird-yaml")) {

@@ -37,6 +37,7 @@ window.CadminApp = (function ($) {
         if ((route.name === "organizations" || route.name === "care-teams"
                 || route.name === "locations" || route.name === "pds-policies"
                 || route.name === "camel-routes"
+                || route.name === "proto-specs"
                 || route.name === "easy-rules"
                 || route.name === "rule-sets"
                 || route.name === "icg-routes"

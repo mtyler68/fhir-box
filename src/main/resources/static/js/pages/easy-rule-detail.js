@@ -794,6 +794,10 @@ window.CadminEasyRuleDetail = (function () {
             window.location.hash = "#/camel-routes/" + encodeURIComponent(resource.id);
             return;
         }
+        if (CadminApi.isLibraryType(resource, "proto-spec")) {
+            window.location.hash = "#/proto-specs/" + encodeURIComponent(resource.id);
+            return;
+        }
         if (CadminApi.isGatewayRouteLibrary(resource)) {
             window.location.hash = "#/icg-routes/" + encodeURIComponent(resource.id);
             return;

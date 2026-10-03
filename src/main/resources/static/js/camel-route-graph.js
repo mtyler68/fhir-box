@@ -330,6 +330,11 @@ window.CadminCamelRouteGraph = (function () {
             const id = body && body.id;
             return id ? "route\n" + truncate(id) : "route";
         }
+        if (kind === "onException") {
+            const list = body && (body.exception || body.exceptions);
+            const first = Array.isArray(list) ? list[0] : list;
+            return first ? "onException\n" + truncate(String(first)) : "onException";
+        }
         if (uri) {
             return kind + "\n" + truncate(uri);
         }
@@ -690,6 +695,17 @@ window.CadminCamelRouteGraph = (function () {
             });
         }
 
+        function walkPipeline(kind, body, docPath) {
+            if (!body || typeof body !== "object") {
+                return;
+            }
+            const id = addNode(kind, body, 0, docPath, docPath);
+            const steps = childSteps(body);
+            if (steps.length) {
+                walkSteps(steps, [id], docPath);
+            }
+        }
+
         flattenDefs(value).forEach(function (item, index) {
             if (item.route != null) {
                 walkRoute(item.route, [index, "route"]);
@@ -701,6 +717,27 @@ window.CadminCamelRouteGraph = (function () {
             }
             if (item.rest != null) {
                 walkRest(item.rest, [index, "rest"]);
+                return;
+            }
+            if (item.onException != null) {
+                walkPipeline("onException", item.onException, [index, "onException"]);
+                return;
+            }
+            if (item.onCompletion != null) {
+                walkPipeline("onCompletion", item.onCompletion, [index, "onCompletion"]);
+                return;
+            }
+            if (item.intercept != null) {
+                walkPipeline("intercept", item.intercept, [index, "intercept"]);
+                return;
+            }
+            if (item.interceptFrom != null) {
+                walkPipeline("interceptFrom", item.interceptFrom, [index, "interceptFrom"]);
+                return;
+            }
+            if (item.interceptSendToEndpoint != null) {
+                walkPipeline("interceptSendToEndpoint", item.interceptSendToEndpoint,
+                    [index, "interceptSendToEndpoint"]);
                 return;
             }
             if (item.id != null && item.from != null) {
@@ -1143,7 +1180,7 @@ window.CadminCamelRouteGraph = (function () {
         const graph = buildGraph(parsed.value, yaml);
         if (!graph.nodes.length) {
             setStatus("");
-            emptyMessage("No route, from, or rest blocks found in this YAML.");
+            emptyMessage("No Camel route documents found in this YAML.");
             return;
         }
         setStatus(graph.nodes.length + (graph.nodes.length === 1 ? " node" : " nodes"));

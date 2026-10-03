@@ -502,6 +502,7 @@ body.layout-fixed .app-main {
 }
 
 .camel-route-editor.CodeMirror,
+.protobuf-spec-editor.CodeMirror,
 .easy-rule-editor.CodeMirror {
     height: 36rem;
     min-height: 0;
@@ -513,6 +514,7 @@ body.layout-fixed .app-main {
 }
 
 .camel-route-editor .CodeMirror-scroll,
+.protobuf-spec-editor .CodeMirror-scroll,
 .easy-rule-editor .CodeMirror-scroll {
     min-height: 0;
 }
@@ -742,11 +744,13 @@ body.layout-fixed .app-main {
 }
 
 .camel-route-yaml-tools,
+.protobuf-spec-tools,
 .easy-rule-yaml-tools {
     flex: 0 0 auto;
 }
 
 .camel-route-yaml-tools .form-select,
+.protobuf-spec-tools .form-select,
 .easy-rule-yaml-tools .form-select {
     width: auto;
     min-width: 10rem;
@@ -1272,13 +1276,11 @@ body.layout-fixed .app-main {
     background: var(--bs-body-bg);
 }
 
-#camel-route-graph-card.maximized-card .camel-route-graph,
-#crd-designer-graph-card.maximized-card .camel-route-graph {
+#camel-route-graph-card.maximized-card .camel-route-graph {
     height: calc(100vh - 8rem);
 }
 
-#camel-route-graph-card .card-header iconify-icon,
-#crd-designer-graph-card .card-header iconify-icon {
+#camel-route-graph-card .card-header iconify-icon {
     font-size: 1.15rem;
     vertical-align: -0.15em;
 }
@@ -2032,75 +2034,5 @@ body:not(.cadmin-has-fhir-resource) [data-target-list-add] {
     align-items: center;
     gap: 0.5rem;
     margin-bottom: 0.5rem;
-}
-
-.camel-route-designer .card-title {
-    font-size: 1rem;
-    flex: 0 1 auto;
-}
-
-.camel-route-designer .camel-designer-toolbar > .btn,
-.camel-route-designer .camel-designer-actions > .btn,
-.camel-route-designer .camel-designer-actions > .form-select,
-.camel-route-designer .card-footer .btn-group,
-.camel-route-designer .card-footer .btn-group > .btn {
-    width: auto;
-    flex: 0 0 auto;
-}
-
-.camel-route-designer .camel-designer-actions > .form-select {
-    width: 11rem;
-}
-
-.camel-route-designer .camel-designer-tree {
-    padding: 0.35rem 0.4rem 0.5rem;
-}
-
-.camel-route-designer .camel-designer-node {
-    display: block;
-    width: 100%;
-    border: 0;
-    background: transparent;
-    text-align: left;
-    color: inherit;
-    font-size: 0.875rem;
-    line-height: 1.3;
-    padding: 0.28rem 0.5rem;
-    border-radius: var(--bs-border-radius);
-}
-
-.camel-route-designer .camel-designer-node:hover {
-    background: var(--bs-tertiary-bg);
-}
-
-.camel-route-designer .camel-designer-node.is-active {
-    background: var(--bs-primary);
-    color: var(--bs-white);
-}
-
-#crd-designer-graph-card .card-tools,
-#crd-designer-graph-card .card-tools .btn-group,
-#crd-designer-graph-card .card-tools .btn-group > .btn,
-#crd-designer-graph-card .card-tools > .btn {
-    width: auto;
-    flex: 0 0 auto;
-}
-
-.camel-route-designer .camel-df-editor .btn {
-    width: auto;
-    flex: 0 0 auto;
-}
-
-.camel-route-designer .camel-df-fields .form-text {
-    font-size: 0.75rem;
-}
-
-.camel-expr-editor {
-    border: 1px solid var(--bs-border-color);
-    border-radius: var(--bs-border-radius);
-}
-
-.camel-expr-editor .CodeMirror-scroll {
-    min-height: 6.5rem;
 }
 

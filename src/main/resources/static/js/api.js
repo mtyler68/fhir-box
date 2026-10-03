@@ -592,6 +592,9 @@ window.CadminApi = (function ($) {
         if (type === "Library" && isLibraryType(resource, "camel-route")) {
             return "#/camel-routes/" + encodeURIComponent(id);
         }
+        if (type === "Library" && isLibraryType(resource, "proto-spec")) {
+            return "#/proto-specs/" + encodeURIComponent(id);
+        }
         if (type === "Library" && isLibraryType(resource, "easy-rule")) {
             return "#/easy-rules/" + encodeURIComponent(id);
         }
@@ -974,6 +977,7 @@ window.CadminApi = (function ($) {
         conditionSeverity: "http://hl7.org/fhir/ValueSet/condition-severity",
         conditionCode: "http://hl7.org/fhir/ValueSet/condition-code",
         camelRouteDomains: "https://insulet.com/fhir/ValueSet/value-set-camel-route-domain",
+        protoSpecDomains: "https://insulet.com/fhir/ValueSet/library-use-context-proto-spec-domain",
         gatewayRouteDomains: "https://insulet.com/fhir/ValueSet/value-set-gateway-route-domain",
         easyRuleDomains: "https://insulet.com/fhir/ValueSet/easy-rule-domain",
         joltDomains: "https://insulet.com/fhir/ValueSet/jolt-transformer-domain"

@@ -1338,6 +1338,10 @@ window.CadminPdsPolicyDetail = (function () {
             window.location.hash = "#/camel-routes/" + encodeURIComponent(resource.id);
             return;
         }
+        if (CadminApi.isLibraryType(resource, "proto-spec")) {
+            window.location.hash = "#/proto-specs/" + encodeURIComponent(resource.id);
+            return;
+        }
         if (CadminApi.isLibraryType(resource, "easy-rule")) {
             window.location.hash = "#/easy-rules/" + encodeURIComponent(resource.id);
             return;

@@ -2,6 +2,7 @@ window.CadminLibraryRelated = (function () {
     const SEARCH_PATH = "/Library?_elements=id,name,title,url,type,version,status,relatedArtifact&_count=100";
     const TYPE_LABELS = {
         "camel-route": "Camel Route",
+        "proto-spec": "Protobuf Spec",
         "easy-rule": "Easy Rule",
         "rule-set": "Rule Set",
         "gateway-route": "Gateway Route",

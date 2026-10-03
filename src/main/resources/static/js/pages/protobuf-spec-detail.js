@@ -1,6 +1,6 @@
-window.CadminCamelRouteDetail = (function () {
-    const libraryType = "camel-route";
-    const routeContentType = "application/camel+yaml";
+window.CadminProtobufSpecDetail = (function () {
+    const libraryType = "proto-spec";
+    const protoContentType = "text/x-protobuf";
     const statusOptions = [
         { code: "draft", display: "Draft" },
         { code: "active", display: "Active" },
@@ -9,58 +9,43 @@ window.CadminCamelRouteDetail = (function () {
     ];
     const templates = [
         {
-            id: "timer",
-            label: "Timer to log",
-            yaml: "- route:\n    id: timer_log\n    from:\n      uri: timer:tick\n      parameters:\n        period: 5000\n      steps:\n        - setBody:\n            simple: \"Hello from Camel\"\n        - log:\n            message: \"${body}\"\n"
+            id: "proto3",
+            label: "proto3 message",
+            proto: 'syntax = "proto3";\n\npackage example;\n\noption java_package = "com.example";\noption java_multiple_files = true;\n\nmessage Example {\n  string id = 1;\n  string name = 2;\n}\n'
         },
         {
-            id: "direct",
-            label: "Direct to log",
-            yaml: "- route:\n    id: direct_log\n    from:\n      uri: direct:start\n      steps:\n        - log:\n            message: \"Received ${body}\"\n        - to:\n            uri: log:done\n"
+            id: "proto2",
+            label: "proto2 message",
+            proto: 'syntax = "proto2";\n\npackage example;\n\nmessage Example {\n  required string id = 1;\n  optional string name = 2;\n  repeated string tags = 3;\n}\n'
         },
         {
-            id: "rest",
-            label: "REST GET",
-            yaml: "- rest:\n    path: /say\n    get:\n      - path: /hello\n        to: direct:hello\n- route:\n    id: hello_rest\n    from:\n      uri: direct:hello\n      steps:\n        - setBody:\n            constant: \"Hello Camel\"\n"
+            id: "edition2024",
+            label: "Edition 2024",
+            proto: 'edition = "2024";\n\npackage example;\n\noption features.field_presence = EXPLICIT;\n\nmessage Example {\n  string id = 1;\n  string name = 2;\n}\n'
         },
         {
-            id: "choice",
-            label: "Content-based router",
-            yaml: "- route:\n    id: choice_route\n    from:\n      uri: direct:in\n      steps:\n        - choice:\n            when:\n              - simple: \"${header.type} == 'ok'\"\n                steps:\n                  - to:\n                      uri: direct:ok\n            otherwise:\n              steps:\n                - to:\n                    uri: direct:other\n"
+            id: "service",
+            label: "Service and RPC",
+            proto: 'syntax = "proto3";\n\npackage example.v1;\n\nimport "google/protobuf/empty.proto";\nimport "google/protobuf/timestamp.proto";\n\nservice ExampleService {\n  rpc GetExample(GetExampleRequest) returns (Example);\n  rpc WatchExamples(WatchExamplesRequest) returns (stream Example);\n}\n\nmessage GetExampleRequest {\n  string id = 1;\n}\n\nmessage WatchExamplesRequest {\n  google.protobuf.Timestamp since = 1;\n}\n\nmessage Example {\n  string id = 1;\n  string name = 2;\n}\n'
         },
         {
-            id: "kafka",
-            label: "Kafka consumer",
-            yaml: "- route:\n    id: kafka_consumer\n    from:\n      uri: kafka:events\n      parameters:\n        brokers: localhost:9092\n      steps:\n        - unmarshal:\n            json: {}\n        - log:\n            message: \"Event ${body}\"\n"
+            id: "enum-oneof",
+            label: "Enum, oneof, and map",
+            proto: 'syntax = "proto3";\n\npackage example;\n\nenum Status {\n  STATUS_UNSPECIFIED = 0;\n  STATUS_ACTIVE = 1;\n  STATUS_INACTIVE = 2;\n}\n\nmessage Example {\n  string id = 1;\n  Status status = 2;\n  map<string, string> labels = 3;\n  oneof payload {\n    string text = 10;\n    bytes data = 11;\n  }\n}\n'
         }
     ];
-    const hintWords = [
-        "route", "from", "uri", "parameters", "steps", "to", "toD", "log", "setBody", "setHeader",
-        "setProperty", "removeHeader", "removeHeaders", "choice", "when", "otherwise", "filter",
-        "split", "aggregate", "multicast", "recipientList", "routingSlip", "dynamicRouter",
-        "marshal", "unmarshal", "convertBodyTo", "transform", "process", "bean", "script",
-        "delay", "throttle", "circuitBreaker", "saga", "transacted", "onException",
-        "try", "doTry", "doCatch", "doFinally", "intercept", "interceptFrom", "interceptSendToEndpoint",
-        "rest", "get", "post", "put", "delete", "patch", "head", "consumes", "produces",
-        "simple", "constant", "fhirJson", "jsonpath", "xpath", "header", "exchangeProperty", "body",
-        "timer", "direct", "seda", "vm", "kafka", "jms", "http", "https", "file", "ftp",
-        "sftp", "sql", "jdbc", "mongodb", "rest", "platform-http", "vertx", "netty",
-        "id", "description", "autoStartup", "startupOrder", "streamCache", "message", "name",
-        "expression", "simple", "constant", "datasonnet", "groovy", "javascript", "unpackArray"
-    ];
-    const markdownFields = ["crd-description", "crd-purpose", "crd-usage", "crd-copyright"];
+    const markdownFields = ["psd-description", "psd-purpose", "psd-usage", "psd-copyright"];
     const markdownFieldKeys = {
-        "crd-description": "description",
-        "crd-purpose": "purpose",
-        "crd-usage": "usage",
-        "crd-copyright": "copyright"
+        "psd-description": "description",
+        "psd-purpose": "purpose",
+        "psd-usage": "usage",
+        "psd-copyright": "copyright"
     };
     let library = null;
     let editor = null;
     let markdownEditors = {};
     let turndown = null;
-    let hintRegistered = false;
-    let savedYaml = "";
+    let savedProto = "";
     let savedBasics = "";
 
     function esc(value) {
@@ -87,8 +72,8 @@ window.CadminCamelRouteDetail = (function () {
         return '<span class="badge text-bg-' + kind + '">' + esc(statusLabel(status)) + "</span>";
     }
 
-    function routeLabel() {
-        return library.title || library.name || library.id || "Camel route";
+    function specLabel() {
+        return library.title || library.name || library.id || "Protobuf spec";
     }
 
     function navButton(paneId, icon, label, opts) {
@@ -135,31 +120,32 @@ window.CadminCamelRouteDetail = (function () {
         }
     }
 
-    function isRouteYaml(item) {
+    function isProtoAttachment(item) {
         const type = ((item && item.contentType) || "").split(";")[0].trim().toLowerCase();
-        return type === routeContentType || type === "text/yaml" || type === "application/x-yaml"
-            || type === "text/x-yaml";
+        const title = String((item && item.title) || "").toLowerCase();
+        return type === protoContentType || type === "text/protobuf"
+            || /\.proto$/i.test(title) || title.indexOf("protobuf") >= 0;
     }
 
-    function findRouteAttachment() {
-        return (library.content || []).find(isRouteYaml) || (library.content || [])[0] || null;
+    function findProtoAttachment() {
+        return (library.content || []).find(isProtoAttachment) || (library.content || [])[0] || null;
     }
 
-    function readYaml() {
-        const attachment = findRouteAttachment();
+    function readProto() {
+        const attachment = findProtoAttachment();
         return attachment && attachment.data ? decodeText(attachment.data) : "";
     }
 
-    function upsertYaml(text) {
+    function upsertProto(text) {
         const attachment = {
-            contentType: routeContentType,
-            title: "Camel route",
+            contentType: protoContentType,
+            title: "Protobuf spec",
             data: encodeText(text || "")
         };
         library.content = library.content || [];
         let found = false;
         library.content = library.content.map(function (item) {
-            if (!isRouteYaml(item)) {
+            if (!isProtoAttachment(item)) {
                 return item;
             }
             found = true;
@@ -169,78 +155,6 @@ window.CadminCamelRouteDetail = (function () {
         if (!found) {
             library.content.push(attachment);
         }
-    }
-
-    function isYamlPropertyPosition(line, wordStart) {
-        return /^\s*(-\s+)?$/.test(String(line || "").slice(0, wordStart));
-    }
-
-    function emptyYamlPropertyIndent(line, indentUnit) {
-        const match = /^(\s*(?:-\s+)?)([A-Za-z][A-Za-z0-9_-]*)\s*:\s*$/.exec(line || "");
-        if (!match) {
-            return null;
-        }
-        return match[1].length + (indentUnit || 2);
-    }
-
-    function insertEmptyPropertyNewline(cm) {
-        if (cm.somethingSelected()) {
-            return CodeMirror.Pass;
-        }
-        const cursor = cm.getCursor();
-        const line = cm.getLine(cursor.line) || "";
-        const indent = emptyYamlPropertyIndent(line, cm.getOption("indentUnit") || 2);
-        if (indent == null) {
-            return CodeMirror.Pass;
-        }
-        const colonAt = line.indexOf(":");
-        if (colonAt < 0 || cursor.ch < colonAt) {
-            return CodeMirror.Pass;
-        }
-        cm.replaceSelection("\n" + new Array(indent + 1).join(" "), "end");
-    }
-
-    function registerHint() {
-        if (hintRegistered || typeof CodeMirror === "undefined") {
-            return;
-        }
-        hintRegistered = true;
-        CodeMirror.registerHelper("hint", "camel-yaml", function (cm) {
-            const cursor = cm.getCursor();
-            const line = cm.getLine(cursor.line) || "";
-            const before = line.slice(0, cursor.ch);
-            const match = before.match(/[A-Za-z][A-Za-z0-9_-]*$/);
-            const word = match ? match[0] : "";
-            const start = cursor.ch - word.length;
-            const prefix = word.toLowerCase();
-            const asProperty = isYamlPropertyPosition(line, start);
-            const colonAlready = /^\s*:/.test(line.slice(cursor.ch));
-            const C = window.CadminCamelYamlCatalog;
-            const words = hintWords.concat(
-                C ? Object.keys(C.processors || {}) : [],
-                C ? Object.keys(C.documents || {}) : [],
-                C ? (C.expressions || []) : [],
-                C ? (C.dataFormats || []) : []
-            );
-            const seen = {};
-            const list = words.filter(function (item) {
-                if (seen[item]) {
-                    return false;
-                }
-                seen[item] = true;
-                return !prefix || item.toLowerCase().indexOf(prefix) === 0;
-            }).map(function (item) {
-                if (!asProperty || colonAlready) {
-                    return item;
-                }
-                return { text: item + ": ", displayText: item };
-            });
-            return {
-                list: list,
-                from: CodeMirror.Pos(cursor.line, Math.max(0, start)),
-                to: cursor
-            };
-        });
     }
 
     function field(label, control, hint) {
@@ -421,10 +335,10 @@ window.CadminCamelRouteDetail = (function () {
     }
 
     function fillMarkdownFields() {
-        setMarkdownValue("crd-description", library && library.description);
-        setMarkdownValue("crd-purpose", library && library.purpose);
-        setMarkdownValue("crd-usage", library && library.usage);
-        setMarkdownValue("crd-copyright", library && library.copyright);
+        setMarkdownValue("psd-description", library && library.description);
+        setMarkdownValue("psd-purpose", library && library.purpose);
+        setMarkdownValue("psd-usage", library && library.usage);
+        setMarkdownValue("psd-copyright", library && library.copyright);
     }
 
     function refreshMarkdownEditors() {
@@ -443,7 +357,7 @@ window.CadminCamelRouteDetail = (function () {
         fillMarkdownFields();
     }
 
-    function destroyYamlEditor() {
+    function destroyProtoEditor() {
         if (editor) {
             editor.toTextArea();
             editor = null;
@@ -452,21 +366,21 @@ window.CadminCamelRouteDetail = (function () {
 
     function destroyEditor() {
         destroyMarkdownEditors();
-        destroyYamlEditor();
+        destroyProtoEditor();
     }
 
     function editorValue() {
-        const cm = yamlEditorInstance();
-        return cm ? cm.getValue() : ($("#crd-yaml").val() || "");
+        const cm = protoEditorInstance();
+        return cm ? cm.getValue() : ($("#psd-proto").val() || "");
     }
 
-    function yamlEditorInstance() {
+    function protoEditorInstance() {
         const root = window.CadminWorkspace && typeof CadminWorkspace.root === "function"
             ? CadminWorkspace.root()
             : document;
         const wrap = root && root.querySelector
-            ? root.querySelector("#camel-route-yaml-card .CodeMirror")
-            : document.querySelector("#camel-route-yaml-card .CodeMirror");
+            ? root.querySelector("#protobuf-spec-editor-card .CodeMirror")
+            : document.querySelector("#protobuf-spec-editor-card .CodeMirror");
         if (wrap && wrap.CodeMirror) {
             editor = wrap.CodeMirror;
             return editor;
@@ -475,40 +389,40 @@ window.CadminCamelRouteDetail = (function () {
     }
 
     function domainSnapshot() {
-        return CadminApi.selectCodings("#crd-domains").map(function (item) {
+        return CadminApi.selectCodings("#psd-domains").map(function (item) {
             return (item.system || "") + "|" + item.code;
         }).sort().join(",");
     }
 
     function basicsSnapshot() {
         return [
-            $("#crd-title-input").val() || "",
-            $("#crd-status").val() || "",
-            $("#crd-experimental").is(":checked") ? "1" : "0",
+            $("#psd-title-input").val() || "",
+            $("#psd-status").val() || "",
+            $("#psd-experimental").is(":checked") ? "1" : "0",
             domainSnapshot(),
-            markdownValue("crd-description"),
-            markdownValue("crd-purpose"),
-            markdownValue("crd-usage"),
-            markdownValue("crd-copyright"),
-            $("#crd-url").val() || "",
-            $("#crd-name").val() || "",
-            $("#crd-version").val() || "",
-            $("#crd-publisher").val() || "",
-            $("#crd-date").val() || "",
-            $("#crd-approval").val() || "",
-            $("#crd-review").val() || "",
-            $("#crd-period-start").val() || "",
-            $("#crd-period-end").val() || ""
+            markdownValue("psd-description"),
+            markdownValue("psd-purpose"),
+            markdownValue("psd-usage"),
+            markdownValue("psd-copyright"),
+            $("#psd-url").val() || "",
+            $("#psd-name").val() || "",
+            $("#psd-version").val() || "",
+            $("#psd-publisher").val() || "",
+            $("#psd-date").val() || "",
+            $("#psd-approval").val() || "",
+            $("#psd-review").val() || "",
+            $("#psd-period-start").val() || "",
+            $("#psd-period-end").val() || ""
         ].join("\n");
     }
 
     function syncUnsavedFlag() {
         CadminApi.setUnsavedFlag(CadminWorkspace.root(),
-            editorValue() !== savedYaml || basicsSnapshot() !== savedBasics);
+            editorValue() !== savedProto || basicsSnapshot() !== savedBasics);
     }
 
     function markEditorClean() {
-        savedYaml = editorValue();
+        savedProto = editorValue();
         syncUnsavedFlag();
     }
 
@@ -517,41 +431,21 @@ window.CadminCamelRouteDetail = (function () {
         syncUnsavedFlag();
     }
 
-    function validateYaml(text) {
+    function validateProto(text) {
         const source = String(text || "");
         if (!source.trim()) {
-            return "Route YAML is empty.";
+            return "Protobuf source is empty.";
         }
-        const lines = source.split(/\r?\n/);
-        let i;
-        for (i = 0; i < lines.length; i += 1) {
-            const line = lines[i];
-            if (!line.trim() || /^\s*#/.test(line)) {
-                continue;
-            }
-            if (/^\t/.test(line)) {
-                return "Line " + (i + 1) + " uses a tab. Indent Camel YAML with spaces.";
-            }
-            if (/^\s+[^ \t].*:/.test(line) && (line.length - line.trimStart().length) % 2 !== 0) {
-                return "Line " + (i + 1) + " is not indented in 2-space steps.";
-            }
-        }
-        if (!/(^|\n)\s*-?\s*(route|from|rest|onException|onCompletion)\s*:/.test(source)) {
-            return "YAML should define a Camel route, from, rest, or onException block.";
-        }
-        try {
-            if (typeof jsyaml !== "undefined") {
-                jsyaml.load(source);
-            }
-        } catch (err) {
-            return (err && err.message) || "Invalid YAML.";
+        const stripped = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+        if (!/\b(?:syntax|edition|message|enum|service)\b/.test(stripped)) {
+            return "Protobuf should declare a syntax, edition, message, enum, or service.";
         }
         return "";
     }
 
     function mountEditor(text) {
-        destroyYamlEditor();
-        const textarea = document.getElementById("crd-yaml");
+        destroyProtoEditor();
+        const textarea = document.getElementById("psd-proto");
         if (!textarea) {
             return;
         }
@@ -559,9 +453,8 @@ window.CadminCamelRouteDetail = (function () {
         if (typeof CodeMirror === "undefined") {
             return;
         }
-        registerHint();
         editor = CodeMirror.fromTextArea(textarea, {
-            mode: "yaml",
+            mode: "protobuf",
             theme: "material-darker",
             lineNumbers: true,
             lineWrapping: false,
@@ -589,7 +482,6 @@ window.CadminCamelRouteDetail = (function () {
                 "Ctrl-Q": function (cm) {
                     cm.foldCode(cm.getCursor());
                 },
-                Enter: insertEmptyPropertyNewline,
                 Tab: function (cm) {
                     if (cm.somethingSelected()) {
                         cm.indentSelection("add");
@@ -598,18 +490,18 @@ window.CadminCamelRouteDetail = (function () {
                     }
                 }
             },
-            hintOptions: { hint: CodeMirror.hint["camel-yaml"], completeSingle: false }
+            hintOptions: {
+                hint: CodeMirror.hint.protobuf,
+                completeSingle: false
+            }
         });
-        editor.getWrapperElement().classList.add("camel-route-editor");
+        editor.getWrapperElement().classList.add("protobuf-spec-editor");
         editor.setSize("100%", "36rem");
         editor.on("change", function () {
             syncUnsavedFlag();
-            if (window.CadminCamelRouteGraph) {
-                CadminCamelRouteGraph.scheduleRefresh();
-            }
         });
         editor.on("inputRead", function (cm, change) {
-            if (change.text.length !== 1 || !/^[A-Za-z]$/.test(change.text[0])) {
+            if (change.text.length !== 1 || !/^[A-Za-z.]$/.test(change.text[0])) {
                 return;
             }
             CodeMirror.commands.autocomplete(cm, null, { completeSingle: false });
@@ -622,31 +514,31 @@ window.CadminCamelRouteDetail = (function () {
     }
 
     function applyMeta() {
-        setOrDelete(library, "title", $("#crd-title-input").val());
-        library.status = $("#crd-status").val() || "draft";
+        setOrDelete(library, "title", $("#psd-title-input").val());
+        library.status = $("#psd-status").val() || "draft";
         library.type = {
-            coding: [{ code: libraryType, display: "Camel Route" }],
+            coding: [{ code: libraryType, display: "Protobuf Spec" }],
             text: libraryType
         };
-        if ($("#crd-experimental").is(":checked")) {
+        if ($("#psd-experimental").is(":checked")) {
             library.experimental = true;
         } else {
             delete library.experimental;
         }
-        CadminApi.applyLibraryDomainCodings(library, CadminApi.selectCodings("#crd-domains"));
-        setOrDelete(library, "description", htmlToMarkdown(markdownValue("crd-description")));
-        setOrDelete(library, "purpose", htmlToMarkdown(markdownValue("crd-purpose")));
-        setOrDelete(library, "usage", htmlToMarkdown(markdownValue("crd-usage")));
-        setOrDelete(library, "copyright", htmlToMarkdown(markdownValue("crd-copyright")));
-        setOrDelete(library, "url", $("#crd-url").val());
-        setOrDelete(library, "name", $("#crd-name").val());
-        setOrDelete(library, "version", $("#crd-version").val());
-        setOrDelete(library, "publisher", $("#crd-publisher").val());
-        setOrDelete(library, "date", $("#crd-date").val());
-        setOrDelete(library, "approvalDate", $("#crd-approval").val());
-        setOrDelete(library, "lastReviewDate", $("#crd-review").val());
-        const start = ($("#crd-period-start").val() || "").trim();
-        const end = ($("#crd-period-end").val() || "").trim();
+        CadminApi.applyLibraryDomainCodings(library, CadminApi.selectCodings("#psd-domains"));
+        setOrDelete(library, "description", htmlToMarkdown(markdownValue("psd-description")));
+        setOrDelete(library, "purpose", htmlToMarkdown(markdownValue("psd-purpose")));
+        setOrDelete(library, "usage", htmlToMarkdown(markdownValue("psd-usage")));
+        setOrDelete(library, "copyright", htmlToMarkdown(markdownValue("psd-copyright")));
+        setOrDelete(library, "url", $("#psd-url").val());
+        setOrDelete(library, "name", $("#psd-name").val());
+        setOrDelete(library, "version", $("#psd-version").val());
+        setOrDelete(library, "publisher", $("#psd-publisher").val());
+        setOrDelete(library, "date", $("#psd-date").val());
+        setOrDelete(library, "approvalDate", $("#psd-approval").val());
+        setOrDelete(library, "lastReviewDate", $("#psd-review").val());
+        const start = ($("#psd-period-start").val() || "").trim();
+        const end = ($("#psd-period-end").val() || "").trim();
         if (start || end) {
             library.effectivePeriod = {};
             if (start) {
@@ -663,23 +555,23 @@ window.CadminCamelRouteDetail = (function () {
     function saveLibrary(next, opts) {
         opts = opts || {};
         const withMeta = !!opts.withMeta;
-        const withYaml = opts.withYaml !== false;
+        const withProto = opts.withProto !== false;
         if (withMeta) {
             applyMeta();
         } else {
             library.type = {
-                coding: [{ code: libraryType, display: "Camel Route" }],
+                coding: [{ code: libraryType, display: "Protobuf Spec" }],
                 text: libraryType
             };
         }
-        if (withYaml) {
-            const yaml = editorValue();
-            const problem = validateYaml(yaml);
+        if (withProto) {
+            const proto = editorValue();
+            const problem = validateProto(proto);
             if (problem) {
                 CadminApi.showToast("danger", problem);
                 return;
             }
-            upsertYaml(yaml);
+            upsertProto(proto);
         }
         CadminApi.fhir("/Library/" + encodeURIComponent(library.id), "PUT", library).done(function (updated) {
             library = updated || library;
@@ -692,10 +584,7 @@ window.CadminCamelRouteDetail = (function () {
             CadminResourceSource.mount(function () { return library; });
             CadminResourceGraph.mount(library);
             CadminLibraryRelated.mount(library);
-            if (window.CadminCamelRouteGraph) {
-                CadminCamelRouteGraph.refresh();
-            }
-            if (withYaml) {
+            if (withProto) {
                 markEditorClean();
             } else {
                 syncUnsavedFlag();
@@ -704,76 +593,132 @@ window.CadminCamelRouteDetail = (function () {
                 next();
             }
         }).fail(function (xhr) {
-            CadminApi.showToast("danger", "Update Camel route failed (" + xhr.status + ").");
+            CadminApi.showToast("danger", "Update Protobuf spec failed (" + xhr.status + ").");
         });
+    }
+
+    function setProtoText(text) {
+        if (editor) {
+            editor.setValue(text);
+            editor.focus();
+        } else {
+            $("#psd-proto").val(text);
+        }
+    }
+
+    function applyProtoText(text, confirmTitle) {
+        function apply() {
+            setProtoText(text);
+        }
+        if (editorValue().trim()) {
+            CadminApi.confirm({
+                title: confirmTitle,
+                confirmText: "Replace",
+                icon: "warning"
+            }).done(apply);
+            return;
+        }
+        apply();
+    }
+
+    function insertTemplate(id) {
+        const match = templates.find(function (item) { return item.id === id; });
+        if (!match) {
+            return;
+        }
+        applyProtoText(match.proto, "Replace the current Protobuf with this template?");
+    }
+
+    function loadLocalFile(file) {
+        if (!file) {
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = function () {
+            applyProtoText(String(reader.result || ""), "Replace the current Protobuf with this file?");
+        };
+        reader.onerror = function () {
+            CadminApi.showToast("danger", "Unable to read the selected file.");
+        };
+        reader.readAsText(file);
+    }
+
+    function redirectIfOtherLibrary(resource) {
+        if (CadminApi.isLibraryType(resource, "pds-policies")) {
+            window.location.hash = "#/pds-policies/" + encodeURIComponent(resource.id);
+            return true;
+        }
+        if (CadminApi.isLibraryType(resource, "camel-route")) {
+            window.location.hash = "#/camel-routes/" + encodeURIComponent(resource.id);
+            return true;
+        }
+        if (CadminApi.isGatewayRouteLibrary(resource)) {
+            window.location.hash = "#/icg-routes/" + encodeURIComponent(resource.id);
+            return true;
+        }
+        if (CadminApi.isLibraryType(resource, "easy-rule")) {
+            window.location.hash = "#/easy-rules/" + encodeURIComponent(resource.id);
+            return true;
+        }
+        if (CadminApi.isLibraryType(resource, "rule-set")) {
+            window.location.hash = "#/rule-sets/" + encodeURIComponent(resource.id);
+            return true;
+        }
+        if (CadminApi.isLibraryType(resource, "jolt")) {
+            window.location.hash = "#/jolts/" + encodeURIComponent(resource.id);
+            return true;
+        }
+        if (CadminApi.isLibraryType(resource, "rate-limit-plan")) {
+            window.location.hash = "#/rate-limit-plans/" + encodeURIComponent(resource.id);
+            return true;
+        }
+        return false;
     }
 
     function render(resource) {
         destroyEditor();
         CadminApi.destroySelects(CadminWorkspace.root());
-        if (CadminApi.isLibraryType(resource, "pds-policies")) {
-            window.location.hash = "#/pds-policies/" + encodeURIComponent(resource.id);
-            return;
-        }
-        if (CadminApi.isLibraryType(resource, "proto-spec")) {
-            window.location.hash = "#/proto-specs/" + encodeURIComponent(resource.id);
-            return;
-        }
-        if (CadminApi.isGatewayRouteLibrary(resource)) {
-            window.location.hash = "#/icg-routes/" + encodeURIComponent(resource.id);
-            return;
-        }
-        if (CadminApi.isLibraryType(resource, "easy-rule")) {
-            window.location.hash = "#/easy-rules/" + encodeURIComponent(resource.id);
-            return;
-        }
-        if (CadminApi.isLibraryType(resource, "rule-set")) {
-            window.location.hash = "#/rule-sets/" + encodeURIComponent(resource.id);
-            return;
-        }
-        if (CadminApi.isLibraryType(resource, "jolt")) {
-            window.location.hash = "#/jolts/" + encodeURIComponent(resource.id);
-            return;
-        }
-        if (CadminApi.isLibraryType(resource, "rate-limit-plan")) {
-            window.location.hash = "#/rate-limit-plans/" + encodeURIComponent(resource.id);
+        if (redirectIfOtherLibrary(resource)) {
             return;
         }
         library = resource;
         const $root = $(CadminWorkspace.root());
-        const label = esc(routeLabel());
-        const yamlTools =
-            '<select class="form-select form-select-sm" id="crd-template" style="max-width:14rem">' +
+        const label = esc(specLabel());
+        const protoTools =
+            '<select class="form-select form-select-sm" id="psd-template" style="max-width:14rem">' +
                 '<option value="">Insert template…</option>' +
                 templates.map(function (item) {
                     return '<option value="' + esc(item.id) + '">' + esc(item.label) + "</option>";
                 }).join("") +
             "</select>" +
-            '<button class="btn btn-sm btn-outline-secondary" type="button" id="crd-find">' +
+            '<input type="file" class="d-none" id="psd-file" accept=".proto,.txt,text/x-protobuf,text/plain">' +
+            '<button class="btn btn-sm btn-outline-secondary" type="button" id="psd-load-file">' +
+                '<i class="bi bi-folder2-open me-1"></i>Load file</button>' +
+            '<button class="btn btn-sm btn-outline-secondary" type="button" id="psd-find">' +
                 '<i class="bi bi-search me-1"></i>Find</button>' +
-            '<button class="btn btn-sm btn-outline-secondary" type="button" id="crd-replace">' +
+            '<button class="btn btn-sm btn-outline-secondary" type="button" id="psd-replace">' +
                 "Replace</button>" +
-            '<div class="btn-group btn-group-sm" role="group" aria-label="Fold YAML">' +
-                '<button class="btn btn-outline-secondary" type="button" id="crd-fold" ' +
+            '<div class="btn-group btn-group-sm" role="group" aria-label="Fold Protobuf">' +
+                '<button class="btn btn-outline-secondary" type="button" id="psd-fold" ' +
                     'title="Fold all" aria-label="Fold all">' +
                     '<i class="bi bi-arrows-collapse" aria-hidden="true"></i></button>' +
-                '<button class="btn btn-outline-secondary" type="button" id="crd-unfold" ' +
+                '<button class="btn btn-outline-secondary" type="button" id="psd-unfold" ' +
                     'title="Unfold all" aria-label="Unfold all">' +
                     '<i class="bi bi-arrows-expand" aria-hidden="true"></i></button>' +
             "</div>" +
-            '<button class="btn btn-sm btn-primary" type="button" id="crd-save">' +
+            '<button class="btn btn-sm btn-primary" type="button" id="psd-save">' +
                 '<i class="bi bi-check2 me-1"></i>Save</button>';
         $root.html(
             '<div class="d-flex align-items-center justify-content-between mb-3">' +
                 "<div>" +
-                    '<a class="small text-decoration-none" href="#/camel-routes">' +
-                        '<i class="bi bi-arrow-left me-1"></i>Camel Routes</a>' +
+                    '<a class="small text-decoration-none" href="#/proto-specs">' +
+                        '<i class="bi bi-arrow-left me-1"></i>Protobuf Specs</a>' +
                     '<div class="d-flex align-items-center flex-wrap gap-2">' +
-                        '<h1 class="mb-0 fs-3 page-title" id="crd-title">' + label + "</h1>" +
-                        '<span id="crd-status-badge">' + statusBadge(library.status) + "</span>" +
+                        '<h1 class="mb-0 fs-3 page-title" id="psd-title">' + label + "</h1>" +
+                        '<span id="psd-status-badge">' + statusBadge(library.status) + "</span>" +
                         (library.id
-                            ? '<code class="small" id="crd-fhir-id">' + esc(library.id) + "</code>"
-                            : '<code class="small d-none" id="crd-fhir-id"></code>') +
+                            ? '<code class="small" id="psd-fhir-id">' + esc(library.id) + "</code>"
+                            : '<code class="small d-none" id="psd-fhir-id"></code>') +
                         CadminApi.unsavedFlagHtml() +
                     "</div>" +
                 "</div>" +
@@ -783,71 +728,71 @@ window.CadminCamelRouteDetail = (function () {
             "</div>" +
             '<div class="row g-3">' +
                 '<div class="col-md-3">' +
-                    '<div class="list-group list-group-flush nav nav-pills flex-column" id="crd-settings-nav" role="tablist">' +
-                        navButton("crd-pane-basics", "bi bi-info-circle", "Basics", { active: true }) +
-                        navButton("crd-pane-identity", "bi bi-person-vcard", "Identity and version") +
-                        navButton("crd-pane-details", "bi bi-journal-text", "Details") +
-                        navButton("crd-pane-route", "bi bi-file-earmark-code", "Route") +
-                        navButton("crd-pane-related", "bi bi-link-45deg", "Related") +
-                        navButton("crd-pane-graph", "bi bi-diagram-3", "Reference graph") +
-                        navButton("crd-pane-history", "bi bi-clock-history", "History") +
-                        navButton("crd-pane-danger", "bi bi-exclamation-triangle", "Danger zone", { danger: true }) +
+                    '<div class="list-group list-group-flush nav nav-pills flex-column" id="psd-settings-nav" role="tablist">' +
+                        navButton("psd-pane-basics", "bi bi-info-circle", "Basics", { active: true }) +
+                        navButton("psd-pane-identity", "bi bi-person-vcard", "Identity and version") +
+                        navButton("psd-pane-details", "bi bi-journal-text", "Details") +
+                        navButton("psd-pane-protobuf", "bi bi-file-earmark-code", "Protobuf") +
+                        navButton("psd-pane-related", "bi bi-link-45deg", "Related") +
+                        navButton("psd-pane-graph", "bi bi-diagram-3", "Reference graph") +
+                        navButton("psd-pane-history", "bi bi-clock-history", "History") +
+                        navButton("psd-pane-danger", "bi bi-exclamation-triangle", "Danger zone", { danger: true }) +
                     "</div>" +
                 "</div>" +
                 '<div class="col-md-9">' +
                     '<div class="tab-content">' +
-                        tabPane("crd-pane-basics",
-                            '<form id="crd-basic-form">' +
+                        tabPane("psd-pane-basics",
+                            '<form id="psd-basic-form">' +
                                 '<div class="card">' +
                                     '<div class="card-header"><h3 class="card-title">Basics</h3></div>' +
                                     '<div class="card-body">' +
-                                        field("Title", '<input class="form-control" id="crd-title-input">') +
+                                        field("Title", '<input class="form-control" id="psd-title-input">') +
                                         fieldRow(
-                                            field("Status", '<select class="form-select" id="crd-status">' +
+                                            field("Status", '<select class="form-select" id="psd-status">' +
                                                 optionsHtml(statusOptions, library.status || "draft") + "</select>"),
                                             field("Type",
-                                                '<input class="form-control font-monospace" id="crd-type" value="' +
+                                                '<input class="form-control font-monospace" id="psd-type" value="' +
                                                     esc(typeCode()) + '" readonly disabled>')) +
                                         fieldRow(
                                             '<div class="mb-3">' +
                                                 '<label class="form-label d-none d-md-block">&nbsp;</label>' +
                                                 '<div class="form-check d-flex align-items-center gap-2" ' +
                                                     'style="min-height:calc(1.5em + .75rem + 2px)">' +
-                                                    '<input class="form-check-input" type="checkbox" id="crd-experimental">' +
-                                                    '<label class="form-check-label" for="crd-experimental">Experimental</label>' +
+                                                    '<input class="form-check-input" type="checkbox" id="psd-experimental">' +
+                                                    '<label class="form-check-label" for="psd-experimental">Experimental</label>' +
                                                 "</div>" +
                                             "</div>",
                                             field("Domain",
-                                                '<select class="form-select" id="crd-domains" multiple></select>')) +
+                                                '<select class="form-select" id="psd-domains" multiple></select>')) +
                                         '<button type="submit" class="btn btn-primary">Save changes</button>' +
                                     "</div>" +
                                 "</div>" +
                             "</form>",
                             true) +
-                        tabPane("crd-pane-identity",
-                            '<form id="crd-identity-form">' +
+                        tabPane("psd-pane-identity",
+                            '<form id="psd-identity-form">' +
                                 '<div class="card">' +
                                     '<div class="card-header"><h3 class="card-title">Identity and version</h3></div>' +
                                     '<div class="card-body">' +
-                                        field("URL", '<input class="form-control font-monospace" id="crd-url">') +
+                                        field("URL", '<input class="form-control font-monospace" id="psd-url">') +
                                         fieldRow(
-                                            field("Name", '<input class="form-control font-monospace" id="crd-name">'),
-                                            field("Version", '<input class="form-control" id="crd-version" autocomplete="off">')) +
+                                            field("Name", '<input class="form-control font-monospace" id="psd-name">'),
+                                            field("Version", '<input class="form-control" id="psd-version" autocomplete="off">')) +
                                         fieldRow(
-                                            field("Publisher", '<input class="form-control" id="crd-publisher">'),
-                                            field("Date", '<input type="date" class="form-control" id="crd-date">')) +
+                                            field("Publisher", '<input class="form-control" id="psd-publisher">'),
+                                            field("Date", '<input type="date" class="form-control" id="psd-date">')) +
                                         fieldRow(
-                                            field("Approved date", '<input type="date" class="form-control" id="crd-approval">'),
-                                            field("Last review date", '<input type="date" class="form-control" id="crd-review">')) +
+                                            field("Approved date", '<input type="date" class="form-control" id="psd-approval">'),
+                                            field("Last review date", '<input type="date" class="form-control" id="psd-review">')) +
                                         '<div class="mb-3">' +
                                             '<label class="form-label">Effective date range</label>' +
                                             '<div class="row g-2">' +
                                                 '<div class="col">' +
-                                                    '<input type="date" class="form-control" id="crd-period-start" ' +
+                                                    '<input type="date" class="form-control" id="psd-period-start" ' +
                                                         'aria-label="Effective start">' +
                                                 "</div>" +
                                                 '<div class="col">' +
-                                                    '<input type="date" class="form-control" id="crd-period-end" ' +
+                                                    '<input type="date" class="form-control" id="psd-period-end" ' +
                                                         'aria-label="Effective end">' +
                                                 "</div>" +
                                             "</div>" +
@@ -856,42 +801,39 @@ window.CadminCamelRouteDetail = (function () {
                                     "</div>" +
                                 "</div>" +
                             "</form>") +
-                        tabPane("crd-pane-details",
-                            '<form id="crd-details-form">' +
+                        tabPane("psd-pane-details",
+                            '<form id="psd-details-form">' +
                                 '<div class="card">' +
                                     '<div class="card-header"><h3 class="card-title">Details</h3></div>' +
                                     '<div class="card-body">' +
-                                        markdownField("Description", "crd-description") +
-                                        markdownField("Purpose", "crd-purpose") +
-                                        markdownField("Usage", "crd-usage") +
-                                        markdownField("Copyright", "crd-copyright") +
+                                        markdownField("Description", "psd-description") +
+                                        markdownField("Purpose", "psd-purpose") +
+                                        markdownField("Usage", "psd-usage") +
+                                        markdownField("Copyright", "psd-copyright") +
                                         '<button type="submit" class="btn btn-primary">Save changes</button>' +
                                     "</div>" +
                                 "</div>" +
                             "</form>") +
-                        tabPane("crd-pane-route",
-                            '<div class="d-flex flex-column gap-3">' +
-                                '<div class="card" id="camel-route-yaml-card">' +
-                                    '<div class="card-header flex-wrap gap-2">' +
-                                        "<div>" +
-                                            '<h3 class="card-title mb-0">Camel route YAML</h3>' +
-                                            '<div class="small text-muted"><code>' + esc(routeContentType) + "</code>" +
-                                                " · Ctrl-Space complete · Ctrl-F find · Ctrl-/ comment · Ctrl-Q fold</div>" +
-                                        "</div>" +
-                                        '<div class="card-tools d-flex flex-nowrap align-items-center gap-2 camel-route-yaml-tools">' +
-                                            yamlTools +
-                                        "</div>" +
+                        tabPane("psd-pane-protobuf",
+                            '<div class="card" id="protobuf-spec-editor-card">' +
+                                '<div class="card-header flex-wrap gap-2">' +
+                                    "<div>" +
+                                        '<h3 class="card-title mb-0">Protobuf</h3>' +
+                                        '<div class="small text-muted"><code>' + esc(protoContentType) + "</code>" +
+                                            " · Ctrl-Space complete · Ctrl-F find · Ctrl-/ comment · Ctrl-Q fold</div>" +
                                     "</div>" +
-                                    '<div class="card-body p-0">' +
-                                        '<textarea id="crd-yaml" class="d-none"></textarea>' +
+                                    '<div class="card-tools d-flex flex-nowrap align-items-center gap-2 protobuf-spec-tools">' +
+                                        protoTools +
                                     "</div>" +
                                 "</div>" +
-                                CadminCamelRouteGraph.card() +
+                                '<div class="card-body p-0">' +
+                                    '<textarea id="psd-proto" class="d-none"></textarea>' +
+                                "</div>" +
                             "</div>") +
-                        tabPane("crd-pane-related", CadminLibraryRelated.cards()) +
-                        tabPane("crd-pane-graph", CadminResourceGraph.card()) +
-                        tabPane("crd-pane-history", CadminResourceHistory.card()) +
-                        tabPane("crd-pane-danger",
+                        tabPane("psd-pane-related", CadminLibraryRelated.cards()) +
+                        tabPane("psd-pane-graph", CadminResourceGraph.card()) +
+                        tabPane("psd-pane-history", CadminResourceHistory.card()) +
+                        tabPane("psd-pane-danger",
                             '<div class="card border-danger">' +
                                 '<div class="card-header bg-danger-subtle">' +
                                     '<h3 class="card-title text-danger">Danger zone</h3>' +
@@ -899,12 +841,12 @@ window.CadminCamelRouteDetail = (function () {
                                 '<div class="card-body">' +
                                     '<div class="d-flex justify-content-between align-items-start">' +
                                         "<div>" +
-                                            '<p class="mb-0 fw-semibold text-danger">Delete this Camel route</p>' +
+                                            '<p class="mb-0 fw-semibold text-danger">Delete this Protobuf spec</p>' +
                                             '<small class="text-secondary">' +
-                                                "This permanently deletes the Library that stores the route YAML." +
+                                                "This permanently deletes the Library that stores the Protobuf source." +
                                             "</small>" +
                                         "</div>" +
-                                        '<button class="btn btn-danger" type="button" id="crd-delete">Delete</button>' +
+                                        '<button class="btn btn-danger" type="button" id="psd-delete">Delete</button>' +
                                     "</div>" +
                                 "</div>" +
                             "</div>") +
@@ -920,8 +862,7 @@ window.CadminCamelRouteDetail = (function () {
         fillBasicsForm();
         mountMarkdownEditors();
         fillMarkdownFields();
-        mountEditor(readYaml() || templates[0].yaml);
-        mountRouteGraph();
+        mountEditor(readProto() || templates[0].proto);
         markEditorClean();
         markBasicsClean();
         bind();
@@ -932,7 +873,7 @@ window.CadminCamelRouteDetail = (function () {
             library = resource;
         }
         const pane = document.getElementById("app-content-detail") || document;
-        const wrap = pane.querySelector("#camel-route-yaml-card .CodeMirror");
+        const wrap = pane.querySelector("#protobuf-spec-editor-card .CodeMirror");
         if (wrap && wrap.CodeMirror) {
             editor = wrap.CodeMirror;
             function refreshEditor() {
@@ -947,31 +888,28 @@ window.CadminCamelRouteDetail = (function () {
                 requestAnimationFrame(refreshEditor);
             });
         } else {
-            const textarea = pane.querySelector("#crd-yaml");
+            const textarea = pane.querySelector("#psd-proto");
             if (textarea) {
                 mountEditor(textarea.value);
             }
-        }
-        if (window.CadminCamelRouteGraph) {
-            mountRouteGraph();
         }
         refreshMarkdownEditors();
         syncUnsavedFlag();
     }
 
     function renderHeader() {
-        const label = routeLabel();
-        $("#crd-title").text(label);
-        $("#crd-status-badge").html(statusBadge(library.status));
+        const label = specLabel();
+        $("#psd-title").text(label);
+        $("#psd-status-badge").html(statusBadge(library.status));
         if (library.id) {
-            $("#crd-fhir-id").text(library.id).removeClass("d-none");
+            $("#psd-fhir-id").text(library.id).removeClass("d-none");
         } else {
-            $("#crd-fhir-id").text("").addClass("d-none");
+            $("#psd-fhir-id").text("").addClass("d-none");
         }
     }
 
     function bindDomainSelect() {
-        CadminApi.bindConceptSelect("#crd-domains", CadminApi.valueSets.camelRouteDomains, {
+        CadminApi.bindConceptSelect("#psd-domains", CadminApi.valueSets.protoSpecDomains, {
             placeholder: "Select domains…",
             multiple: true,
             preload: true,
@@ -982,180 +920,99 @@ window.CadminCamelRouteDetail = (function () {
 
     function fillBasicsForm() {
         const period = library.effectivePeriod || {};
-        $("#crd-title-input").val(library.title || "");
-        $("#crd-status").val(library.status || "draft");
-        $("#crd-type").val(typeCode());
-        $("#crd-experimental").prop("checked", !!library.experimental);
+        $("#psd-title-input").val(library.title || "");
+        $("#psd-status").val(library.status || "draft");
+        $("#psd-type").val(typeCode());
+        $("#psd-experimental").prop("checked", !!library.experimental);
         bindDomainSelect();
-        $("#crd-url").val(library.url || "");
-        $("#crd-name").val(library.name || "");
-        $("#crd-version").val(library.version || "");
-        $("#crd-publisher").val(library.publisher || "");
-        $("#crd-date").val(dateInputValue(library.date));
-        $("#crd-approval").val(dateInputValue(library.approvalDate));
-        $("#crd-review").val(dateInputValue(library.lastReviewDate));
-        $("#crd-period-start").val(dateInputValue(period.start));
-        $("#crd-period-end").val(dateInputValue(period.end));
+        $("#psd-url").val(library.url || "");
+        $("#psd-name").val(library.name || "");
+        $("#psd-version").val(library.version || "");
+        $("#psd-publisher").val(library.publisher || "");
+        $("#psd-date").val(dateInputValue(library.date));
+        $("#psd-approval").val(dateInputValue(library.approvalDate));
+        $("#psd-review").val(dateInputValue(library.lastReviewDate));
+        $("#psd-period-start").val(dateInputValue(period.start));
+        $("#psd-period-end").val(dateInputValue(period.end));
     }
 
-    function refreshRoutePane() {
+    function refreshProtobufPane() {
         if (editor) {
             editor.setSize("100%", "36rem");
             editor.refresh();
         }
-        if (window.CadminCamelRouteGraph && typeof CadminCamelRouteGraph.resize === "function") {
-            CadminCamelRouteGraph.resize();
-        }
-    }
-
-    function unfoldEditorToLine(lineNo) {
-        if (!editor || typeof editor.findMarks !== "function") {
-            return;
-        }
-        const to = CodeMirror.Pos(lineNo, (editor.getLine(lineNo) || "").length);
-        editor.findMarks(CodeMirror.Pos(0, 0), to).forEach(function (mark) {
-            if (mark && mark.__isFold) {
-                mark.clear();
-            }
-        });
-    }
-
-    function applyYamlLine(line) {
-        if (!editor || typeof line !== "number" || line < 0) {
-            return;
-        }
-        const lineNo = Math.max(0, Math.min(line, editor.lineCount() - 1));
-        unfoldEditorToLine(lineNo);
-        refreshRoutePane();
-        const text = editor.getLine(lineNo) || "";
-        const ch = text.search(/\S/);
-        const from = CodeMirror.Pos(lineNo, 0);
-        const to = CodeMirror.Pos(lineNo, text.length);
-        editor.setCursor({ line: lineNo, ch: ch < 0 ? 0 : ch });
-        editor.scrollIntoView({ from: from, to: to }, 80);
-        editor.focus();
-    }
-
-    function revealYamlLine(line) {
-        if (typeof line !== "number" || line < 0) {
-            return;
-        }
-        const btn = document.getElementById("crd-pane-route-btn");
-        const pane = document.getElementById("crd-pane-route");
-        const already = pane && pane.classList.contains("active") && pane.classList.contains("show");
-        if (already || !btn) {
-            applyYamlLine(line);
-            return;
-        }
-        $(btn).off("shown.bs.tab.crdetail-reveal").one("shown.bs.tab.crdetail-reveal", function () {
-            applyYamlLine(line);
-        });
-        if (window.bootstrap && bootstrap.Tab) {
-            bootstrap.Tab.getOrCreateInstance(btn).show();
-        } else {
-            btn.click();
-        }
-    }
-
-    function mountRouteGraph() {
-        if (!window.CadminCamelRouteGraph) {
-            return;
-        }
-        CadminCamelRouteGraph.mount(editorValue, { onNodeClick: revealYamlLine });
-    }
-
-    function insertTemplate(id) {
-        const match = templates.find(function (item) { return item.id === id; });
-        if (!match) {
-            return;
-        }
-        function apply() {
-            if (editor) {
-                editor.setValue(match.yaml);
-                editor.focus();
-            } else {
-                $("#crd-yaml").val(match.yaml);
-            }
-            if (window.CadminCamelRouteGraph) {
-                CadminCamelRouteGraph.refresh();
-            }
-        }
-        if (editor && editor.getValue().trim()) {
-            CadminApi.confirm({
-                title: "Replace the current YAML with this template?",
-                confirmText: "Replace",
-                icon: "warning"
-            }).done(apply);
-            return;
-        }
-        apply();
     }
 
     function bind() {
         const $root = $(CadminWorkspace.root());
-        $root.off(".crdetail");
-        $root.on("shown.bs.tab.crdetail", "#crd-pane-details-btn", refreshMarkdownEditors);
-        $root.on("shown.bs.tab.crdetail", "#crd-pane-route-btn", function () {
-            mountRouteGraph();
-            refreshRoutePane();
-        });
-        $root.on("shown.bs.tab.crdetail", "#crd-pane-graph-btn", function () {
+        $root.off(".psdetail");
+        $root.on("shown.bs.tab.psdetail", "#psd-pane-details-btn", refreshMarkdownEditors);
+        $root.on("shown.bs.tab.psdetail", "#psd-pane-protobuf-btn", refreshProtobufPane);
+        $root.on("shown.bs.tab.psdetail", "#psd-pane-graph-btn", function () {
             if (typeof CadminResourceGraph.resize === "function") {
                 CadminResourceGraph.resize();
             }
         });
-        $root.on("input.crdetail change.crdetail",
-            "#crd-basic-form :input, #crd-identity-form :input, #crd-details-form :input", syncUnsavedFlag);
-        CadminApi.fillValueSetSelect("#crd-status", CadminApi.valueSets.publicationStatus, {
+        $root.on("input.psdetail change.psdetail",
+            "#psd-basic-form :input, #psd-identity-form :input, #psd-details-form :input", syncUnsavedFlag);
+        CadminApi.fillValueSetSelect("#psd-status", CadminApi.valueSets.publicationStatus, {
             fallback: statusOptions,
             selected: library.status || "draft",
             onConcepts: function () {
                 syncUnsavedFlag();
             }
         });
-        $root.on("click.crdetail", "#crd-save", function () {
+        $root.on("click.psdetail", "#psd-save", function () {
             saveLibrary(function () {
-                CadminApi.showToast("success", "Camel route saved.");
+                CadminApi.showToast("success", "Protobuf spec saved.");
             });
         });
-        $("#crd-basic-form, #crd-identity-form, #crd-details-form").on("submit", function (event) {
+        $("#psd-basic-form, #psd-identity-form, #psd-details-form").on("submit", function (event) {
             event.preventDefault();
             saveLibrary(function () {
-                CadminApi.showToast("success", "Camel route updated.");
-            }, { withMeta: true, withYaml: false });
+                CadminApi.showToast("success", "Protobuf spec updated.");
+            }, { withMeta: true, withProto: false });
         });
-        $root.on("click.crdetail", "#crd-delete", function () {
-            CadminApi.confirm("Delete this Camel route?").done(function () {
+        $root.on("click.psdetail", "#psd-delete", function () {
+            CadminApi.confirm("Delete this Protobuf spec?").done(function () {
                 CadminApi.fhir("/Library/" + encodeURIComponent(library.id), "DELETE").done(function () {
                     destroyEditor();
-                    if (window.CadminCamelRouteGraph) {
-                        CadminCamelRouteGraph.destroy();
-                    }
-                    CadminApi.showToast("success", "Camel route deleted.");
-                    window.location.hash = "#/camel-routes";
+                    CadminApi.showToast("success", "Protobuf spec deleted.");
+                    window.location.hash = "#/proto-specs";
                 }).fail(function (xhr) {
-                    CadminApi.showToast("danger", "Delete Camel route failed (" + xhr.status + ").");
+                    CadminApi.showToast("danger", "Delete Protobuf spec failed (" + xhr.status + ").");
                 });
             });
         });
-        $root.on("change.crdetail", "#crd-template", function () {
+        $root.on("change.psdetail", "#psd-template", function () {
             const id = $(this).val();
             $(this).val("");
             insertTemplate(id);
         });
-        $root.on("click.crdetail", "#crd-find", function () {
+        $root.on("click.psdetail", "#psd-load-file", function () {
+            const input = document.getElementById("psd-file");
+            if (input) {
+                input.click();
+            }
+        });
+        $root.on("change.psdetail", "#psd-file", function () {
+            const file = this.files && this.files[0];
+            this.value = "";
+            loadLocalFile(file);
+        });
+        $root.on("click.psdetail", "#psd-find", function () {
             if (editor && CodeMirror.commands.findPersistent) {
                 CodeMirror.commands.findPersistent(editor);
             } else if (editor && CodeMirror.commands.find) {
                 CodeMirror.commands.find(editor);
             }
         });
-        $root.on("click.crdetail", "#crd-replace", function () {
+        $root.on("click.psdetail", "#psd-replace", function () {
             if (editor && CodeMirror.commands.replace) {
                 CodeMirror.commands.replace(editor);
             }
         });
-        $root.on("click.crdetail", "#crd-fold", function () {
+        $root.on("click.psdetail", "#psd-fold", function () {
             if (!editor) {
                 return;
             }
@@ -1165,7 +1022,7 @@ window.CadminCamelRouteDetail = (function () {
                 }
             });
         });
-        $root.on("click.crdetail", "#crd-unfold", function () {
+        $root.on("click.psdetail", "#psd-unfold", function () {
             if (!editor) {
                 return;
             }
